@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 
-/// Placeholder home screen. Replaced feature-by-feature starting with the
-/// current-time / completion-countdown display (tracking issue #1).
+/// Placeholder home screen, replaced feature-by-feature starting with the
+/// current-time / completion-countdown display.
 class ClockScreen extends StatelessWidget {
   const ClockScreen({super.key});
 

@@ -9,7 +9,7 @@ Flutterプロジェクトの雛形作成、CI、markdownlint、CodeRabbit設定�
 ## 技術選定
 
 - フレームワーク: Flutter（Dart）。理由はチャットでの検討ログの通り、本仕様書（3-1節等）の状態遷移が精密で、単一コードベースでAndroid/iOSの挙動を一致させやすいことを優先。
-- パッケージ名: `com.iq3run.sessiontimer`
+- パッケージ名: `com.iq3run.session_timer`（`flutter create --org com.iq3run --project-name session_timer`の既定に従う）
 - 状態管理: Riverpod（テスト容易性・DIのしやすさを優先。Providerのみのシンプル構成から開始し、機能追加に応じて必要な分だけ足す）
 - 永続化: `shared_preferences`（キーバリューで十分。仕様上必要なのはepochミリ秒やJSON化した小さなリストのみで、SQLite等は過剰）
 - 通知: `flutter_local_notifications`（ローカル通知スケジューリング、3-7節のバックグラウンド通知要件に対応）
