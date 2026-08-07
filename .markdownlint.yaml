@@ -1,0 +1,8 @@
+# MD013 (line-length): disabled — docs/session-timer-spec.md is Japanese prose,
+# where long unbroken lines are normal and wrapping at a fixed column would hurt
+# readability.
+MD013: false
+
+# MD029 (ol-prefix): disabled — session-timer-spec.md uses incrementing numbers
+# (1. 2. 3.) intentionally instead of markdownlint's default all-1s style.
+MD029: false

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>SESSION CUE</title>
+<style>
+  :root{
+    --bg:#000000;
+    --panel:#0b0d0c;
+    --line:#1c211f;
+    --amber:#ffb000;
+    --cyan:#4fd1c5;
+    --white:#e9ede9;
+    --red:#ff3b30;
+    --muted:#7c8580;
+    --text:#e9ede9;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+    overscroll-behavior:none; user-select:none;
+    display:flex; flex-direction:column;
+    padding-top:var(--safe-t); padding-bottom:var(--safe-b);
+    height:100%;
+  }
+  .mono{font-family:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace; font-variant-numeric:tabular-nums;}
+  .lbl{font-size:12px; color:var(--muted); letter-spacing:2px; margin-bottom:2px;}
+
+  #topbar{
+    display:flex; align-items:center; justify-content:flex-end;
+    padding:8px 16px 0; flex-shrink:0;
+  }
+  #gearBtn{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    width:34px;height:34px;border-radius:50%; font-size:16px; line-height:1;
+  }
+
+  #stage{
+    flex:1; display:flex; flex-direction:column; align-items:stretch; justify-content:center;
+    position:relative; padding:2px 20px; gap:2px; overflow-y:auto;
+  }
+
+  .block{ text-align:center; position:relative; }
+  .bigTime{ font-size:clamp(38px, 13vw, 80px); font-weight:600; line-height:1.02; }
+  #currentBlock{ margin-bottom:2px; }
+  #currentTime{ color:var(--white); }
+
+  /* tap-to-set overlay input: invisible but sits over the whole block, opening the
+     device's native time picker directly on tap (no custom dialog). */
+  .tapInput{
+    position:absolute; inset:0; opacity:0; width:100%; height:100%;
+    border:0; background:transparent; padding:0; margin:0; z-index:2;
+  }
+  .clearBtn{
+    position:absolute; top:2px; right:2px; z-index:3;
+    width:26px; height:26px; border-radius:50%; border:1px solid var(--line);
+    background:var(--panel); color:var(--muted); font-size:13px; line-height:1;
+  }
+
+  #completeBlock{ margin-bottom:2px; padding:6px 0; border-radius:14px; }
+  #completeBlock:active{ background:rgba(255,255,255,0.05); }
+  #completeTime{ color:var(--amber); }
+  body.state-alert #completeTime{ color:var(--red); }
+  #completeSub{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  #divider{ height:1px; background:var(--line); margin:6px 0; flex-shrink:0; }
+
+  #targetsWrap{ display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
+  .targetRow{ text-align:center; padding:4px 0; border-radius:12px; position:relative; }
+  .targetRow:active{ background:rgba(255,255,255,0.05); }
+  .targetLabelLine{font-size:12px; color:var(--muted);}
+  .targetTime{
+    font-size:clamp(24px, 8vw, 48px); font-weight:600; line-height:1.05; color:var(--cyan);
+  }
+  .targetTime.hit{color:var(--red);}
+  #addTargetRow{
+    font-size:13px; color:var(--muted); text-align:center; padding:10px 0; border:1px dashed var(--line);
+    border-radius:12px; margin-top:2px; position:relative;
+  }
+  #addTargetRow:active{ background:rgba(255,255,255,0.05); }
+
+  #swWrap{
+    margin-top:6px; text-align:center; padding-top:8px; border-top:1px solid var(--line); flex-shrink:0; border-radius:10px;
+  }
+  #swWrap:active{ background:rgba(255,255,255,0.04); }
+  #swLabel{font-size:12px; color:var(--muted); letter-spacing:1px;}
+  #swTime{ color:var(--text); }
+  #tapHint{font-size:11px; color:var(--muted); opacity:.7; margin-top:2px;}
+
+  #chipRow{
+    display:flex; gap:6px; flex-wrap:wrap; justify-content:center;
+    padding:6px 16px 4px; flex-shrink:0; min-height:10px;
+  }
+  .chip{
+    border:1px solid var(--line); border-radius:8px; padding:4px 8px;
+    font-size:11px; color:var(--muted); background:var(--panel); text-align:center;
+  }
+  .chip b{display:block; font-size:12px; margin-top:1px; color:var(--text);}
+  .chip.hit{border-color:var(--red); color:var(--red);}
+
+  #flashOverlay{
+    position:fixed; inset:0; background:var(--amber); opacity:0; pointer-events:none; z-index:50;
+  }
+  #flashOverlay.go{ animation: strobe 0.5s steps(1) 6; }
+  @keyframes strobe{ 0%,100%{opacity:0;} 50%{opacity:1;} }
+
+  /* settings sheet */
+  #sheetBg{ position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:60; display:none; }
+  #sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:61; background:var(--panel);
+    border-top:1px solid var(--line); border-radius:16px 16px 0 0;
+    max-height:85vh; overflow-y:auto; padding:14px 18px calc(24px + var(--safe-b));
+    transform:translateY(100%); transition:transform .25s ease; display:none;
+  }
+  #sheet.open{ transform:translateY(0); }
+  #sheetBg.show, #sheet.show{display:block;}
+  .sheetTitle{font-size:16px; font-weight:600; margin:14px 0 8px; color:var(--text);}
+  .sheetTitle:first-child{margin-top:2px;}
+  .row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .row input[type="number"], .row input[type="date"]{
+    background:#181b19; border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-size:14px; flex:1;
+  }
+  .row input[type="number"]{flex:0 0 70px;}
+  .small{font-size:12px; color:var(--muted);}
+  .btn{ background:#181b19; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px 12px; font-size:13px; }
+  .btn.primary{background:var(--amber); color:#000; border-color:var(--amber); font-weight:600;}
+  .btn.danger{color:var(--red); border-color:#3a1210;}
+  .list-item{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:13px;
+  }
+  .list-item .meta{color:var(--muted); font-size:12px;}
+  .closeSheet{width:36px; height:5px; background:var(--line); border-radius:3px; margin:0 auto 10px;}
+  .switch{display:flex; align-items:center; justify-content:space-between; padding:6px 0;}
+  #ntpStatus{font-size:12px; color:var(--muted); margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="gearBtn">⚙</button>
+</div>
+
+<div id="stage">
+  <div class="block" id="currentBlock">
+    <div class="lbl">現在時刻</div>
+    <div id="currentTime" class="bigTime mono">--:--:--</div>
+  </div>
+
+  <div class="block" id="completeBlock">
+    <div class="lbl">完了まで</div>
+    <div id="completeTime" class="bigTime mono">--:--</div>
+    <div id="completeSub">タップして完了時刻を設定</div>
+    <input type="time" id="completeTimeInput" class="tapInput">
+    <button class="clearBtn" id="completeClearBtn" style="display:none;">✕</button>
+  </div>
+
+  <div id="divider"></div>
+
+  <div id="targetsWrap"></div>
+  <div id="addTargetRow">
+    ＋ 指定時刻を追加
+    <input type="time" id="addTargetInput" class="tapInput">
+  </div>
+
+  <div id="swWrap">
+    <div id="swLabel">タップして経過時間を計測</div>
+    <div id="swTime" class="bigTime mono">00:00</div>
+    <div id="tapHint">タップで開始/一時停止・長押しでリセット</div>
+  </div>
+</div>
+
+<div id="chipRow"></div>
+
+<div id="flashOverlay"></div>
+
+<div id="sheetBg"></div>
+<div id="sheet">
+  <div class="closeSheet"></div>
+
+  <div class="sheetTitle">完了◯分前フラッシュ</div>
+  <div id="flashList"></div>
+  <div class="row">
+    <input type="number" id="flashMinInput" placeholder="分" min="1">
+    <button class="btn" id="addFlashBtn">追加</button>
+  </div>
+
+  <div class="sheetTitle">通知</div>
+  <div class="switch">
+    <span class="small">フラッシュ/到達時に通知を送る</span>
+    <input type="checkbox" id="notifyToggle">
+  </div>
+  <div class="small" id="notifyStatus"></div>
+
+  <div class="sheetTitle">おまけ：週末（マイルストーン）</div>
+  <div id="milestoneList"></div>
+  <div class="row">
+    <input type="text" id="msLabelInput" placeholder="ラベル（例: 第3週末）">
+    <input type="date" id="msDateInput">
+    <button class="btn" id="addMsBtn">追加</button>
+  </div>
+
+  <div class="sheetTitle">おまけ：時刻同期（NTP風）</div>
+  <div class="row">
+    <button class="btn" id="ntpSyncBtn">サーバー時刻に同期</button>
+  </div>
+  <div id="ntpStatus">未同期（端末時刻を使用中）</div>
+
+  <div style="height:20px;"></div>
+  <button class="btn primary" id="closeSheetBtn" style="width:100%;">閉じる</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  let targetTime = null;
+  let flashPoints = [10,5,1];
+  let flashedSet = new Set();
+  let completedFlashed = false;
+
+  let timeTargets = []; // {id, timeMs, flashed}
+  let sw = { running:false, startTs:null, accum:0 };
+
+  let msList = [];
+  let notifyEnabled = false;
+  let ntpOffsetMs = 0;
+  let wakeLock = null;
+  let pressTimer = null;
+
+  const $ = (id)=>document.getElementById(id);
+  const pad = (n)=>String(n).padStart(2,"0");
+  function now(){ return Date.now() + ntpOffsetMs; }
+
+  function fmtHMS(ms, forceHours){
+    const neg = ms < 0;
+    ms = Math.abs(ms);
+    let s = Math.floor(ms/1000);
+    const h = Math.floor(s/3600); s -= h*3600;
+    const m = Math.floor(s/60); s -= m*60;
+    if(h>0 || forceHours) return `${neg?"-":""}${pad(h)}:${pad(m)}:${pad(s)}`;
+    return `${neg?"-":""}${pad(m)}:${pad(s)}`;
+  }
+  // Same as fmtHMS but with a tenths-of-a-second digit, for the stopwatch.
+  function fmtHMSTenths(ms){
+    const neg = ms < 0;
+    ms = Math.abs(ms);
+    let totalTenths = Math.floor(ms/100);
+    const tenth = totalTenths % 10; totalTenths = Math.floor(totalTenths/10);
+    let s = totalTenths % 60; totalTenths = Math.floor(totalTenths/60);
+    let m = totalTenths % 60; totalTenths = Math.floor(totalTenths/60);
+    const h = totalTenths;
+    const core = h>0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+    return `${neg?"-":""}${core}.${tenth}`;
+  }
+  // Uses the device's local time zone (e.g. JST if the device is set to Japan).
+  function fmtClock(ms){
+    const d = new Date(ms);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function fmtClockSec(ms){
+    const d = new Date(ms);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  function timeInputToEpoch(hhmm){
+    const [hh,mm] = hhmm.split(":").map(Number);
+    const d = new Date(now());
+    d.setHours(hh, mm, 0, 0);
+    if(d.getTime() <= now()) d.setDate(d.getDate()+1);
+    return d.getTime();
+  }
+  function epochToTimeInputVal(ms){
+    const d = new Date(ms);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function requestWakeLock(){
+    try{ if("wakeLock" in navigator){ wakeLock = await navigator.wakeLock.request("screen"); } }catch(e){}
+  }
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState === "visible") requestWakeLock();
+  });
+
+  function ensureNotifyPermission(){
+    if(!("Notification" in window)) return;
+    if(Notification.permission === "default") Notification.requestPermission().then(updateNotifyStatus);
+    updateNotifyStatus();
+  }
+  function updateNotifyStatus(){
+    const el = $("notifyStatus");
+    if(!("Notification" in window)){ el.textContent = "この端末は通知に対応していません"; return; }
+    el.textContent = "通知権限: " + Notification.permission;
+  }
+  function fireNotify(title, body){
+    if(notifyEnabled && "Notification" in window && Notification.permission === "granted"){
+      try{ new Notification(title, {body, silent:false}); }catch(e){}
+    }
+    if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  }
+
+  function triggerFlash(){
+    const ov = $("flashOverlay");
+    ov.classList.remove("go");
+    void ov.offsetWidth;
+    ov.classList.add("go");
+  }
+
+  function renderClock(){
+    $("currentTime").textContent = fmtClockSec(now());
+  }
+
+  function renderComplete(){
+    $("completeClearBtn").style.display = targetTime ? "flex" : "none";
+    if(targetTime === null){
+      $("completeTime").textContent = "--:--";
+      $("completeSub").textContent = "タップして完了時刻を設定";
+      document.body.classList.remove("state-alert");
+      return;
+    }
+    const diff = targetTime - now();
+    $("completeTime").textContent = fmtHMS(diff);
+    $("completeSub").textContent = (diff>=0?"完了予定 ":"超過 / 完了予定だった時刻 ") + fmtClock(targetTime) + "（タップで変更）";
+    document.body.classList.toggle("state-alert", diff <= 60000 && diff >= -1);
+
+    flashPoints.forEach(m=>{
+      const triggerAt = targetTime - m*60000;
+      if(!flashedSet.has(m) && now() >= triggerAt){
+        flashedSet.add(m);
+        triggerFlash();
+        fireNotify("残り " + m + " 分", "セッション完了まで残り" + m + "分です");
+      }
+    });
+    if(!completedFlashed && diff <= 0){
+      completedFlashed = true;
+      triggerFlash();
+      fireNotify("完了時刻です", "セッションの完了時刻になりました");
+    }
+  }
+
+  function renderTargets(){
+    const wrap = $("targetsWrap");
+    wrap.innerHTML = "";
+    timeTargets
+      .slice()
+      .sort((a,b)=>a.timeMs-b.timeMs)
+      .forEach(t=>{
+        const diff = t.timeMs - now();
+        const hit = diff <= 0;
+        if(hit && !t.flashed){
+          t.flashed = true;
+          triggerFlash();
+          fireNotify("指定時刻 " + fmtClock(t.timeMs), fmtClock(t.timeMs) + " になりました");
+        }
+        const row = document.createElement("div");
+        row.className = "targetRow";
+        row.dataset.id = t.id;
+        row.innerHTML = `
+          <div class="targetLabelLine">指定時刻 ${fmtClock(t.timeMs)}（タップで変更）</div>
+          <div class="targetTime mono${hit?" hit":""}">${fmtHMS(diff)}</div>
+          <input type="time" class="tapInput targetTimeInput" value="${epochToTimeInputVal(t.timeMs)}">
+          <button class="clearBtn targetClearBtn">✕</button>`;
+        wrap.appendChild(row);
+
+        row.querySelector(".targetTimeInput").addEventListener("change", (e)=>{
+          if(!e.target.value) return;
+          t.timeMs = timeInputToEpoch(e.target.value);
+          t.flashed = false;
+          tick();
+        });
+        row.querySelector(".targetClearBtn").addEventListener("click", ()=>{
+          timeTargets = timeTargets.filter(x=>x.id!==t.id);
+          tick();
+        });
+      });
+  }
+
+  function renderStopwatch(){
+    const elapsed = sw.accum + (sw.running ? (now() - sw.startTs) : 0);
+    $("swLabel").textContent = sw.running ? "経過時間（計測中）" : (elapsed>0 ? "経過時間（一時停止）" : "タップして経過時間を計測");
+    $("swTime").textContent = fmtHMSTenths(elapsed);
+  }
+
+  function renderFlashChips(){
+    const row = $("chipRow");
+    row.innerHTML = "";
+    if(targetTime === null) return;
+    flashPoints.slice().sort((a,b)=>b-a).forEach(m=>{
+      const triggerAt = targetTime - m*60000;
+      const untilTrigger = triggerAt - now();
+      const hit = flashedSet.has(m);
+      const div = document.createElement("div");
+      div.className = "chip" + (hit ? " hit" : "");
+      div.innerHTML = `残${m}分フラッシュ<b class="mono">${hit ? "済" : fmtHMS(Math.max(untilTrigger,0))}</b>`;
+      row.appendChild(div);
+    });
+  }
+
+  function tick(){
+    renderClock();
+    renderComplete();
+    renderTargets();
+    renderStopwatch();
+    renderFlashChips();
+  }
+
+  // ---------- stopwatch tap: only inside swWrap ----------
+  const swWrap = $("swWrap");
+  swWrap.addEventListener("pointerdown", ()=>{
+    pressTimer = setTimeout(()=>{
+      pressTimer = "longpress";
+      sw.running = false; sw.accum = 0;
+      tick();
+    }, 650);
+  });
+  swWrap.addEventListener("pointerup", ()=>{
+    if(pressTimer === "longpress"){ pressTimer=null; return; }
+    clearTimeout(pressTimer); pressTimer = null;
+    if(sw.running){ sw.accum += now() - sw.startTs; sw.running = false; }
+    else { sw.startTs = now(); sw.running = true; }
+    tick();
+  });
+  swWrap.addEventListener("pointerleave", ()=>{ clearTimeout(pressTimer); pressTimer=null; });
+
+  // ---------- direct native time pickers (no custom dialog) ----------
+  // Completion time: tapping the block focuses the invisible time input,
+  // which opens the device's own time picker immediately.
+  $("completeTimeInput").addEventListener("change", (e)=>{
+    if(!e.target.value) return;
+    targetTime = timeInputToEpoch(e.target.value);
+    flashedSet.clear(); completedFlashed = false;
+    tick();
+  });
+  $("completeClearBtn").addEventListener("click", ()=>{
+    targetTime = null; flashedSet.clear(); completedFlashed=false;
+    tick();
+  });
+
+  // New time target: tapping "＋ 指定時刻を追加" opens the picker directly;
+  // selecting a time immediately adds it (labelled by its own H:MM).
+  $("addTargetInput").addEventListener("change", (e)=>{
+    if(!e.target.value) return;
+    timeTargets.push({id:Date.now()+Math.random(), timeMs:timeInputToEpoch(e.target.value), flashed:false});
+    e.target.value = "";
+    tick();
+  });
+
+  // ---------- settings sheet (flash points / notify / milestones / ntp) ----------
+  const sheetBg = $("sheetBg"), sheet = $("sheet");
+  function openSheet(){
+    sheetBg.classList.add("show"); sheet.classList.add("show");
+    requestAnimationFrame(()=>sheet.classList.add("open"));
+    renderSheetLists();
+    ensureNotifyPermission();
+  }
+  function closeSheetFn(){
+    sheet.classList.remove("open");
+    setTimeout(()=>{ sheetBg.classList.remove("show"); sheet.classList.remove("show"); }, 250);
+  }
+  $("gearBtn").addEventListener("click", openSheet);
+  $("closeSheetBtn").addEventListener("click", closeSheetFn);
+  sheetBg.addEventListener("click", closeSheetFn);
+
+  $("addFlashBtn").addEventListener("click", ()=>{
+    const v = parseInt($("flashMinInput").value, 10);
+    if(!v || v<=0) return;
+    if(!flashPoints.includes(v)) flashPoints.push(v);
+    flashedSet.delete(v);
+    $("flashMinInput").value = "";
+    renderSheetLists(); tick();
+  });
+  function renderFlashList(){
+    const el = $("flashList");
+    el.innerHTML = "";
+    flashPoints.slice().sort((a,b)=>b-a).forEach(m=>{
+      const div = document.createElement("div");
+      div.className = "list-item";
+      div.innerHTML = `<span>残り ${m} 分</span>`;
+      const btn = document.createElement("button");
+      btn.className = "btn danger"; btn.textContent = "削除";
+      btn.addEventListener("click", ()=>{
+        flashPoints = flashPoints.filter(x=>x!==m);
+        renderSheetLists(); tick();
+      });
+      div.appendChild(btn);
+      el.appendChild(div);
+    });
+  }
+
+  $("notifyToggle").addEventListener("change", (e)=>{
+    notifyEnabled = e.target.checked;
+    if(notifyEnabled) ensureNotifyPermission();
+  });
+
+  $("addMsBtn").addEventListener("click", ()=>{
+    const label = $("msLabelInput").value.trim();
+    const dv = $("msDateInput").value;
+    if(!dv) return;
+    const d = new Date(dv+"T00:00:00");
+    msList.push({id:Date.now()+Math.random(), label:label||"週末", dateMs:d.getTime()});
+    $("msLabelInput").value=""; $("msDateInput").value="";
+    renderMsList();
+  });
+  function renderMsList(){
+    const el = $("milestoneList");
+    el.innerHTML = "";
+    const sorted = msList.slice().sort((a,b)=>a.dateMs-b.dateMs);
+    sorted.forEach((m,i)=>{
+      const daysUntil = Math.ceil((m.dateMs - now())/86400000);
+      let gapText = "";
+      if(i>0){
+        const gap = Math.round((m.dateMs - sorted[i-1].dateMs)/86400000);
+        gapText = ` / 前の週末から ${gap}日`;
+      }
+      const div = document.createElement("div");
+      div.className = "list-item";
+      div.innerHTML = `<span>${m.label} <span class="meta">${new Date(m.dateMs).toLocaleDateString("ja-JP")} まであと ${daysUntil}日${gapText}</span></span>`;
+      const btn = document.createElement("button");
+      btn.className="btn danger"; btn.textContent="削除";
+      btn.addEventListener("click", ()=>{
+        msList = msList.filter(x=>x.id!==m.id);
+        renderMsList();
+      });
+      div.appendChild(btn);
+      el.appendChild(div);
+    });
+  }
+
+  $("ntpSyncBtn").addEventListener("click", async ()=>{
+    $("ntpStatus").textContent = "同期中…";
+    try{
+      const t0 = Date.now();
+      const res = await fetch("https://worldtimeapi.org/api/ip", {cache:"no-store"});
+      const data = await res.json();
+      const t1 = Date.now();
+      const rtt = t1 - t0;
+      const serverMs = new Date(data.utc_datetime).getTime() + rtt/2;
+      ntpOffsetMs = serverMs - Date.now();
+      $("ntpStatus").textContent = `同期完了（誤差補正 ${Math.round(ntpOffsetMs)}ms） / ${new Date().toLocaleTimeString("ja-JP")}`;
+    }catch(e){
+      $("ntpStatus").textContent = "同期失敗（インターネット接続を確認してください）";
+    }
+  });
+
+  function renderSheetLists(){
+    renderFlashList();
+    renderMsList();
+  }
+
+  requestWakeLock();
+  setInterval(tick, 1000);
+  setInterval(renderStopwatch, 100); // smoother tenths-of-a-second display while running
+  tick();
+
+})();
+</script>
+</body>
+</html>
