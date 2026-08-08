@@ -39,10 +39,16 @@ void main() {
     });
 
     test(
-      'falls back to zero when the persisted accumulatedMs is negative',
+      'discards the whole persisted state when accumulatedMs is negative',
       () async {
+        // runningSinceEpochMs is deliberately non-null here so this test
+        // can't pass under a partial-fix regression that only clamps
+        // accumulatedMs while leaving the rest of the invalid state intact.
         SharedPreferences.setMockInitialValues({
-          stopwatchStateJsonKey: jsonEncode({'accumulatedMs': -1000}),
+          stopwatchStateJsonKey: jsonEncode({
+            'accumulatedMs': -1000,
+            'runningSinceEpochMs': DateTime.now().millisecondsSinceEpoch,
+          }),
         });
         final container = ProviderContainer();
         addTearDown(container.dispose);
