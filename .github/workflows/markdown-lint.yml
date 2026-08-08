@@ -31,3 +31,6 @@ jobs:
             !docs/**
             !ios/**
             !android/**
+            # Subagent-authored memory notes (.claude/agent-memory/), not
+            # house-style content meant for human authors.
+            !.claude/**
