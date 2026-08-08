@@ -38,6 +38,22 @@ void main() {
       expect(state.accumulatedMs, 0);
     });
 
+    test(
+      'falls back to zero when the persisted accumulatedMs is negative',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          stopwatchStateJsonKey: jsonEncode({'accumulatedMs': -1000}),
+        });
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.isRunning, isFalse);
+        expect(state.accumulatedMs, 0);
+      },
+    );
+
     test('toggle starts running, then pauses and accumulates', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();

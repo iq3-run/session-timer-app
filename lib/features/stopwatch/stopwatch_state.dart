@@ -26,7 +26,7 @@ class StopwatchState {
 
   static StopwatchState? tryFromJson(Map<String, dynamic> json) {
     final accumulatedMs = json['accumulatedMs'];
-    if (accumulatedMs is! int) return null;
+    if (accumulatedMs is! int || accumulatedMs < 0) return null;
     final runningSinceEpochMs = json['runningSinceEpochMs'];
     if (runningSinceEpochMs != null && runningSinceEpochMs is! int) {
       return null;
