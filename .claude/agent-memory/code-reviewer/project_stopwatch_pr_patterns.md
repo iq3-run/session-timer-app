@@ -48,4 +48,21 @@ as a tradeoff in `plans/feat-stopwatch.md` itself. Don't raise it as an unaddres
 plan doc already discusses it; do check whether a future PR's plan doc omits that acknowledgment
 before raising it fresh.
 
+**`HitTestBehavior.opaque` sweep**: the fix of adding `behavior: HitTestBehavior.opaque` to a bare
+`GestureDetector(onTap: ...)` has now landed 3 times — `StopwatchSection` (PR #11, original),
+`CompletionCountdownSection` + `_TimeTargetRow` (PR #14, issue #13), and `_AddTargetRow`
+(issue #15, branch `fix/add-target-row-tap-area`). Each instance is a one-line, single-widget fix
+with its own `onTap` handler, so there's nothing to DRY out (no shared base widget makes sense for
+a one-property addition). If a *new* `GestureDetector(onTap: ...)` without `behavior: opaque` shows
+up in a future diff in this repo, flag it immediately by analogy — this is now an established repo
+convention, not a one-off.
+
+**Worktree local-`main` staleness**: this repo is reviewed from a git worktree
+(`.claude/worktrees/<slug>`) whose local `main` ref can lag `origin/main` by several already-merged
+commits (seen: local `main` was 4 commits behind `origin/main`, missing an already-merged sibling PR
+#14 entirely). Diffing a feature branch against the stale local `main` pulled in PR #14's already-
+merged changes as if they were part of the new diff, which would have produced false findings against
+code that was already reviewed and shipped. Always `git fetch origin` and diff against `origin/main`
+(or verify `git log main..origin/main` is empty) before trusting a `main...HEAD` diff in this repo.
+
 Related: [[project_readme_maintenance_gap]]
