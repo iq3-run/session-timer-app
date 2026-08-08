@@ -1,0 +1,2 @@
+- [Stopwatch PR patterns](project_stopwatch_pr_patterns.md) — mutation-queue/.then()/multi-line-comment/GestureDetector-300ms patterns already established & accepted in this repo, don't re-flag
+- [README maintenance gap](project_readme_maintenance_gap.md) — README.md stale since bootstrap across 3 feature PRs, keep flagging until fixed
