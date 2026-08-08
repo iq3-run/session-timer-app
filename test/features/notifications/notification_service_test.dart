@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -113,5 +115,58 @@ void main() {
       expect(secondArgs['id'], firstArgs['id']);
       expect(firstArgs['id'] as int, greaterThanOrEqualTo(0));
     });
+
+    test(
+      'serializes overlapping calls instead of interleaving their '
+      'cancelAll/zonedSchedule steps',
+      () async {
+        // Gate 'zonedSchedule' so the first call can't finish until the
+        // test releases it — if the two calls below weren't serialized,
+        // the second call's (ungated) cancelAll() would run while the
+        // first call is still stuck waiting, landing before the first
+        // call's zonedSchedule instead of after it.
+        final zonedScheduleGate = Completer<void>();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(_channel, (call) async {
+              calls.add(_RecordedCall(call.method, call.arguments));
+              if (call.method == 'zonedSchedule') {
+                await zonedScheduleGate.future;
+              }
+              return switch (call.method) {
+                'initialize' => true,
+                _ => null,
+              };
+            });
+        final service = buildService();
+        final eventA = FlashEvent(
+          id: 'a',
+          instant: DateTime.now().add(const Duration(hours: 1)),
+          label: 'A',
+        );
+        final eventB = FlashEvent(
+          id: 'b',
+          instant: DateTime.now().add(const Duration(hours: 2)),
+          label: 'B',
+        );
+
+        final first = service.rescheduleAll([eventA]);
+        final second = service.rescheduleAll([eventB]);
+        zonedScheduleGate.complete();
+        await Future.wait([first, second]);
+
+        expect(calls.map((c) => c.method).toList(), [
+          'initialize',
+          'cancelAll',
+          'zonedSchedule',
+          'cancelAll',
+          'zonedSchedule',
+        ]);
+        final scheduledBodies = calls
+            .where((c) => c.method == 'zonedSchedule')
+            .map((c) => (c.arguments! as Map<dynamic, dynamic>)['body'])
+            .toList();
+        expect(scheduledBodies, ['A', 'B']);
+      },
+    );
   });
 }

@@ -48,6 +48,35 @@ doesn't cover this per the same precedent already recorded for `ensureRunning()`
 whenever a PR's own `plans/*.md` gets cited *from inside implementation comments* — distinguish
 that from citing `docs/*.md` spec files, which remains fine.
 
+## Resolved (2026-08-09, same PR #21 branch, commit 9cd8790, code-reviewer-driven fix)
+
+The unserialized `rescheduleAll` race above was fixed by adding `_rescheduleQueue` (`Future<void>`
+field, synchronous read-then-reassign per call, `.catchError((_) {})` only on the chain-continuation
+so the queue itself never gets stuck on a rejected link) — verified on re-review to structurally
+match `StopwatchController._mutationQueue`/`_mutate` exactly: atomic synchronous swap (no `await`
+between reading `previous` and writing `_rescheduleQueue`, so no interleaving window even with two
+synchronous `rescheduleAll()` calls back to back), no dropped calls (every call's `_rescheduleNow`
+still runs because `previous` is always the *caught* version), no deadlock. The `init()`
+memoization-caches-failure gap noted below was also fixed the same commit
+(`_initFuture = null` inside a `catchError`, then `Error.throwWithStackTrace` to rethrow with the
+original stack) — reviewed and confirmed this doesn't race `_rescheduleNow`'s internal `await init()`
+call: `_initFuture` and `_rescheduleQueue` are independent memoized-future fields, and Dart's
+single-threaded event loop means the synchronous portions of each never interleave. `Future.wait`
+parallelizing the per-event `zonedSchedule` calls (replacing the old sequential `for` loop) was also
+reviewed as safe: each call schedules an independently-keyed notification (no ordering dependency
+between them), `cancelAll()` still runs before all of them, and default `eagerError: false` means one
+failing `zonedSchedule` no longer aborts scheduling of the remaining events the way the old
+sequential loop did — a net robustness improvement, not a lost guarantee.
+
+**Gap found on this re-review**: the fix commit added no regression test proving the queue actually
+prevents interleaving (no concurrent-call test in `notification_service_test.dart`) and no test for
+`init()` retrying after a failure — contrast with the stopwatch mutation-queue fix
+([[project_stopwatch_pr_patterns]], `ensureRunning()` entry), which added a test confirmed to fail
+deterministically on the pre-fix code and pass on the post-fix code. Flagged as Warning, not
+Critical (the fix itself is correct on manual trace-through). Watch whether this becomes a pattern —
+if a future queue/race fix in this repo also ships without a proving test, it's worth raising as a
+repo-wide gap rather than a one-off.
+
 ## `Future<void>? _cache ??= _computeOnce()` memoization pattern — verify failure semantics
 
 `NotificationService.init()` uses `_initFuture ??= _initNow()` to memoize/dedupe concurrent
