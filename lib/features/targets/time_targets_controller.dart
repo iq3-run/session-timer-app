@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,12 @@ final timeTargetsControllerProvider =
     );
 
 class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
+  // Serializes _mutate calls: each waits for the previous one's read of
+  // `state` -> persist -> state-update cycle to finish before starting its
+  // own, so concurrent add/update/remove calls can't read the same stale
+  // `state` and have one silently overwrite the other's persisted result.
+  Future<void> _mutationQueue = Future.value();
+
   @override
   Future<List<TimeTarget>> build() async {
     final prefs = await ref.watch(sharedPreferencesProvider.future);
@@ -55,6 +62,18 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   }
 
   Future<void> _mutate(
+    List<TimeTarget> Function(List<TimeTarget>) update,
+  ) {
+    final previous = _mutationQueue;
+    final result = previous.then((_) => _mutateNow(update));
+    // Swallow the error here so it doesn't become an unhandled rejection on
+    // the queue chain itself — _mutateNow already reports failures via
+    // `state`, and each caller's own awaited `result` still sees it.
+    _mutationQueue = result.catchError((_) {});
+    return result;
+  }
+
+  Future<void> _mutateNow(
     List<TimeTarget> Function(List<TimeTarget>) update,
   ) async {
     final current = state.value ?? const <TimeTarget>[];

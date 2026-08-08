@@ -156,5 +156,53 @@ void main() {
         expect(targets.single.epochMs, futureTarget.millisecondsSinceEpoch);
       },
     );
+
+    test(
+      'drops a persisted entry with an out-of-range epochMs, keeps the rest',
+      () async {
+        final validEpochMs = DateTime.now()
+            .add(const Duration(hours: 1))
+            .millisecondsSinceEpoch;
+        // Beyond DateTime.fromMillisecondsSinceEpoch's documented max range.
+        const outOfRangeEpochMs = 9000000000000000;
+        SharedPreferences.setMockInitialValues({
+          timeTargetsJsonKey:
+              '[{"id":"valid","epochMs":$validEpochMs},'
+              '{"id":"bad","epochMs":$outOfRangeEpochMs}]',
+        });
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+
+        final targets = await container.read(
+          timeTargetsControllerProvider.future,
+        );
+
+        expect(targets.single.id, 'valid');
+      },
+    );
+
+    test(
+      'concurrent mutations without awaiting each other both land',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timeTargetsControllerProvider.future);
+        final notifier = container.read(timeTargetsControllerProvider.notifier);
+
+        final first = notifier.addTarget(
+          DateTime.now().add(const Duration(hours: 1)),
+        );
+        final second = notifier.addTarget(
+          DateTime.now().add(const Duration(hours: 2)),
+        );
+        await Future.wait([first, second]);
+        final targets = await container.read(
+          timeTargetsControllerProvider.future,
+        );
+
+        expect(targets, hasLength(2));
+      },
+    );
   });
 }
