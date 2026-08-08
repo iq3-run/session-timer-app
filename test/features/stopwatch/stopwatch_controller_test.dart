@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,22 @@ class _FlakyStore extends InMemorySharedPreferencesStore {
       failNextWrite = false;
       return Future.value(false);
     }
+    return super.setValue(valueType, key, value);
+  }
+}
+
+/// Delegates to a real in-memory store, but every write waits on [unblock]
+/// before completing — used to simulate backpressure on the mutation queue
+/// (a slow prior persist) without needing a full fake platform
+/// implementation.
+class _DelayedStore extends InMemorySharedPreferencesStore {
+  _DelayedStore(this.unblock) : super.empty();
+
+  final Future<void> unblock;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    await unblock;
     return super.setValue(valueType, key, value);
   }
 }
@@ -240,6 +257,46 @@ void main() {
         final state = await container.read(stopwatchControllerProvider.future);
 
         expect(state.isRunning, isTrue);
+      },
+    );
+
+    test(
+      'toggle times the running segment from call time, not from when '
+      'a slow prior persist lets the queued mutation run',
+      () async {
+        final previousStore = SharedPreferencesStorePlatform.instance;
+        addTearDown(
+          () => SharedPreferencesStorePlatform.instance = previousStore,
+        );
+        SharedPreferences.setMockInitialValues({});
+        final unblock = Completer<void>();
+        SharedPreferencesStorePlatform.instance = _DelayedStore(
+          unblock.future,
+        );
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(stopwatchControllerProvider.notifier);
+
+        final startCallEpochMs = DateTime.now().millisecondsSinceEpoch;
+        final startFuture = notifier.toggle();
+
+        // The start mutation is now queued behind a persist blocked on
+        // `unblock`. Pause is called well before that persist is released,
+        // so a regression that captures the running epoch at queue-drain
+        // time (instead of at the toggle() call itself) would inflate
+        // accumulatedMs by roughly the full delay below.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final pauseCallEpochMs = DateTime.now().millisecondsSinceEpoch;
+        final pauseFuture = notifier.toggle();
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        unblock.complete();
+        await Future.wait([startFuture, pauseFuture]);
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        final actualCallGapMs = pauseCallEpochMs - startCallEpochMs;
+        expect(state.accumulatedMs, closeTo(actualCallGapMs, 40));
       },
     );
   });

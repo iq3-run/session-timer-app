@@ -56,8 +56,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
       }
       final elapsedThisRun = nowEpochMs - s.runningSinceEpochMs!;
       return StopwatchState(
-        accumulatedMs:
-            s.accumulatedMs + (elapsedThisRun < 0 ? 0 : elapsedThisRun),
+        accumulatedMs: s.accumulatedMs + clampToNonNegativeMs(elapsedThisRun),
       );
     });
   }

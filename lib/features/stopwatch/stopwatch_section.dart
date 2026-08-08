@@ -7,6 +7,8 @@ import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 
+const _tickInterval = Duration(milliseconds: 100);
+
 class StopwatchSection extends ConsumerWidget {
   const StopwatchSection({super.key});
 
@@ -16,6 +18,10 @@ class StopwatchSection extends ConsumerWidget {
     final notifier = ref.read(stopwatchControllerProvider.notifier);
 
     return GestureDetector(
+      // The tappable area is the whole section, not just where the text
+      // itself paints — without this, taps landing in the padding or
+      // between lines are silently ignored.
+      behavior: HitTestBehavior.opaque,
       onTap: notifier.toggle,
       onDoubleTap: notifier.resetAndRestart,
       onLongPress: notifier.reset,
@@ -39,10 +45,14 @@ class StopwatchSection extends ConsumerWidget {
   }
 
   String _label(StopwatchState? state) {
-    if (state == null) return '';
+    // While SharedPreferences is still loading, `state` is briefly null —
+    // treat it the same as the idle state so the label doesn't pop in and
+    // shift the layout once loading resolves.
+    if (state == null || (!state.isRunning && state.accumulatedMs == 0)) {
+      return 'タップして経過時間を計測';
+    }
     if (state.isRunning) return '経過時間（計測中）';
-    if (state.accumulatedMs > 0) return '経過時間（一時停止）';
-    return 'タップして経過時間を計測';
+    return '経過時間（一時停止）';
   }
 }
 
@@ -81,10 +91,9 @@ class _ElapsedTimeState extends State<_ElapsedTime> {
   void _syncTicker() {
     final isRunning = widget.state?.isRunning ?? false;
     if (isRunning && _ticker == null) {
-      _ticker = Timer.periodic(
-        const Duration(milliseconds: 100),
-        (_) => setState(() {}),
-      );
+      _ticker = Timer.periodic(_tickInterval, (_) {
+        if (mounted) setState(() {});
+      });
     } else if (!isRunning && _ticker != null) {
       _ticker!.cancel();
       _ticker = null;
