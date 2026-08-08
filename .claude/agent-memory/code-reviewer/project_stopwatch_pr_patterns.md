@@ -65,4 +65,26 @@ merged changes as if they were part of the new diff, which would have produced f
 code that was already reviewed and shipped. Always `git fetch origin` and diff against `origin/main`
 (or verify `git log main..origin/main` is empty) before trusting a `main...HEAD` diff in this repo.
 
+**Cross-controller wiring via `ref.read`, not `ref.watch`**: `feat/countdown-timer`
+(2026-08-08) introduced the first two-way link between sibling `AsyncNotifier`
+controllers — `StopwatchController.reset()`/`resetAndRestart()` call into
+`TimerController` via `ref.read(timerControllerProvider.notifier)`, and
+`TimerController.start()`/`quickStart()`/`addTime()` call back into
+`StopwatchController` the same way. Neither `build()` method watches the other
+provider, so Riverpod's dependency graph has no edge between them and there's
+no circular-initialization risk — confirmed safe. This is the pattern to expect
+for the shared flash infrastructure task too (deferred from this PR, will likely
+touch stopwatch/timer/targets/completion controllers similarly): cross-controller
+calls belong in action methods via `ref.read`, never via `ref.watch` in `build()`,
+or a genuine cycle becomes possible.
+
+One real gap found in that PR: `TimerController.start()` captures
+`stopwatch = await ref.read(stopwatchControllerProvider.future)` once at the top
+(needed early for the linked-mode elapsed-time calc), then reuses that same
+stale snapshot for the later "auto-start stopwatch if not running" check instead
+of re-reading fresh — while the sibling helper `_autoStartStopwatchIfNeeded()`
+(used by `addTime`/`quickStart`) does re-read fresh each time. Flagged as Warning
+(DRY + staleness). Watch for the same stale-read-reused-later shape in future
+cross-controller methods.
+
 Related: [[project_readme_maintenance_gap]]

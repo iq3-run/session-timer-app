@@ -205,6 +205,25 @@ void main() {
     );
 
     test(
+      'quickStart auto-starts the stopwatch when it is not already running',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timerControllerProvider.future);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(timerControllerProvider.notifier);
+
+        await notifier.quickStart(const Duration(seconds: 30));
+        final stopwatch = await container.read(
+          stopwatchControllerProvider.future,
+        );
+
+        expect(stopwatch.isRunning, isTrue);
+      },
+    );
+
+    test(
       'an overdue (counting-up) state survives a cold restart as-is, '
       'unlike completion time it is not auto-reset',
       () async {

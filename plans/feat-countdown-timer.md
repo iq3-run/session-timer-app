@@ -100,7 +100,8 @@ after `StopwatchSection`:
   - `onTap` → `TimerController.addTime(...)`.
   - `onLongPress` → `TimerController.quickStart(...)`.
 - Overdue state renders in red (matching `CompletionCountdownSection`'s
-  overdue styling) with a leading `+` and keeps counting up.
+  overdue styling), reusing `formatCountdown`'s existing negative-duration
+  (`-MM:SS`) convention, and keeps counting up.
 
 ## Verification
 

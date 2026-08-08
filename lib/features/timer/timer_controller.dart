@@ -51,9 +51,7 @@ class TimerController extends AsyncNotifier<TimerState> {
     final targetEpochMs =
         now.millisecondsSinceEpoch + duration.inMilliseconds - alreadyElapsedMs;
     await _mutate((_) => TimerState(targetEpochMs: targetEpochMs, mode: mode));
-    if (!stopwatch.isRunning) {
-      await ref.read(stopwatchControllerProvider.notifier).toggle();
-    }
+    await _autoStartStopwatchIfNeeded();
   }
 
   /// Long-press on the main timer area: full reset to unset. The mode is
