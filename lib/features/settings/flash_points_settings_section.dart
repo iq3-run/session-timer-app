@@ -4,8 +4,8 @@ import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 
 /// UI-only mirror of the prototype's flash-point add/remove list
 /// (docs/session-timer.html `#flashList`/`#flashMinInput`). [minutes] is
-/// ephemeral state owned by `SettingsSheet` — not wired to
-/// `FlashQueueController` yet (see plans/feat-settings-sheet-shell.md).
+/// ephemeral state owned by `SettingsSheet`, not backed by
+/// `FlashQueueController`.
 class FlashPointsSettingsSection extends StatelessWidget {
   const FlashPointsSettingsSection({
     required this.minutes,

@@ -112,6 +112,35 @@ void main() {
       expect(find.textContaining('週末テスト'), findsOneWidget);
     });
 
+    testWidgets('removing a milestone drops it from the list', (
+      tester,
+    ) async {
+      await _pumpAndOpenSheet(tester);
+
+      await tester.enterText(
+        find.byKey(const Key('milestoneLabelField')),
+        '週末テスト',
+      );
+      await tester.tap(find.byKey(const Key('milestoneDateButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addMilestoneButton')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('週末テスト'), findsOneWidget);
+
+      final milestoneItem = find.ancestor(
+        of: find.textContaining('週末テスト'),
+        matching: find.byType(SettingsListItem),
+      );
+      await tester.tap(
+        find.descendant(of: milestoneItem, matching: find.text('削除')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('週末テスト'), findsNothing);
+    });
+
     testWidgets('ntp sync button flips the status text', (tester) async {
       await _pumpAndOpenSheet(tester);
       expect(find.text('未同期（端末時刻を使用中）'), findsOneWidget);

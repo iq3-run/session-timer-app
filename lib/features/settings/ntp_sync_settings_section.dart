@@ -4,8 +4,7 @@ import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 
 /// UI-only mirror of the prototype's NTP sync button
 /// (docs/session-timer.html `#ntpSyncBtn`/`#ntpStatus`). Does not perform a
-/// real network sync — that's a separate future issue (see
-/// plans/feat-settings-sheet-shell.md).
+/// real network sync.
 class NtpSyncSettingsSection extends StatelessWidget {
   const NtpSyncSettingsSection({
     required this.statusText,

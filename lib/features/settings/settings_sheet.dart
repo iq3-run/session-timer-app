@@ -13,7 +13,7 @@ const _syncPlaceholderStatusText = '同期は未実装です（実装予定: iss
 /// The settings sheet's UI-only shell, mirroring
 /// docs/session-timer.html's `#sheet`. Every section's state below is
 /// ephemeral to this widget's lifetime — none of it is wired to the app's
-/// real state or persisted. See plans/feat-settings-sheet-shell.md.
+/// real state or persisted.
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({super.key});
 
@@ -48,39 +48,46 @@ class _SettingsSheetState extends State<SettingsSheet> {
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FlashPointsSettingsSection(
-                minutes: _flashPointMinutes,
-                onAdd: _addFlashPoint,
-                onRemove: _removeFlashPoint,
-              ),
-              NotificationSettingsSection(
-                enabled: _notifyEnabled,
-                onChanged: (value) => setState(() => _notifyEnabled = value),
-              ),
-              WeekendMilestonesSettingsSection(
-                milestones: _milestones,
-                onAdd: _addMilestone,
-                onRemove: _removeMilestone,
-              ),
-              NtpSyncSettingsSection(
-                statusText: _ntpStatusText,
-                onSyncPressed: () => setState(
-                  () => _ntpStatusText = _syncPlaceholderStatusText,
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                key: const Key('closeSettingsSheetButton'),
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('閉じる'),
-              ),
-            ],
+            children: _sections(context),
           ),
         ),
       ),
     );
   }
+
+  List<Widget> _sections(BuildContext context) {
+    return [
+      FlashPointsSettingsSection(
+        minutes: _flashPointMinutes,
+        onAdd: _addFlashPoint,
+        onRemove: _removeFlashPoint,
+      ),
+      NotificationSettingsSection(
+        enabled: _notifyEnabled,
+        onChanged: _setNotifyEnabled,
+      ),
+      WeekendMilestonesSettingsSection(
+        milestones: _milestones,
+        onAdd: _addMilestone,
+        onRemove: _removeMilestone,
+      ),
+      NtpSyncSettingsSection(
+        statusText: _ntpStatusText,
+        onSyncPressed: _syncNow,
+      ),
+      const SizedBox(height: 12),
+      FilledButton(
+        key: const Key('closeSettingsSheetButton'),
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('閉じる'),
+      ),
+    ];
+  }
+
+  void _setNotifyEnabled(bool value) => setState(() => _notifyEnabled = value);
+
+  void _syncNow() =>
+      setState(() => _ntpStatusText = _syncPlaceholderStatusText);
 
   void _addFlashPoint(int minutes) {
     if (_flashPointMinutes.contains(minutes)) return;

@@ -3,9 +3,8 @@ import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 
 /// UI-only mirror of the prototype's notify switch
-/// (docs/session-timer.html `#notifyToggle`). Not wired to
-/// `NotificationService` — that's issue #22's scope (see
-/// plans/feat-settings-sheet-shell.md).
+/// (docs/session-timer.html `#notifyToggle`). Ephemeral local state, not
+/// wired to `NotificationService`.
 class NotificationSettingsSection extends StatelessWidget {
   const NotificationSettingsSection({
     required this.enabled,

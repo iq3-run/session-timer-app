@@ -33,7 +33,7 @@ iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
 ## ディレクトリ構成
 
-機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`で、`settings/`は今後のPRで追加される想定の構成。
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（UIの土台のみ、各項目の実配線は別Issue）。
 
 ```text
 lib/

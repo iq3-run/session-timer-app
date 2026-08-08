@@ -188,4 +188,36 @@ latches a previous value to detect change instead of using `ref.listen`
 should be flagged with this precedent cited, not treated as a fresh
 finding.
 
+**`context.mounted`-after-`await` check — established pattern, and a real
+miss found in `feat/settings-sheet-shell` (2026-08-09, commit 7a8d370)**:
+`time_targets_section.dart` (`_editTarget`/`_addTarget`) and
+`completion_countdown_section.dart` both guard the `setState` following an
+awaited `showTimePicker`/`showDatePicker` with
+`if (picked == null || !context.mounted) return;`. The new
+`weekend_milestones_settings_section.dart`'s `_AddMilestoneRowState._pickDate`
+awaits `showDatePicker` and then calls `setState` with only a
+`if (picked == null) return;` guard — no `mounted`/`context.mounted` check.
+Flagged as Critical (real crash risk: `setState()` after `dispose()`), not
+yet fixed as of this review (read-only pass). If this repeats in a future
+PR, cite this precedent directly — it's an established, repo-wide pattern
+now broken once.
+
+**Doc-comment content rule (task/issue/plan-file references) — recurred in
+`feat/settings-sheet-shell` (2026-08-09, commit 7a8d370)**: six new files
+under `lib/features/settings/` all carry doc comments naming
+`plans/feat-settings-sheet-shell.md` and/or issue numbers (`issue #22`,
+`Issue #24`) — the same class of violation as the `ensureRunning()` case
+above (CLAUDE.md: "never reference the current task, fix, or callers in
+comments"), except spread across a whole new feature folder instead of one
+function. Flagged as Warning, not yet fixed as of this review. Note: the
+*user-facing* UI text in `notification_settings_section.dart`
+("この設定は #22 で実際の通知に反映されます") and
+`settings_sheet.dart`'s NTP placeholder ("実装予定: issue #1") are
+different — those are deliberate, pre-agreed in `plans/feat-settings-sheet-shell.md`
+itself (explicit design decision + "Items to Confirm" note for the human
+reviewer), not a fresh violation. Don't conflate the two: doc-comment
+issue-references are the recurring violation to flag; the same references
+inside user-visible strings here are an adjudicated exception, cited once,
+not re-flagged.
+
 Related: [[project_readme_maintenance_gap]]

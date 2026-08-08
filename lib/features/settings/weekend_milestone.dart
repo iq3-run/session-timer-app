@@ -1,5 +1,5 @@
 /// Ephemeral, UI-only entry for the settings sheet's "週末（マイルストーン）"
-/// section. Not persisted — see plans/feat-settings-sheet-shell.md.
+/// section. Not persisted.
 class WeekendMilestone {
   const WeekendMilestone({
     required this.id,

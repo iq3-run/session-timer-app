@@ -6,7 +6,7 @@ import 'package:session_timer/features/settings/weekend_milestone.dart';
 
 /// UI-only mirror of the prototype's milestone list
 /// (docs/session-timer.html `#milestoneList`/`#msLabelInput`/`#msDateInput`).
-/// Not persisted — see plans/feat-settings-sheet-shell.md.
+/// Not persisted.
 class WeekendMilestonesSettingsSection extends StatelessWidget {
   const WeekendMilestonesSettingsSection({
     required this.milestones,
@@ -90,7 +90,7 @@ class _AddMilestoneRowState extends State<_AddMilestoneRow> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     setState(() => _pickedDate = picked);
   }
 
