@@ -1,0 +1,10 @@
+# MD013 (line-length): disabled — this repo's docs (README, plans/) are Japanese
+# prose, where long unbroken lines are normal and wrapping at a fixed column
+# would hurt readability. (docs/session-timer-spec.md itself is excluded from
+# lint entirely — see .github/workflows/markdown-lint.yml — since it's a
+# preserved copy of an externally-authored spec, not house-style content.)
+MD013: false
+
+# MD029 (ol-prefix): disabled — plan files may intentionally use incrementing
+# numbers (1. 2. 3.) instead of markdownlint's default all-1s style.
+MD029: false

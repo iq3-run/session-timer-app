@@ -2,7 +2,7 @@
 
 セミナー／教育プログラムの運営者が、セッションを時間どおりに終わらせるために使うタイムマネジメント用スマホアプリ（Flutter製、Android / iOS対応）。
 
-詳細な機能仕様は [docs/session-timer-spec.md](docs/session-timer-spec.md) を参照。UI設計の参考実装（HTMLプロトタイプ）は [docs/prototype-reference.html](docs/prototype-reference.html)。
+詳細な機能仕様は [docs/session-timer-spec.md](docs/session-timer-spec.md) を参照。UI設計の参考実装（HTMLプロトタイプ）は [docs/session-timer.html](docs/session-timer.html)。
 
 ## 技術スタック
 
@@ -32,6 +32,8 @@ flutter build apk --debug
 iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
 ## ディレクトリ構成
+
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`と`core/theme/`のみで、他の`features/`配下は今後のPRで追加される想定の構成。
 
 ```text
 lib/
