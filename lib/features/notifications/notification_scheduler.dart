@@ -36,6 +36,13 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler> {
     try {
       await service.init();
       await service.requestPermissions();
+      // `ref.listen` in build() only fires on a *change* to the candidate
+      // list, not for its current value — schedule explicitly for whatever
+      // it already is by the time init finishes, rather than relying on a
+      // source provider happening to still be mid-load.
+      await service.rescheduleAll(
+        ref.read(notificationCandidateEventsProvider),
+      );
     } on Exception catch (e) {
       debugPrint('NotificationScheduler: failed to initialize: $e');
     }

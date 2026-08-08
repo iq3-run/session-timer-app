@@ -8,7 +8,7 @@ import 'package:session_timer/features/timer/timer_controller.dart';
 /// notification — the same three sources `FlashQueueController` animates,
 /// but without any window/firing logic: this only changes when a source's
 /// state does, not on every clock tick, since scheduling is done up front
-/// rather than at fire time (see plans/feat-device-notifications.md).
+/// rather than at fire time.
 final notificationCandidateEventsProvider = Provider<List<FlashEvent>>((ref) {
   final completion = ref.watch(completionTimeControllerProvider).value;
   final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];

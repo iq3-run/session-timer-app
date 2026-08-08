@@ -15,11 +15,9 @@ final notificationServiceProvider = Provider<NotificationService>(
 );
 
 /// Schedules a device notification for every future flash-point instant,
-/// mirroring what `FlashOverlay` shows on screen. Notifications are
-/// pre-scheduled via `zonedSchedule` rather than fired at the moment a
-/// flash actually plays, so they still arrive while the app is backgrounded
-/// or not running — see plans/feat-device-notifications.md for why this
-/// differs from the flash overlay's foreground-only design.
+/// mirroring what `FlashOverlay` shows on screen. Unlike the flash overlay
+/// (foreground-only), notifications are pre-scheduled via `zonedSchedule`
+/// so they still arrive while the app is backgrounded or not running.
 class NotificationService {
   NotificationService(
     this._plugin, {
@@ -37,10 +35,16 @@ class NotificationService {
   /// Memoized so concurrent callers (e.g. `NotificationScheduler.initState`
   /// racing an early `rescheduleAll`) share one in-flight initialization
   /// instead of double-initializing the plugin or reading `tz.local` before
-  /// it's been set.
+  /// it's been set. Reset to `null` on failure so a transient error (e.g. a
+  /// platform channel not ready yet) doesn't permanently disable the
+  /// feature for the rest of the app session.
   Future<void>? _initFuture;
 
-  Future<void> init() => _initFuture ??= _initNow();
+  Future<void> init() =>
+      _initFuture ??= _initNow().catchError((Object e, StackTrace st) {
+        _initFuture = null;
+        Error.throwWithStackTrace(e, st);
+      });
 
   Future<void> _initNow() async {
     tz_data.initializeTimeZones();
@@ -71,26 +75,42 @@ class NotificationService {
         ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
+  /// Serializes [rescheduleAll] calls so an in-flight cancel-and-rebuild
+  /// can't be interleaved with a newer one — e.g. two rapid state edits
+  /// (add two time targets back-to-back) would otherwise race, letting the
+  /// older call's later `zonedSchedule`s land after the newer call's
+  /// `cancelAll()` and leave stale notifications behind. Mirrors
+  /// `StopwatchController`/`TimeTargetsController`'s `_mutationQueue`
+  /// pattern.
+  Future<void> _rescheduleQueue = Future<void>.value();
+
   /// Cancels every pending scheduled notification and re-schedules one for
   /// each of [events] whose instant hasn't passed yet. Called whenever the
-  /// candidate list changes (completion/target/timer state edited), which
-  /// is infrequent enough that a full rebuild is simpler than diffing the
-  /// old and new schedules. Awaits [init] itself so callers can't race it.
-  Future<void> rescheduleAll(List<FlashEvent> events) async {
+  /// candidate list changes (completion/target/timer state edited).
+  Future<void> rescheduleAll(List<FlashEvent> events) {
+    final previous = _rescheduleQueue;
+    final result = previous.then((_) => _rescheduleNow(events));
+    _rescheduleQueue = result.catchError((_) {});
+    return result;
+  }
+
+  Future<void> _rescheduleNow(List<FlashEvent> events) async {
     await init();
     await _plugin.cancelAll();
     final now = DateTime.now();
-    for (final event in events) {
-      if (!event.instant.isAfter(now)) continue;
-      await _plugin.zonedSchedule(
-        id: _notificationId(event.id),
-        title: _notificationTitle,
-        body: event.label,
-        scheduledDate: tz.TZDateTime.from(event.instant, tz.local),
-        notificationDetails: _notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
-    }
+    final upcoming = events.where((event) => event.instant.isAfter(now));
+    await Future.wait(
+      upcoming.map(
+        (event) => _plugin.zonedSchedule(
+          id: _notificationId(event.id),
+          title: _notificationTitle,
+          body: event.label,
+          scheduledDate: tz.TZDateTime.from(event.instant, tz.local),
+          notificationDetails: _notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        ),
+      ),
+    );
   }
 
   static const _notificationDetails = NotificationDetails(
@@ -102,8 +122,9 @@ class NotificationService {
   );
 }
 
-/// `zonedSchedule` requires a positive 32-bit int id. Collisions between
-/// two [FlashEvent.id]s are astronomically unlikely given this app's event
-/// volume (well under a hundred at once) — accepted, see Items to Confirm
-/// in plans/feat-device-notifications.md.
-int _notificationId(String eventId) => eventId.hashCode & 0x7fffffff;
+/// Masks a hash down to a positive 32-bit int, as `zonedSchedule` requires.
+const _int32SignMask = 0x7fffffff;
+
+/// Collisions between two [FlashEvent.id]s are astronomically unlikely
+/// given this app's event volume (well under a hundred at once) — accepted.
+int _notificationId(String eventId) => eventId.hashCode & _int32SignMask;
