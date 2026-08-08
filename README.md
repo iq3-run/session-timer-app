@@ -33,7 +33,7 @@ iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
 ## ディレクトリ構成
 
-機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`と`core/theme/`のみで、他の`features/`配下は今後のPRで追加される想定の構成。
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`で、`timer/`・`flash/`・`settings/`は今後のPRで追加される想定の構成。
 
 ```text
 lib/
@@ -44,7 +44,7 @@ lib/
     clock/       # 現在時刻表示
     completion/  # 完了時刻カウントダウン
     targets/     # 指定時刻リスト
-    stopwatch/
+    stopwatch/   # ストップウォッチ
     timer/
     flash/       # フラッシュ演出・キューイング
     settings/    # 設定シート（マイルストーン・通知・NTP）
