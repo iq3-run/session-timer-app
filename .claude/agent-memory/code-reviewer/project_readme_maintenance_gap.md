@@ -60,4 +60,22 @@ the `plans/*.md` template (e.g. a "Docs" section listing README.md explicitly) r
 continuing to rely on the prose MUST rule alone, since four fix-after-flag cycles is enough
 evidence the rule alone isn't preventing the initial miss.
 
+**Recurred a 5th time in `feat/settings-sheet-shell` (2026-08-09, commit
+7a8d370)**: `lib/features/settings/` was implemented (UI-only shell, issue
+#24). README.md's directory-tree code block already listed `settings/`
+(pre-added in an earlier PR in anticipation), but the prose sentence just
+above it (line 36) still says `settings/`は今後のPRで追加される想定
+("expected to be added in a future PR") — now stale since it's implemented.
+Same partial-update failure mode as the 3rd recurrence (tree right, prose
+wrong) but this time the tree was *already* right beforehand and only the
+prose needed to flip from future-tense to implemented; the PR didn't touch
+README.md at all. Flagged during this PR's local code-reviewer pass and
+fixed in the same PR (commit 8b6329c) — then CodeRabbit caught a follow-on
+gap the fix didn't cover (the tree's inline comment on `settings/` still
+only mentioned milestones/notify/NTP, missing flash points), fixed
+separately. Five recurrences now across PR #11, #18, #20,
+device-notifications PR, and this one. The
+standing proposal (checklist item in `plans/*.md` template) has not been
+acted on yet — raise it again next time, more insistently.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_notification_scheduler_patterns]]
