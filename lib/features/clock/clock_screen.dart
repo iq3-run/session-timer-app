@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/clock/current_time_display.dart';
 import 'package:session_timer/features/completion/completion_countdown_section.dart';
+import 'package:session_timer/features/targets/time_targets_section.dart';
 
 class ClockScreen extends StatelessWidget {
   const ClockScreen({super.key});
@@ -13,13 +14,16 @@ class ClockScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CurrentTimeDisplay(),
-              SizedBox(height: 8),
-              CompletionCountdownSection(),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                CurrentTimeDisplay(),
+                SizedBox(height: 8),
+                CompletionCountdownSection(),
+                SizedBox(height: 16),
+                TimeTargetsSection(),
+              ],
+            ),
           ),
         ),
       ),
