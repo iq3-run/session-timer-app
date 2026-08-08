@@ -22,3 +22,6 @@ Add `behavior: HitTestBehavior.opaque` to the `GestureDetector` in
 - `dart format`
 - `flutter analyze`
 - `flutter test`
+- `flutter build apk --debug` (local debug build)
+- Local review: `code-reviewer` subagent + Gemini CLI review (see the
+  repo's `CLAUDE.md` review flow), before the PR is created or pushed
