@@ -38,21 +38,28 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
     final timer = ref.watch(timerControllerProvider).value;
 
+    // Sorted chronologically so that when several windows open in the same
+    // build (e.g. resuming from a long background gap), each new event is
+    // compared against its true nearest neighbor for merging — not just
+    // whichever source happened to list it first.
     final candidates = [
       ...completionFlashEvents(completion),
       ...targetFlashEvents(targets),
       ...timerFlashEvents(timer),
-    ];
+    ]..sort((a, b) => a.instant.compareTo(b.instant));
 
     for (final event in candidates) {
       _admit(event, now);
     }
+    _promoteNextIfIdle();
 
+    return FlashQueueState(active: _active, firedIds: {..._firedIds});
+  }
+
+  void _promoteNextIfIdle() {
     if (_active == null && _queue.isNotEmpty) {
       _active = _queue.removeAt(0);
     }
-
-    return FlashQueueState(active: _active, firedIds: {..._firedIds});
   }
 
   /// Called by `FlashOverlay` when its animation for the current `active`
@@ -60,7 +67,8 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   /// flashes back-to-back without a gap (spec 3-5-1節: 再生中の演出を中断
   /// せずキューイングして順番に再生する).
   void advance() {
-    _active = _queue.isNotEmpty ? _queue.removeAt(0) : null;
+    _active = null;
+    _promoteNextIfIdle();
     state = FlashQueueState(active: _active, firedIds: {..._firedIds});
   }
 
@@ -76,16 +84,16 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     _firedIds.add(event.id);
     if (now.isAfter(event.instant)) return;
 
-    if (_active != null &&
-        event.instant.difference(_active!.instant).abs() <=
-            _flashMergeThreshold) {
-      return; // merged into the currently playing flash
-    }
-    if (_queue.isNotEmpty &&
-        event.instant.difference(_queue.last.instant).abs() <=
-            _flashMergeThreshold) {
-      return; // merged into the last queued flash
-    }
-    _queue.add(event);
+    if (!_isMergeable(event)) _queue.add(event);
+  }
+
+  /// Whether [event] lands within [_flashMergeThreshold] of the currently
+  /// playing flash or the last queued one — either way it's folded into
+  /// that flash instead of getting its own (spec 3-5-1節).
+  bool _isMergeable(FlashEvent event) {
+    final nearest = _queue.isNotEmpty ? _queue.last : _active;
+    if (nearest == null) return false;
+    return event.instant.difference(nearest.instant).abs() <=
+        _flashMergeThreshold;
   }
 }

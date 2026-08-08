@@ -188,5 +188,41 @@ void main() {
         expect(second?.id, 'target:t2:${t1Instant.millisecondsSinceEpoch}');
       },
     );
+
+    test(
+      'plays events in chronological order even when they become due in a '
+      'different order (e.g. resuming after a long background gap)',
+      () async {
+        final clock = StreamController<DateTime>.broadcast();
+        addTearDown(clock.close);
+        final early = DateTime(2099, 1, 1, 12);
+        final mid = early.add(const Duration(milliseconds: 500));
+        final late = early.add(const Duration(seconds: 3));
+        // Listed out of chronological order — 'late' is due first in this
+        // list — to prove admission sorts by instant instead of trusting
+        // source order.
+        final container = await _buildContainer(
+          clock: clock,
+          targets: [
+            TimeTarget(id: 'late', epochMs: late.millisecondsSinceEpoch),
+            TimeTarget(id: 'early', epochMs: early.millisecondsSinceEpoch),
+            TimeTarget(id: 'mid', epochMs: mid.millisecondsSinceEpoch),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        // All three windows are simultaneously open only exactly at `early`
+        // (its window ends there, `late`'s window starts there, and `mid`'s
+        // spans right through it).
+        await _tick(clock, early);
+
+        final first = container.read(flashQueueControllerProvider).active;
+        expect(first?.id, 'target:early:${early.millisecondsSinceEpoch}');
+
+        container.read(flashQueueControllerProvider.notifier).advance();
+        final second = container.read(flashQueueControllerProvider).active;
+        expect(second?.id, 'target:late:${late.millisecondsSinceEpoch}');
+      },
+    );
   });
 }

@@ -155,4 +155,36 @@ Pattern to remember: if a 3rd persisted-model file needs the same epoch
 bound, it should import `epoch_bounds.dart` too rather than adding another
 private copy.
 
+**Notifier mutating private instance fields inside `build()` itself (not just
+inside action methods) — confirmed safe, now a 2nd instance**:
+`flash_queue_controller.dart` (`feat/flash-effect`, 2026-08-09)'s
+`FlashQueueController.build()` mutates `_firedIds`/`_queue`/`_active`
+directly on every re-run (triggered every ~1s via `ref.watch(nowProvider)`),
+not just from action methods like `advance()`. This is a step further than
+the stopwatch/targets `_mutationQueue`/`_lastGood` pattern above (which only
+mutates fields from action methods, not from `build()` itself), but is
+reviewed as safe for the same reason: the provider is a plain
+`NotifierProvider` (no `.autoDispose`), so the container — and therefore the
+Notifier instance and its fields — lives for the whole app session; a hot
+restart (not hot reload) is the only thing that resets it, and that resets
+`state` too, so there's no split-brain window. Don't flag "mutating fields in
+build()" as inherently unsafe in this repo without first checking whether the
+provider is `autoDispose` — it isn't, here or in the stopwatch/targets
+controllers.
+
+**`ref.listen` is not used anywhere in this repo yet**: every existing
+widget that needs to react to a *change* in provider state (not just read
+its current value) does so by manually diffing against a stored field —
+e.g. `flash_overlay.dart`'s `_FlashOverlayState` compares
+`active.id != _lastActiveId` inside `build()` to decide whether to call
+`_controller.forward()`, rather than using `ref.listen(provider, (prev,
+next) { ... })`, which is Riverpod's documented tool for exactly this
+(side effects on state change, as opposed to `ref.watch` for rendering).
+Flagged as Warning in that PR's review. If this recurs in a future PR
+(another `ConsumerStatefulWidget` manually latching a previous value to
+detect change instead of `ref.listen`), it's the same gap, not a new one —
+worth raising to Warning-with-precedent rather than a fresh finding, and
+worth asking the user once whether `ref.listen` should become a stated
+convention in CLAUDE.md.
+
 Related: [[project_readme_maintenance_gap]]

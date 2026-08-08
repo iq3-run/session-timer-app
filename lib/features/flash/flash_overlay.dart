@@ -25,10 +25,8 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
     duration: flashAnimationDuration,
   )..addStatusListener(_onStatusChanged);
 
-  String? _lastActiveId;
-
   void _onStatusChanged(AnimationStatus status) {
-    if (status == AnimationStatus.completed) {
+    if (status == AnimationStatus.completed && mounted) {
       ref.read(flashQueueControllerProvider.notifier).advance();
     }
   }
@@ -41,15 +39,13 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(flashQueueControllerProvider, (previous, next) {
+      if (next.active != null && next.active!.id != previous?.active?.id) {
+        _controller.stop();
+        unawaited(_controller.forward(from: 0));
+      }
+    });
     final active = ref.watch(flashQueueControllerProvider).active;
-
-    if (active != null && active.id != _lastActiveId) {
-      _lastActiveId = active.id;
-      _controller.stop();
-      unawaited(_controller.forward(from: 0));
-    } else if (active == null) {
-      _lastActiveId = null;
-    }
 
     return IgnorePointer(
       child: AnimatedBuilder(
