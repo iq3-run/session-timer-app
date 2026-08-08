@@ -48,7 +48,7 @@ lib/
     timer/       # 単独カウントダウンタイマー
     flash/       # フラッシュ演出・キューイング
     notifications/ # フラッシュポイントの端末通知スケジューリング
-    settings/    # 設定シート（マイルストーン・通知・NTP）
+    settings/    # 設定シート（フラッシュポイント・通知・マイルストーン・NTP）
 test/            # libと同じfeature構成でミラーリング
 ```
 

@@ -69,9 +69,12 @@ above it (line 36) still says `settings/`は今後のPRで追加される想定
 Same partial-update failure mode as the 3rd recurrence (tree right, prose
 wrong) but this time the tree was *already* right beforehand and only the
 prose needed to flip from future-tense to implemented; the PR didn't touch
-README.md at all. Flagged during this PR's local code-reviewer pass (not
-yet fixed as of this writing — review was read-only). Five recurrences now
-across PR #11, #18, #20, device-notifications PR, and this one. The
+README.md at all. Flagged during this PR's local code-reviewer pass and
+fixed in the same PR (commit 8b6329c) — then CodeRabbit caught a follow-on
+gap the fix didn't cover (the tree's inline comment on `settings/` still
+only mentioned milestones/notify/NTP, missing flash points), fixed
+separately. Five recurrences now across PR #11, #18, #20,
+device-notifications PR, and this one. The
 standing proposal (checklist item in `plans/*.md` template) has not been
 acted on yet — raise it again next time, more insistently.
 

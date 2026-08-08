@@ -197,10 +197,10 @@ awaited `showTimePicker`/`showDatePicker` with
 `weekend_milestones_settings_section.dart`'s `_AddMilestoneRowState._pickDate`
 awaits `showDatePicker` and then calls `setState` with only a
 `if (picked == null) return;` guard — no `mounted`/`context.mounted` check.
-Flagged as Critical (real crash risk: `setState()` after `dispose()`), not
-yet fixed as of this review (read-only pass). If this repeats in a future
-PR, cite this precedent directly — it's an established, repo-wide pattern
-now broken once.
+Flagged as Critical (real crash risk: `setState()` after `dispose()`),
+fixed in the same PR (commit 8b6329c). If this repeats in a future PR,
+cite this precedent directly — it's an established, repo-wide pattern
+broken once already.
 
 **Doc-comment content rule (task/issue/plan-file references) — recurred in
 `feat/settings-sheet-shell` (2026-08-09, commit 7a8d370)**: six new files
@@ -209,7 +209,7 @@ under `lib/features/settings/` all carry doc comments naming
 `Issue #24`) — the same class of violation as the `ensureRunning()` case
 above (CLAUDE.md: "never reference the current task, fix, or callers in
 comments"), except spread across a whole new feature folder instead of one
-function. Flagged as Warning, not yet fixed as of this review. Note: the
+function. Flagged as Warning, fixed in the same PR (commit 8b6329c). Note: the
 *user-facing* UI text in `notification_settings_section.dart`
 ("この設定は #22 で実際の通知に反映されます") and
 `settings_sheet.dart`'s NTP placeholder ("実装予定: issue #1") are
