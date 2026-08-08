@@ -103,6 +103,31 @@ void main() {
       },
     );
 
+    test(
+      'two concurrent fresh-start calls do not race the stopwatch into '
+      'being paused right after auto-starting it',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timerControllerProvider.future);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(timerControllerProvider.notifier);
+
+        final first = notifier.start(
+          TimerMode.normal,
+          const Duration(minutes: 1),
+        );
+        final second = notifier.quickStart(const Duration(seconds: 30));
+        await Future.wait([first, second]);
+        final stopwatch = await container.read(
+          stopwatchControllerProvider.future,
+        );
+
+        expect(stopwatch.isRunning, isTrue);
+      },
+    );
+
     test('reset clears the target but keeps the last selected mode', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();

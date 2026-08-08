@@ -96,11 +96,8 @@ class TimerController extends AsyncNotifier<TimerState> {
     await _autoStartStopwatchIfNeeded();
   }
 
-  Future<void> _autoStartStopwatchIfNeeded() async {
-    final stopwatch = await ref.read(stopwatchControllerProvider.future);
-    if (!stopwatch.isRunning) {
-      await ref.read(stopwatchControllerProvider.notifier).toggle();
-    }
+  Future<void> _autoStartStopwatchIfNeeded() {
+    return ref.read(stopwatchControllerProvider.notifier).ensureRunning();
   }
 
   Future<void> _mutate(TimerState Function(TimerState) update) {

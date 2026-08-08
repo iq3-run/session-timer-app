@@ -49,17 +49,29 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     // still be timed from when the user actually tapped.
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     return _mutate((s) {
-      if (!s.isRunning) {
-        return StopwatchState(
-          accumulatedMs: s.accumulatedMs,
-          runningSinceEpochMs: nowEpochMs,
-        );
-      }
+      if (!s.isRunning) return _startedFrom(s, nowEpochMs);
       final elapsedThisRun = nowEpochMs - s.runningSinceEpochMs!;
       return StopwatchState(
         accumulatedMs: s.accumulatedMs + clampToNonNegativeMs(elapsedThisRun),
       );
     });
+  }
+
+  /// Starts the stopwatch only if it isn't already running. The not-running
+  /// check runs inside the same mutation queue as the state change, so two
+  /// concurrent callers can't both observe "not running" and race into a
+  /// start-then-immediately-stop pair (unlike a naive
+  /// read-current-state-then-toggle() sequence).
+  Future<void> ensureRunning() {
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    return _mutate((s) => s.isRunning ? s : _startedFrom(s, nowEpochMs));
+  }
+
+  StopwatchState _startedFrom(StopwatchState s, int nowEpochMs) {
+    return StopwatchState(
+      accumulatedMs: s.accumulatedMs,
+      runningSinceEpochMs: nowEpochMs,
+    );
   }
 
   /// Long-press: full reset. Unconditionally resets the linked/independent

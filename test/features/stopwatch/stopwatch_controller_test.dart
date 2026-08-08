@@ -98,6 +98,59 @@ void main() {
       expect(paused.accumulatedMs, greaterThan(0));
     });
 
+    test('ensureRunning starts the stopwatch when it is stopped', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(stopwatchControllerProvider.future);
+      final notifier = container.read(stopwatchControllerProvider.notifier);
+
+      await notifier.ensureRunning();
+      final state = await container.read(stopwatchControllerProvider.future);
+
+      expect(state.isRunning, isTrue);
+    });
+
+    test(
+      'ensureRunning is a no-op when the stopwatch is already running',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(stopwatchControllerProvider.notifier);
+        await notifier.toggle();
+        final running = await container.read(
+          stopwatchControllerProvider.future,
+        );
+
+        await notifier.ensureRunning();
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.isRunning, isTrue);
+        expect(state.runningSinceEpochMs, running.runningSinceEpochMs);
+      },
+    );
+
+    test(
+      'two concurrent ensureRunning calls leave the stopwatch running, '
+      'not started-then-immediately-stopped',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(stopwatchControllerProvider.notifier);
+
+        final first = notifier.ensureRunning();
+        final second = notifier.ensureRunning();
+        await Future.wait([first, second]);
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.isRunning, isTrue);
+      },
+    );
+
     test('reset returns to stopped and zero', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();

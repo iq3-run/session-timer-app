@@ -21,13 +21,14 @@ assuming a single fix makes it permanent.
 `features/*` directory without updating README.md's directory-structure
 section, flag it again as a Warning, same as before.
 
-**Recurred in `feat/countdown-timer` (2026-08-08, still unmerged at review
-time)**: `lib/features/timer/` was added and wired into `clock_screen.dart`,
-but README.md line 36/48 still lists `timer/` under "今後のPRで追加される想定"
-(not yet implemented). Flagged again as Warning in that review. If it lands
-fixed in that PR, this note can be trimmed back down; if it recurs a second
-time after that, consider whether the README-update step needs to become a
-literal checklist item in `plans/*.md` templates rather than relying on the
-CLAUDE.md MUST rule alone.
+**Recurred in `feat/countdown-timer` (2026-08-08), fixed within the same
+PR (#18)**: `lib/features/timer/` was added and wired into
+`clock_screen.dart`, but README.md line 36/48 still listed `timer/` under
+"今後のPRで追加される想定" (not yet implemented). Flagged as Warning during
+that PR's local code-reviewer pass and fixed in the same PR before it was
+pushed. If it recurs a second time after this, consider whether the
+README-update step needs to become a literal checklist item in
+`plans/*.md` templates rather than relying on the CLAUDE.md MUST rule
+alone.
 
 Related: [[project_stopwatch_pr_patterns]]

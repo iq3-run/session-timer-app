@@ -1,3 +1,5 @@
+import 'package:session_timer/core/clock/epoch_bounds.dart';
+
 /// Whether a running timer counts down from the moment it was set, or from
 /// the stopwatch's effective start time (see docs/session-timer-spec.md
 /// 3-1節).
@@ -36,11 +38,15 @@ class TimerState {
   /// from a future schema — rather than throwing, so a bad persisted value
   /// falls back to the unset state instead of crashing the app.
   static TimerState? tryFromJson(Map<String, dynamic> json) {
-    final targetEpochMs = json['targetEpochMs'];
-    if (targetEpochMs != null && targetEpochMs is! int) return null;
+    final rawTargetEpochMs = json['targetEpochMs'];
+    if (rawTargetEpochMs != null && rawTargetEpochMs is! int) return null;
+    final targetEpochMs = rawTargetEpochMs as int?;
+    if (targetEpochMs != null && targetEpochMs.abs() > maxEpochMs) {
+      return null;
+    }
     final mode = _modeFromName(json['mode']);
     if (mode == null) return null;
-    return TimerState(targetEpochMs: targetEpochMs as int?, mode: mode);
+    return TimerState(targetEpochMs: targetEpochMs, mode: mode);
   }
 
   static TimerMode? _modeFromName(Object? name) {

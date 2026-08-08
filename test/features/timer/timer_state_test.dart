@@ -74,5 +74,36 @@ void main() {
 
       expect(restored, isNull);
     });
+
+    test(
+      "tryFromJson accepts targetEpochMs at DateTime's exact valid bounds",
+      () {
+        const maxEpochMs = 8640000000000000;
+        final atMax = TimerState.tryFromJson({
+          'targetEpochMs': maxEpochMs,
+          'mode': 'normal',
+        });
+        final atMin = TimerState.tryFromJson({
+          'targetEpochMs': -maxEpochMs,
+          'mode': 'normal',
+        });
+
+        expect(atMax?.targetEpochMs, maxEpochMs);
+        expect(atMin?.targetEpochMs, -maxEpochMs);
+      },
+    );
+
+    test(
+      "tryFromJson rejects a targetEpochMs beyond DateTime's valid range",
+      () {
+        const beyondMaxEpochMs = 8640000000000001;
+        final restored = TimerState.tryFromJson({
+          'targetEpochMs': beyondMaxEpochMs,
+          'mode': 'normal',
+        });
+
+        expect(restored, isNull);
+      },
+    );
   });
 }

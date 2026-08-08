@@ -1,6 +1,4 @@
-/// DateTime's own valid range (see DateTime.fromMillisecondsSinceEpoch),
-/// beyond which the constructor throws.
-const _maxEpochMs = 8640000000000000;
+import 'package:session_timer/core/clock/epoch_bounds.dart';
 
 class TimeTarget {
   const TimeTarget({required this.id, required this.epochMs});
@@ -12,7 +10,7 @@ class TimeTarget {
     final id = json['id'];
     final epochMs = json['epochMs'];
     if (id is! String || epochMs is! int) return null;
-    if (epochMs.abs() > _maxEpochMs) return null;
+    if (epochMs.abs() > maxEpochMs) return null;
     return TimeTarget(id: id, epochMs: epochMs);
   }
 
