@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+# Stopwatch PR (#11) review patterns
+
 This repo (session-timer-app, Flutter/Dart) has a deliberate, repeated architecture for
 `AsyncNotifier`-backed persisted state, first established in
 `lib/features/targets/time_targets_controller.dart` and now duplicated near-verbatim in

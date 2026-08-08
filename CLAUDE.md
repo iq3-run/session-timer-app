@@ -37,17 +37,28 @@ already clean.
 ## Reviewers configured for this project
 
 - **CodeRabbit** — runs automatically on every push, configured via
-  `.coderabbit.yaml` (chill profile, Japanese, auto-review on). No Sourcery
-  or Codex Action is configured in this repo — `gh workflow list` only shows
-  `Flutter CI` and `Markdown Lint`.
+  `.coderabbit.yaml` (chill profile, Japanese, auto-review on).
+  `gh workflow list` shows no `Codex`-named GitHub Actions workflow (only
+  `Flutter CI` and `Markdown Lint`) — but that only rules out an
+  Actions-based integration under an obvious name, not a GitHub App
+  installation (e.g. Sourcery) or a Codex step embedded in an existing
+  workflow under a different name. Don't treat `gh workflow list` alone as
+  proof nothing else is wired up; check workflow file contents and the
+  repo's installed GitHub Apps if it matters for a decision.
 - **Gemini CLI** — invoked manually (`gemini` is installed on this
   machine). This is specific to this project (decided in Issue #1's
   tracking description) — it is not part of the global CLAUDE.md's default
   review flow, so it must be run explicitly at step 3 above. Headless
-  invocation needs `--skip-trust` in this environment, e.g.:
+  invocation needs `--skip-trust` in this environment. Feed it the full
+  diff — committed, staged, and unstaged — not just `main...<branch>`,
+  since step 3 runs before the change is necessarily committed:
 
   ```bash
-  git diff main...<branch> | gemini --skip-trust -p "review this diff for ..."
+  {
+    git diff --no-ext-diff main...HEAD
+    git diff --no-ext-diff --cached
+    git diff --no-ext-diff
+  } | gemini --skip-trust -p "review this diff for ..."
   ```
 
 - **code-reviewer subagent** — keeps persistent memory under
