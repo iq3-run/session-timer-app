@@ -31,6 +31,7 @@ class _TimeTargetRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _editTarget(context, ref),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),

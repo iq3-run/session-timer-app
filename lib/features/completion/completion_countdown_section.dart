@@ -18,6 +18,7 @@ class CompletionCountdownSection extends ConsumerWidget {
         ?.targetTime;
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _pickCompletionTime(context, ref),
       child: Stack(
         children: [
