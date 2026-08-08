@@ -100,23 +100,27 @@ regression test fails deterministically on the old code and passes on the
 new — confirms the test isn't timing-lucky, it's exercising the actual
 mutation-queue ordering guarantee.
 
-Two things this fix's review caught that CodeRabbit's 3 findings didn't:
-- `ensureRunning()`'s "start" branch (`StopwatchState(accumulatedMs:
-  s.accumulatedMs, runningSinceEpochMs: nowEpochMs)`) is byte-for-byte
-  duplicated from `toggle()`'s `!s.isRunning` branch, right above it in the
-  same file — a same-file, same-PR DRY miss, not a multi-PR spread-out
-  pattern like the mutation-queue skeleton above. Flag this class of thing
-  (new duplication introduced within the diff itself) as Warning
-  immediately, don't apply the "wait for a 3rd instance" leniency that
-  applies to the older, already-adjudicated repo-wide patterns in this file.
-- The comment on `ensureRunning()` names its caller ("used by
-  TimerController's auto-start-on-timer-start rule") — this repo's accepted
-  multi-line-WHY-comment exemption (see below) covers *length*, not
-  *content*. CLAUDE.md's "never reference the current task, fix, or
-  callers in comments" rule still applies inside a long WHY block; sibling
-  comments in this same file (`reset()`, `resetAndRestart()`) get this
-  right by citing the spec section instead of the caller class name. Don't
-  let the length exemption imply a content exemption too.
+Two things this fix's *first* review pass caught that CodeRabbit's 3
+findings didn't — both already fixed in the same PR, recorded here as
+history/pattern, not as current-state issues:
+- *Old implementation* (before the follow-up fix): `ensureRunning()`'s
+  "start" branch (`StopwatchState(accumulatedMs: s.accumulatedMs,
+  runningSinceEpochMs: nowEpochMs)`) was byte-for-byte duplicated from
+  `toggle()`'s `!s.isRunning` branch, right above it in the same file — a
+  same-file, same-PR DRY miss, not a multi-PR spread-out pattern like the
+  mutation-queue skeleton above. *Current state*: both branches now call
+  a shared `_startedFrom()` helper. Pattern to remember: flag new
+  duplication introduced within the diff itself as Warning immediately —
+  don't apply the "wait for a 3rd instance" leniency that applies to the
+  older, already-adjudicated repo-wide patterns in this file.
+- *Old implementation*: the comment on `ensureRunning()` named its caller
+  ("used by TimerController's auto-start-on-timer-start rule") — this
+  repo's accepted multi-line-WHY-comment exemption (see below) covers
+  *length*, not *content*. CLAUDE.md's "never reference the current task,
+  fix, or callers in comments" rule still applies inside a long WHY block.
+  *Current state*: the comment no longer names `TimerController`. Pattern
+  to remember: don't let the length exemption imply a content exemption
+  too.
 
 **Per-widget `Timer.periodic` ticker lifecycle — now duplicated twice**:
 `stopwatch_section.dart`'s `_ElapsedTime`/`_ElapsedTimeState` (`Timer? _ticker`
@@ -138,15 +142,17 @@ extracts its interval as a top-level `_tickInterval` constant;
 instead — minor inconsistency with the very pattern it mirrors, Suggestion
 only, not worth a Warning.
 
-**`_maxEpochMs` bound-check constant duplicated across two files**: fixing
-CodeRabbit's Critical finding on `TimerState.tryFromJson` (missing the same
-out-of-range guard `TimeTarget.tryFromJson` already had) copied the private
+**`_maxEpochMs` bound-check constant — was briefly duplicated, now shared
+(resolved same PR)**: fixing CodeRabbit's Critical finding on
+`TimerState.tryFromJson` (missing the same out-of-range guard
+`TimeTarget.tryFromJson` already had) initially copied the private
 `const _maxEpochMs = 8640000000000000;` constant (value + doc comment)
-verbatim into `lib/features/timer/timer_state.dart` — it already existed in
-`lib/features/targets/time_target.dart`. 2nd occurrence of the same named
-constant; if a 3rd persisted-model file needs the same epoch bound, flag as
-Warning and suggest extracting to `lib/core/clock/` (that directory already
-holds shared time utilities: `duration_format.dart`,
-`time_of_day_resolver.dart`, `now_provider.dart`).
+verbatim into `lib/features/timer/timer_state.dart`, duplicating the one
+already in `lib/features/targets/time_target.dart`. *Current state*: both
+files now import a single public `maxEpochMs` from the new
+`lib/core/clock/epoch_bounds.dart`; neither has a private copy anymore.
+Pattern to remember: if a 3rd persisted-model file needs the same epoch
+bound, it should import `epoch_bounds.dart` too rather than adding another
+private copy.
 
 Related: [[project_readme_maintenance_gap]]
