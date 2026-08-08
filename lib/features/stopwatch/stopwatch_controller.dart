@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const stopwatchAccumulatedMsKey = 'stopwatch_accumulated_ms';
-const stopwatchRunningSinceEpochMsKey = 'stopwatch_running_since_epoch_ms';
+// A single JSON key (rather than one key per field) so a partial
+// SharedPreferences write can't leave a new accumulatedMs paired with a
+// stale runningSinceEpochMs — that combination would double-count the
+// previous running segment on the next restore.
+const stopwatchStateJsonKey = 'stopwatch_state_json';
 
 final stopwatchControllerProvider =
     AsyncNotifierProvider<StopwatchController, StopwatchState>(
@@ -30,10 +34,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
       // a stale read.
       if (state.hasValue) return state.value!;
 
-      final loaded = StopwatchState(
-        accumulatedMs: prefs.getInt(stopwatchAccumulatedMsKey) ?? 0,
-        runningSinceEpochMs: prefs.getInt(stopwatchRunningSinceEpochMsKey),
-      );
+      final loaded = _readPersisted(prefs);
       _lastGood = loaded;
       return loaded;
     } finally {
@@ -41,25 +42,32 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     }
   }
 
-  Future<void> toggle() => _mutate((s) {
-    if (!s.isRunning) {
+  Future<void> toggle() {
+    // Captured before queuing: if a prior persist is still in flight,
+    // _mutateNow may run well after this call, and the operation should
+    // still be timed from when the user actually tapped.
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    return _mutate((s) {
+      if (!s.isRunning) {
+        return StopwatchState(
+          accumulatedMs: s.accumulatedMs,
+          runningSinceEpochMs: nowEpochMs,
+        );
+      }
+      final elapsedThisRun = nowEpochMs - s.runningSinceEpochMs!;
       return StopwatchState(
-        accumulatedMs: s.accumulatedMs,
-        runningSinceEpochMs: DateTime.now().millisecondsSinceEpoch,
+        accumulatedMs:
+            s.accumulatedMs + (elapsedThisRun < 0 ? 0 : elapsedThisRun),
       );
-    }
-    final elapsedThisRun =
-        DateTime.now().millisecondsSinceEpoch - s.runningSinceEpochMs!;
-    return StopwatchState(accumulatedMs: s.accumulatedMs + elapsedThisRun);
-  });
+    });
+  }
 
   Future<void> reset() => _mutate((_) => const StopwatchState());
 
-  Future<void> resetAndRestart() => _mutate(
-    (_) => StopwatchState(
-      runningSinceEpochMs: DateTime.now().millisecondsSinceEpoch,
-    ),
-  );
+  Future<void> resetAndRestart() {
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    return _mutate((_) => StopwatchState(runningSinceEpochMs: nowEpochMs));
+  }
 
   Future<void> _mutate(StopwatchState Function(StopwatchState) update) {
     final previous = _mutationQueue;
@@ -90,18 +98,21 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     }
   }
 
-  Future<bool> _persist(SharedPreferences prefs, StopwatchState s) async {
-    final accumulatedOk = await prefs.setInt(
-      stopwatchAccumulatedMsKey,
-      s.accumulatedMs,
-    );
-    final runningOk = s.runningSinceEpochMs == null
-        ? await prefs.remove(stopwatchRunningSinceEpochMsKey)
-        : await prefs.setInt(
-            stopwatchRunningSinceEpochMsKey,
-            s.runningSinceEpochMs!,
-          );
-    return accumulatedOk && runningOk;
+  StopwatchState _readPersisted(SharedPreferences prefs) {
+    final raw = prefs.getString(stopwatchStateJsonKey);
+    if (raw == null) return const StopwatchState();
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      return const StopwatchState();
+    }
+    if (decoded is! Map<String, dynamic>) return const StopwatchState();
+    return StopwatchState.tryFromJson(decoded) ?? const StopwatchState();
+  }
+
+  Future<bool> _persist(SharedPreferences prefs, StopwatchState s) {
+    return prefs.setString(stopwatchStateJsonKey, jsonEncode(s.toJson()));
   }
 
   AsyncValue<StopwatchState> _persistenceFailure() {

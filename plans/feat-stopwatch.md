@@ -30,7 +30,7 @@ Issue: #10（親: #1）
 - `reset()`：`accumulatedMs=0`・`runningSinceEpochMs=null`（長押し）
 - `resetAndRestart()`：`accumulatedMs=0`・`runningSinceEpochMs=現在epoch`（ダブルタップ）
 
-永続化キー：`stopwatch_accumulated_ms`（int）、`stopwatch_running_since_epoch_ms`（int、未計測時はキー削除）。3-9節の「開始基準epoch＋その時点での累積時間」方式そのもの。再起動時、`runningSinceEpochMs`が保存されていれば計測中状態のまま復元し、経過時間はダウンタイム分も含めて自動的に加算される（実際のストップウォッチと同じ挙動なので、超過リセットのような特別処理は不要）。
+永続化キーは`stopwatch_state_json`（`TimeTargetsController`と同じくJSON文字列を1キーへ保存する方式）。`accumulatedMs`・`runningSinceEpochMs`をそれぞれ独立したキーで書き込むと、片方だけ書き込み成功した場合に新しい累積時間と古い計測開始epochが組み合わさり、次回復元時に同じ区間を二重計上してしまう（PRレビューで指摘・修正）。3-9節の「開始基準epoch＋その時点での累積時間」方式そのもの。再起動時、`runningSinceEpochMs`が保存されていれば計測中状態のまま復元し、経過時間はダウンタイム分も含めて自動的に加算される（実際のストップウォッチと同じ挙動なので、超過リセットのような特別処理は不要）。
 
 ## UI
 

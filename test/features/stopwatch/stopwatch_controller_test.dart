@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
@@ -108,16 +110,14 @@ void main() {
         final persistedPrefs = await firstContainer.read(
           sharedPreferencesProvider.future,
         );
-        final persistedAccumulatedMs = persistedPrefs.getInt(
-          stopwatchAccumulatedMsKey,
-        );
+        final persistedJson = persistedPrefs.getString(stopwatchStateJsonKey);
         firstContainer.dispose();
 
         // SharedPreferences.getInstance() caches its result process-wide, so
         // disposing the container alone doesn't simulate a cold restart —
         // re-seed the mock backing store from what was actually persisted.
         SharedPreferences.setMockInitialValues({
-          stopwatchAccumulatedMsKey: ?persistedAccumulatedMs,
+          stopwatchStateJsonKey: ?persistedJson,
         });
         final secondContainer = ProviderContainer();
         addTearDown(secondContainer.dispose);
@@ -144,18 +144,23 @@ void main() {
         final persistedPrefs = await firstContainer.read(
           sharedPreferencesProvider.future,
         );
-        final persistedAccumulatedMs = persistedPrefs.getInt(
-          stopwatchAccumulatedMsKey,
-        );
-        final persistedRunningSinceEpochMs = persistedPrefs.getInt(
-          stopwatchRunningSinceEpochMsKey,
-        );
+        final persistedJson = persistedPrefs.getString(stopwatchStateJsonKey);
+        final persistedRunningSinceEpochMs =
+            (jsonDecode(persistedJson!)
+                    as Map<String, dynamic>)['runningSinceEpochMs']
+                as int;
         firstContainer.dispose();
 
         await Future<void>.delayed(const Duration(milliseconds: 20));
+        // A lower bound on what the app was stopped for, computed from the
+        // saved start epoch — guards against a regression that re-bases
+        // runningSinceEpochMs to the restore time and silently drops the
+        // downtime instead of continuing to count through it.
+        final minimumElapsedMs =
+            DateTime.now().millisecondsSinceEpoch -
+            persistedRunningSinceEpochMs;
         SharedPreferences.setMockInitialValues({
-          stopwatchAccumulatedMsKey: ?persistedAccumulatedMs,
-          stopwatchRunningSinceEpochMsKey: ?persistedRunningSinceEpochMs,
+          stopwatchStateJsonKey: persistedJson,
         });
         final secondContainer = ProviderContainer();
         addTearDown(secondContainer.dispose);
@@ -166,7 +171,7 @@ void main() {
         expect(restored.isRunning, isTrue);
         expect(
           restored.elapsedAt(DateTime.now()).inMilliseconds,
-          greaterThan(0),
+          greaterThanOrEqualTo(minimumElapsedMs),
         );
       },
     );
