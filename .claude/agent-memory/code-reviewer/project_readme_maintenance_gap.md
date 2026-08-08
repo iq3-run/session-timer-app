@@ -31,19 +31,21 @@ README-update step needs to become a literal checklist item in
 `plans/*.md` templates rather than relying on the CLAUDE.md MUST rule
 alone.
 
-**Recurred a 3rd time in `feat/flash-effect` (2026-08-09), still unfixed as of
-review**: `lib/features/flash/` was added and wired into `clock_screen.dart`.
-README.md's directory-tree code block (line 49) was updated to list
-`flash/` — but the prose sentence just above it (line 36, "現時点で実装済み
-なのは...`timer/`で、`flash/`・`settings/`は今後のPRで追加される想定")
-was not, so it still claims `flash/` isn't implemented yet even though the
-tree right below it says otherwise. This is a new failure mode worth
-watching for specifically: a partial README update (tree updated, prose
-sentence not) reads as "the README was touched" at a glance, so don't
-stop checking at "was README.md modified in this diff" — diff the prose
-sentence's file list against the tree's file list independently. Three
-recurrences now; the CLAUDE.md MUST rule alone isn't preventing this —
-worth proposing a `plans/*.md` checklist item to the user if it recurs
-again.
+**Recurred a 3rd time in `feat/flash-effect` (2026-08-09), fixed within the
+same PR (#20)**: `lib/features/flash/` was added and wired into
+`clock_screen.dart`. README.md's directory-tree code block (line 49) was
+updated to list `flash/` — but the prose sentence just above it (line 36,
+"現時点で実装済みなのは...`timer/`で、`flash/`・`settings/`は今後のPRで
+追加される想定") was initially not, so it briefly claimed `flash/` wasn't
+implemented yet even though the tree right below it said otherwise. Flagged
+during this PR's local code-reviewer pass and fixed in the same PR (commit
+`d292c5c`) before it was pushed. This is a failure mode worth watching for
+specifically: a partial README update (tree updated, prose sentence not)
+reads as "the README was touched" at a glance, so don't stop checking at
+"was README.md modified in this diff" — diff the prose sentence's file list
+against the tree's file list independently. Three recurrences now, all
+caught and fixed before merge; the CLAUDE.md MUST rule alone isn't
+preventing the initial miss — worth proposing a `plans/*.md` checklist item
+to the user if it recurs a 4th time.
 
 Related: [[project_stopwatch_pr_patterns]]

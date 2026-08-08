@@ -48,6 +48,9 @@ class FlashEvent {
 
   final DateTime instant;
   final String label;
+
+  /// The moment this flash's animation must *start* so it ends at [instant].
+  DateTime get windowStart => instant.subtract(flashAnimationDuration);
 }
 
 /// The exact-completion flash plus the 完了◯分前 points, or `[]` if no

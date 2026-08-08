@@ -31,8 +31,14 @@ void main() {
 
       expect(_overlayOpacity(tester), 0);
 
+      // instant is set to "now + duration" so the window just opened
+      // (elapsed progress ~= 0), matching a flash admitted right on time.
       fake.setActive(
-        FlashEvent(id: 'x', instant: DateTime.now(), label: 'test'),
+        FlashEvent(
+          id: 'x',
+          instant: DateTime.now().add(flashAnimationDuration),
+          label: 'test',
+        ),
       );
       await tester.pump();
       expect(_overlayOpacity(tester), 0); // first blink segment: invisible
@@ -43,6 +49,40 @@ void main() {
       await tester.pump(flashAnimationDuration);
       expect(_overlayOpacity(tester), 0);
       expect(fake.state.active, isNull); // advance() ran on completion
+    },
+  );
+
+  testWidgets(
+    'starts from elapsed progress when its window opened before this '
+    'widget noticed, so it still ends at event.instant instead of late',
+    (tester) async {
+      final fake = _FakeFlashQueueController();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [flashQueueControllerProvider.overrideWith(() => fake)],
+          child: const MaterialApp(home: FlashOverlay()),
+        ),
+      );
+
+      // windowStart (instant - duration) is ~1s in the past, simulating a
+      // FlashQueueController tick that admitted this event ~1s after its
+      // window actually opened — so ~2s of animation should remain.
+      const lateBy = Duration(seconds: 1);
+      final remaining = flashAnimationDuration - lateBy;
+      fake.setActive(
+        FlashEvent(
+          id: 'late',
+          instant: DateTime.now().add(remaining),
+          label: 'test',
+        ),
+      );
+      await tester.pump();
+
+      // A fresh (progress 0) animation would need the full 3s and still be
+      // mid-flight here; one that correctly started ~1s in only needs the
+      // ~2s remaining.
+      await tester.pump(remaining + const Duration(milliseconds: 300));
+      expect(fake.state.active, isNull);
     },
   );
 }

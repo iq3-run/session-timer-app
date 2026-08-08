@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
+import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
+import 'package:session_timer/features/timer/timer_state.dart';
 
 /// How close two flash instants have to be to fold into a single played
 /// flash rather than queueing separately (spec 3-5-1節).
@@ -30,6 +32,8 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   final Set<String> _firedIds = {};
   final List<FlashEvent> _queue = [];
   FlashEvent? _active;
+  CompletionTimeState? _lastCompletion;
+  TimerState? _lastTimer;
 
   @override
   FlashQueueState build() {
@@ -37,6 +41,8 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     final completion = ref.watch(completionTimeControllerProvider).value;
     final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
     final timer = ref.watch(timerControllerProvider).value;
+
+    _purgeFiredIdsForSourceChanges(completion, timer);
 
     // Sorted chronologically so that when several windows open in the same
     // build (e.g. resuming from a long background gap), each new event is
@@ -54,6 +60,32 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     _promoteNextIfIdle();
 
     return FlashQueueState(active: _active, firedIds: {..._firedIds});
+  }
+
+  /// A source's state object is replaced on every setTarget()/clear() call
+  /// (Riverpod notifiers always construct a fresh instance), even when the
+  /// resulting epoch happens to equal the previous one — e.g. clearing the
+  /// completion time and re-picking the exact same clock time. Ids embed
+  /// only the epoch, so without this, re-picking an identical epoch would
+  /// collide with already-fired ids from the prior schedule and never flash
+  /// again. Purging on every such change (not just epoch changes) catches
+  /// that case too.
+  void _purgeFiredIdsForSourceChanges(
+    CompletionTimeState? completion,
+    TimerState? timer,
+  ) {
+    _purgeStaleFiredIds('completion:', completion, _lastCompletion);
+    _lastCompletion = completion;
+    _purgeStaleFiredIds('timer:', timer, _lastTimer);
+    _lastTimer = timer;
+  }
+
+  /// Drops every fired id under [prefix] when [current] is a different
+  /// object than [previous] — i.e. the source was just set or cleared,
+  /// regardless of whether the resulting value happens to read the same.
+  void _purgeStaleFiredIds(String prefix, Object? current, Object? previous) {
+    if (identical(current, previous)) return;
+    _firedIds.removeWhere((id) => id.startsWith(prefix));
   }
 
   void _promoteNextIfIdle() {
@@ -75,8 +107,7 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   void _admit(FlashEvent event, DateTime now) {
     if (_firedIds.contains(event.id)) return;
 
-    final windowStart = event.instant.subtract(flashAnimationDuration);
-    if (now.isBefore(windowStart)) return; // not due yet
+    if (now.isBefore(event.windowStart)) return; // not due yet
 
     // Window already closed — either fired earlier this session (handled
     // above) or missed entirely (e.g. backgrounded through it). Either way

@@ -18,6 +18,15 @@ class _FixedCompletionController extends CompletionTimeController {
   Future<CompletionTimeState> build() async => _value;
 }
 
+class _MutableCompletionController extends CompletionTimeController {
+  @override
+  Future<CompletionTimeState> build() async => const CompletionTimeState();
+
+  void setEpoch(int? epochMs) {
+    state = AsyncData(CompletionTimeState(targetEpochMs: epochMs));
+  }
+}
+
 class _FixedTargetsController extends TimeTargetsController {
   _FixedTargetsController(this._value);
   final List<TimeTarget> _value;
@@ -222,6 +231,49 @@ void main() {
         container.read(flashQueueControllerProvider.notifier).advance();
         final second = container.read(flashQueueControllerProvider).active;
         expect(second?.id, 'target:late:${late.millisecondsSinceEpoch}');
+      },
+    );
+
+    test(
+      'reselecting the same completion time after clearing it fires again, '
+      'instead of being silently suppressed by stale fired state',
+      () async {
+        final clock = StreamController<DateTime>.broadcast();
+        addTearDown(clock.close);
+        final target = DateTime(2099, 1, 1, 12);
+        final completionController = _MutableCompletionController();
+        final container = ProviderContainer(
+          overrides: [
+            nowProvider.overrideWith((ref) => clock.stream),
+            completionTimeControllerProvider.overrideWith(
+              () => completionController,
+            ),
+            timeTargetsControllerProvider.overrideWith(
+              () => _FixedTargetsController(const []),
+            ),
+            timerControllerProvider.overrideWith(
+              () => _FixedTimerController(const TimerState()),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container.read(completionTimeControllerProvider.future);
+        await container.read(timeTargetsControllerProvider.future);
+        await container.read(timerControllerProvider.future);
+        container.listen(flashQueueControllerProvider, (_, _) {});
+        final id = 'completion:${target.millisecondsSinceEpoch}:0';
+
+        completionController.setEpoch(target.millisecondsSinceEpoch);
+        await _tick(clock, target);
+        expect(container.read(flashQueueControllerProvider).active?.id, id);
+        container.read(flashQueueControllerProvider.notifier).advance();
+
+        completionController.setEpoch(null);
+        await Future<void>.delayed(Duration.zero);
+        completionController.setEpoch(target.millisecondsSinceEpoch);
+        await _tick(clock, target);
+
+        expect(container.read(flashQueueControllerProvider).active?.id, id);
       },
     );
   });

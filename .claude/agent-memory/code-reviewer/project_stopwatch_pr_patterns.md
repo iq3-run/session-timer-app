@@ -172,19 +172,20 @@ build()" as inherently unsafe in this repo without first checking whether the
 provider is `autoDispose` — it isn't, here or in the stopwatch/targets
 controllers.
 
-**`ref.listen` is not used anywhere in this repo yet**: every existing
-widget that needs to react to a *change* in provider state (not just read
-its current value) does so by manually diffing against a stored field —
-e.g. `flash_overlay.dart`'s `_FlashOverlayState` compares
-`active.id != _lastActiveId` inside `build()` to decide whether to call
-`_controller.forward()`, rather than using `ref.listen(provider, (prev,
-next) { ... })`, which is Riverpod's documented tool for exactly this
-(side effects on state change, as opposed to `ref.watch` for rendering).
-Flagged as Warning in that PR's review. If this recurs in a future PR
-(another `ConsumerStatefulWidget` manually latching a previous value to
-detect change instead of `ref.listen`), it's the same gap, not a new one —
-worth raising to Warning-with-precedent rather than a fresh finding, and
-worth asking the user once whether `ref.listen` should become a stated
-convention in CLAUDE.md.
+**`ref.listen` was unused in this repo until `feat/flash-effect` (2026-08-09,
+PR #20)**: every existing widget that needed to react to a *change* in
+provider state (not just read its current value) did so by manually diffing
+against a stored field — e.g. `flash_overlay.dart`'s `_FlashOverlayState`
+originally compared `active.id != _lastActiveId` inside `build()` to decide
+whether to call `_controller.forward()`, rather than using
+`ref.listen(provider, (prev, next) { ... })`, which is Riverpod's documented
+tool for exactly this (side effects on state change, as opposed to
+`ref.watch` for rendering). Flagged as Warning during that PR's local
+code-reviewer pass and fixed in the same PR (commit `d292c5c`): the manual
+`_lastActiveId` latch was replaced with `ref.listen`. This is now the
+repo's first precedent — a future `ConsumerStatefulWidget` that manually
+latches a previous value to detect change instead of using `ref.listen`
+should be flagged with this precedent cited, not treated as a fresh
+finding.
 
 Related: [[project_readme_maintenance_gap]]

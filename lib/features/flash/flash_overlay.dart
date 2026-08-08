@@ -40,10 +40,10 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   @override
   Widget build(BuildContext context) {
     ref.listen(flashQueueControllerProvider, (previous, next) {
-      if (next.active != null && next.active!.id != previous?.active?.id) {
-        _controller.stop();
-        unawaited(_controller.forward(from: 0));
-      }
+      final event = next.active;
+      if (event == null || event.id == previous?.active?.id) return;
+      _controller.stop();
+      unawaited(_controller.forward(from: _elapsedProgress(event)));
     });
     final active = ref.watch(flashQueueControllerProvider).active;
 
@@ -59,6 +59,18 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
         ),
       ),
     );
+  }
+
+  /// How far into [flashAnimationDuration] [event]'s window already is,
+  /// as a 0–1 fraction. `FlashQueueController` only admits events once per
+  /// ~1s `nowProvider` tick, so a window can open up to ~1s before this
+  /// widget notices — starting from this fraction instead of always 0
+  /// keeps the strobe ending at `event.instant` rather than up to ~1s late.
+  double _elapsedProgress(FlashEvent event) {
+    final elapsedMs = DateTime.now()
+        .difference(event.windowStart)
+        .inMilliseconds;
+    return (elapsedMs / flashAnimationDuration.inMilliseconds).clamp(0.0, 1.0);
   }
 
   bool _isVisibleSegment(FlashEvent? active) {
