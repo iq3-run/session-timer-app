@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/duration_format.dart';
-import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -14,6 +15,7 @@ class TimerSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(timerControllerProvider).value;
     final notifier = ref.read(timerControllerProvider.notifier);
     return Column(
       children: [
@@ -26,7 +28,7 @@ class TimerSection extends ConsumerWidget {
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: SessionTimerColors.line)),
             ),
-            child: const _TimerBody(),
+            child: _TimerBody(state: state),
           ),
         ),
         const SizedBox(height: 8),
@@ -55,13 +57,55 @@ class TimerSection extends ConsumerWidget {
   }
 }
 
-class _TimerBody extends ConsumerWidget {
-  const _TimerBody();
+class _TimerBody extends StatefulWidget {
+  const _TimerBody({required this.state});
+
+  final TimerState? state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(timerControllerProvider).value;
-    final now = watchNow(ref);
+  State<_TimerBody> createState() => _TimerBodyState();
+}
+
+class _TimerBodyState extends State<_TimerBody> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TimerBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTicker();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  // Dedicated 1s ticker, independent of the shared nowProvider the
+  // current-time/completion/targets displays tick on — only runs while a
+  // timer is actually running, matching StopwatchSection's _ElapsedTime.
+  void _syncTicker() {
+    final isRunning = widget.state?.isRunning ?? false;
+    if (isRunning && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!isRunning && _ticker != null) {
+      _ticker!.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final now = DateTime.now();
     final isOverdue = state != null && state.isOverdueAt(now);
     return Column(
       children: [
