@@ -1,6 +1,6 @@
 # Fix: expand tap target hit area on completion/time-target rows
 
-Issue: https://github.com/iq3-run/session-timer-app/issues/13
+Issue: <https://github.com/iq3-run/session-timer-app/issues/13>
 
 ## Problem
 
