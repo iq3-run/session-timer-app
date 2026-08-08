@@ -105,6 +105,7 @@ class _AddTargetRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _addTarget(context, ref),
       child: const Padding(
         padding: EdgeInsets.symmetric(vertical: 10),
