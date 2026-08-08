@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/clock/clock_screen.dart';
+import 'package:session_timer/features/notifications/notification_scheduler.dart';
 
 class SessionTimerApp extends StatelessWidget {
   const SessionTimerApp({super.key});
@@ -11,7 +12,7 @@ class SessionTimerApp extends StatelessWidget {
       title: 'Session Timer',
       debugShowCheckedModeBanner: false,
       theme: SessionTimerTheme.dark,
-      home: const ClockScreen(),
+      home: const NotificationScheduler(child: ClockScreen()),
     );
   }
 }

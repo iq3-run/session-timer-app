@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="session_timer"
         android:name="${applicationName}"
@@ -30,6 +32,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Required by flutter_local_notifications to deliver notifications scheduled via
+             zonedSchedule. No boot receiver is declared: this app rebuilds every future
+             notification schedule from persisted state each time it's opened, so surviving a
+             device reboot is an accepted gap rather than something this receiver needs to cover
+             (see plans/feat-device-notifications.md). -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

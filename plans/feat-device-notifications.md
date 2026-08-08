@@ -23,7 +23,10 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/21>
 
 - ⚙ settings sheet / per-notification-type toggle — ships as an always-on
   behavior tied to existing completion/target/timer state, same reasoning
-  as the flash effect shipping without a settings sheet.
+  as the flash effect shipping without a settings sheet. Follow-up:
+  <https://github.com/iq3-run/session-timer-app/issues/22> (per-point
+  on/off for the completion countdown's 12 notifications specifically —
+  confirmed with the user during this PR's implementation).
 - Weekend milestones, NTP sync (separate Issue #1 items).
 - Surviving a device **reboot**: pending Android alarms are cleared on
   reboot, and this plan does not add a boot receiver
@@ -176,18 +179,28 @@ concerns self-contained.
 - `<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>`
   (Android 13+ runtime-requested, but still needs the manifest entry)
 - `<uses-permission android:name="android.permission.VIBRATE"/>`
+- `<receiver android:exported="false"
+  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />`
+  in `<application>` — confirmed via the plugin's own README (v22.2.0):
+  this is what actually delivers a `zonedSchedule`d notification when its
+  time arrives. It is **not** part of the plugin's own manifest (which
+  only declares the two permissions above) and is easy to miss — without
+  it, scheduled notifications silently never fire.
 - No `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` (see Item 1 above) and no
-  boot receiver (see Out of scope).
-- Verify against `flutter_local_notifications` v22 setup docs at
-  implementation time for any other required manifest entries (e.g.
-  default notification icon `meta-data`).
+  `ScheduledNotificationBootReceiver` (see Out of scope — that receiver is
+  what re-arms alarms after a reboot, which this plan deliberately doesn't
+  support).
 
 ### iOS (`ios/Runner/AppDelegate.swift`)
 
-- Add `UNUserNotificationCenter.current().delegate = self` (with the
-  `UNUserNotificationCenterDelegate` conformance the plugin needs for
-  foreground presentation) per `flutter_local_notifications` iOS setup —
-  confirm exact snippet against the installed package version.
+- `UNUserNotificationCenter.current().delegate = self as?
+  UNUserNotificationCenterDelegate` in `didFinishLaunchingWithOptions`, so
+  the plugin can present notifications while the app is foregrounded.
+- `FlutterLocalNotificationsPlugin.setPluginRegistrantCallback { ... }` in
+  `didInitializeImplicitFlutterEngine` — this app already uses the
+  `FlutterImplicitEngineDelegate` (UIScene) lifecycle rather than the
+  older `didFinishLaunchingWithOptions`-only registration, so the plugin's
+  UIScene-specific setup snippet applies, not its default one.
 
 ### `pubspec.yaml`
 
