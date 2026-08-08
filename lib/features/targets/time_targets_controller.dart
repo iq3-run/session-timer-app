@@ -16,10 +16,25 @@ final timeTargetsControllerProvider =
 
 class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   // Serializes _mutate calls: each waits for the previous one's read of
-  // `state` -> persist -> state-update cycle to finish before starting its
-  // own, so concurrent add/update/remove calls can't read the same stale
-  // `state` and have one silently overwrite the other's persisted result.
+  // `_lastGood` -> persist -> state-update cycle to finish before starting
+  // its own, so concurrent add/update/remove calls can't read the same
+  // stale list and have one silently overwrite the other's persisted
+  // result.
   Future<void> _mutationQueue = Future.value();
+
+  // Completes once build() has loaded the initial list. Mutations queued
+  // before that gate on this instead of AsyncNotifier's own `future`,
+  // because `future` rethrows whenever `state` is currently AsyncError —
+  // which would otherwise permanently wedge every later mutation after a
+  // single persistence failure (AsyncError() does not retain the prior
+  // value; see _mutateNow's fallback field below).
+  final Completer<void> _initialLoad = Completer<void>();
+
+  // The last list that was either loaded from disk or successfully
+  // persisted. Read by _mutateNow instead of `state.value`/`future` so a
+  // failed persist (which sets `state` to AsyncError, discarding its value)
+  // doesn't strand every subsequent mutation with nothing to build on.
+  List<TimeTarget> _lastGood = const [];
 
   @override
   Future<List<TimeTarget>> build() async {
@@ -34,7 +49,10 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
       prefs,
     ).where((t) => t.epochMs > nowEpochMs).toList();
     await _persist(prefs, unexpired);
-    return _sorted(unexpired);
+    final sorted = _sorted(unexpired);
+    _lastGood = sorted;
+    if (!_initialLoad.isCompleted) _initialLoad.complete();
+    return sorted;
   }
 
   Future<void> addTarget(DateTime time) async {
@@ -76,16 +94,17 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   Future<void> _mutateNow(
     List<TimeTarget> Function(List<TimeTarget>) update,
   ) async {
+    if (!_initialLoad.isCompleted) await _initialLoad.future;
+    final updated = _sorted(update(_lastGood));
     try {
-      // Must await `future`, not read `state.value` directly: if a mutation
-      // is queued before build() has finished loading from SharedPreferences,
-      // `state` is still AsyncLoading (value == null) and falling back to []
-      // would silently overwrite every already-persisted target on disk.
-      final current = await future;
-      final updated = _sorted(update(current));
       final prefs = await ref.read(sharedPreferencesProvider.future);
       final persisted = await _persist(prefs, updated);
-      state = persisted ? AsyncData(updated) : _persistenceFailure();
+      if (persisted) {
+        _lastGood = updated;
+        state = AsyncData(updated);
+      } else {
+        state = _persistenceFailure();
+      }
     } on Exception catch (e, st) {
       state = AsyncError(e, st);
     }

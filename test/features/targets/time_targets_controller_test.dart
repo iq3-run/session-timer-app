@@ -5,6 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+
+/// Delegates to a real in-memory store, but fails the next write once
+/// [failNextWrite] is armed — used to simulate a transient SharedPreferences
+/// I/O failure without needing a full fake platform implementation.
+class _FlakyStore extends InMemorySharedPreferencesStore {
+  _FlakyStore.empty() : super.empty();
+
+  bool failNextWrite = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) {
+    if (failNextWrite) {
+      failNextWrite = false;
+      return Future.value(false);
+    }
+    return super.setValue(valueType, key, value);
+  }
+}
 
 void main() {
   group('TimeTargetsController', () {
@@ -242,6 +261,34 @@ void main() {
 
         expect(targets.map((t) => t.id), contains('existing'));
         expect(targets, hasLength(2));
+      },
+    );
+
+    test(
+      'addTarget succeeds again after a prior persistence failure',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final flakyStore = _FlakyStore.empty();
+        SharedPreferencesStorePlatform.instance = flakyStore;
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timeTargetsControllerProvider.future);
+        final notifier = container.read(timeTargetsControllerProvider.notifier);
+
+        flakyStore.failNextWrite = true;
+        await notifier.addTarget(DateTime.now().add(const Duration(hours: 1)));
+        expect(
+          container.read(timeTargetsControllerProvider).hasError,
+          isTrue,
+        );
+
+        final retryTime = DateTime.now().add(const Duration(hours: 2));
+        await notifier.addTarget(retryTime);
+        final targets = await container.read(
+          timeTargetsControllerProvider.future,
+        );
+
+        expect(targets.single.epochMs, retryTime.millisecondsSinceEpoch);
       },
     );
   });
