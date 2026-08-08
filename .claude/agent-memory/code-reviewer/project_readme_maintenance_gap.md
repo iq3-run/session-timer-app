@@ -48,4 +48,16 @@ caught and fixed before merge; the CLAUDE.md MUST rule alone isn't
 preventing the initial miss — worth proposing a `plans/*.md` checklist item
 to the user if it recurs a 4th time.
 
-Related: [[project_stopwatch_pr_patterns]]
+**Recurred a 4th time in `feat/device-notifications` (2026-08-09)**: `lib/features/notifications/`
+was added and wired into `app.dart`, but README.md's directory-tree code block and its prose
+sentence (line 36, still listing only `clock/`・`core/theme/`・`completion/`・`targets/`・
+`stopwatch/`・`timer/`・`flash/` as implemented) were both left unupdated — unlike the 3rd
+recurrence, this time *neither* the tree nor the prose was touched, so there's no "partial
+update" nuance, just a plain miss. Flagged during this PR's local code-reviewer pass. Four
+recurrences in a row now (PR #11, #18, #20, and this one) despite the CLAUDE.md MUST rule —
+per the standing note below, this is worth proposing to the user as a literal checklist item in
+the `plans/*.md` template (e.g. a "Docs" section listing README.md explicitly) rather than
+continuing to rely on the prose MUST rule alone, since four fix-after-flag cycles is enough
+evidence the rule alone isn't preventing the initial miss.
+
+Related: [[project_stopwatch_pr_patterns]], [[project_notification_scheduler_patterns]]
