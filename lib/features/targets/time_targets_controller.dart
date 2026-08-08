@@ -38,21 +38,27 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
 
   @override
   Future<List<TimeTarget>> build() async {
-    final prefs = await ref.watch(sharedPreferencesProvider.future);
-    // A mutate() call may have already landed on `state` while this build()
-    // was awaiting the prefs future above — don't clobber it with a stale
-    // read.
-    if (state.hasValue) return state.value!;
+    // If anything below throws, _initialLoad must still complete — otherwise
+    // every mutation queued behind it (see _mutateNow) would await it
+    // forever instead of failing fast.
+    try {
+      final prefs = await ref.watch(sharedPreferencesProvider.future);
+      // A mutate() call may have already landed on `state` while this
+      // build() was awaiting the prefs future above — don't clobber it with
+      // a stale read.
+      if (state.hasValue) return state.value!;
 
-    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    final unexpired = _readPersisted(
-      prefs,
-    ).where((t) => t.epochMs > nowEpochMs).toList();
-    await _persist(prefs, unexpired);
-    final sorted = _sorted(unexpired);
-    _lastGood = sorted;
-    if (!_initialLoad.isCompleted) _initialLoad.complete();
-    return sorted;
+      final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+      final unexpired = _readPersisted(
+        prefs,
+      ).where((t) => t.epochMs > nowEpochMs).toList();
+      await _persist(prefs, unexpired);
+      final sorted = _sorted(unexpired);
+      _lastGood = sorted;
+      return sorted;
+    } finally {
+      if (!_initialLoad.isCompleted) _initialLoad.complete();
+    }
   }
 
   Future<void> addTarget(DateTime time) async {

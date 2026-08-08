@@ -267,6 +267,10 @@ void main() {
     test(
       'addTarget succeeds again after a prior persistence failure',
       () async {
+        final previousStore = SharedPreferencesStorePlatform.instance;
+        addTearDown(
+          () => SharedPreferencesStorePlatform.instance = previousStore,
+        );
         SharedPreferences.setMockInitialValues({});
         final flakyStore = _FlakyStore.empty();
         SharedPreferencesStorePlatform.instance = flakyStore;
