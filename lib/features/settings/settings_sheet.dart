@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/settings/flash_points_settings_section.dart';
 import 'package:session_timer/features/settings/notification_settings_section.dart';
 import 'package:session_timer/features/settings/ntp_sync_settings_section.dart';
 import 'package:session_timer/features/settings/weekend_milestone.dart';
 import 'package:session_timer/features/settings/weekend_milestones_settings_section.dart';
 
-const _initialFlashPointMinutes = [10, 5, 1];
 const _unsyncedStatusText = '未同期（端末時刻を使用中）';
 const _syncPlaceholderStatusText = '同期は未実装です（実装予定: issue #1）';
 
-/// The settings sheet's UI-only shell, mirroring
-/// docs/session-timer.html's `#sheet`. Every section's state below is
-/// ephemeral to this widget's lifetime — none of it is wired to the app's
-/// real state or persisted.
-class SettingsSheet extends StatefulWidget {
+/// The settings sheet's shell, mirroring docs/session-timer.html's `#sheet`.
+/// Flash points are wired to `FlashPointsController` (persisted); the
+/// notification/milestone/NTP sections below remain ephemeral to this
+/// widget's lifetime, not yet wired to the app's real state.
+class SettingsSheet extends ConsumerStatefulWidget {
   const SettingsSheet({super.key});
 
   static Future<void> show(BuildContext context) {
@@ -30,11 +31,10 @@ class SettingsSheet extends StatefulWidget {
   }
 
   @override
-  State<SettingsSheet> createState() => _SettingsSheetState();
+  ConsumerState<SettingsSheet> createState() => _SettingsSheetState();
 }
 
-class _SettingsSheetState extends State<SettingsSheet> {
-  List<int> _flashPointMinutes = [..._initialFlashPointMinutes];
+class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   bool _notifyEnabled = false;
   List<WeekendMilestone> _milestones = [];
   int _nextMilestoneId = 0;
@@ -56,9 +56,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
   }
 
   List<Widget> _sections(BuildContext context) {
+    final flashPointMinutes =
+        ref.watch(flashPointsControllerProvider).value ?? const [];
     return [
       FlashPointsSettingsSection(
-        minutes: _flashPointMinutes,
+        minutes: flashPointMinutes,
         onAdd: _addFlashPoint,
         onRemove: _removeFlashPoint,
       ),
@@ -89,18 +91,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
   void _syncNow() =>
       setState(() => _ntpStatusText = _syncPlaceholderStatusText);
 
-  void _addFlashPoint(int minutes) {
-    if (_flashPointMinutes.contains(minutes)) return;
-    setState(() => _flashPointMinutes = [..._flashPointMinutes, minutes]);
-  }
+  void _addFlashPoint(int minutes) =>
+      ref.read(flashPointsControllerProvider.notifier).addPoint(minutes);
 
-  void _removeFlashPoint(int minutes) {
-    setState(
-      () => _flashPointMinutes = _flashPointMinutes
-          .where((m) => m != minutes)
-          .toList(),
-    );
-  }
+  void _removeFlashPoint(int minutes) =>
+      ref.read(flashPointsControllerProvider.notifier).removePoint(minutes);
 
   void _addMilestone(String label, DateTime date) {
     final milestone = WeekendMilestone(

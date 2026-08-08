@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
+import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_points_chip_row.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
 
 class _FixedCompletionController extends CompletionTimeController {
@@ -21,11 +23,19 @@ class _FixedFlashQueueController extends FlashQueueController {
   FlashQueueState build() => FlashQueueState(firedIds: _firedIds);
 }
 
+class _FixedFlashPointsController extends FlashPointsController {
+  _FixedFlashPointsController(this._value);
+  final List<int> _value;
+  @override
+  Future<List<int>> build() async => _value;
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required DateTime now,
   CompletionTimeState completion = const CompletionTimeState(),
   Set<String> firedIds = const {},
+  List<int> flashPoints = defaultCompletionFlashPointsMinutes,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -36,6 +46,9 @@ Future<void> _pump(
         ),
         flashQueueControllerProvider.overrideWith(
           () => _FixedFlashQueueController(firedIds),
+        ),
+        flashPointsControllerProvider.overrideWith(
+          () => _FixedFlashPointsController(flashPoints),
         ),
       ],
       child: const MaterialApp(home: Scaffold(body: FlashPointsChipRow())),
@@ -52,6 +65,40 @@ void main() {
       await _pump(tester, now: DateTime(2099));
 
       expect(find.text('残120分フラッシュ'), findsNothing);
+    });
+
+    testWidgets('renders nothing when the flash-point list is empty', (
+      tester,
+    ) async {
+      final target = DateTime(2099, 1, 1, 12);
+      await _pump(
+        tester,
+        now: target.subtract(const Duration(hours: 3)),
+        completion: CompletionTimeState(
+          targetEpochMs: target.millisecondsSinceEpoch,
+        ),
+        flashPoints: const [],
+      );
+
+      expect(find.byType(FlashPointsChipRow), findsOneWidget);
+      expect(find.textContaining('フラッシュ'), findsNothing);
+    });
+
+    testWidgets('shows all points without paging when there are fewer than '
+        'a full window', (tester) async {
+      final target = DateTime(2099, 1, 1, 12);
+      await _pump(
+        tester,
+        now: target.subtract(const Duration(hours: 3)),
+        completion: CompletionTimeState(
+          targetEpochMs: target.millisecondsSinceEpoch,
+        ),
+        flashPoints: const [10, 5],
+      );
+
+      expect(find.text('残10分フラッシュ'), findsOneWidget);
+      expect(find.text('残5分フラッシュ'), findsOneWidget);
+      expect(find.text('…'), findsNothing);
     });
 
     testWidgets('shows the next 3 not-yet-fired points by default', (

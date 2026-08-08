@@ -3,6 +3,7 @@ import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -41,6 +42,8 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     final completion = ref.watch(completionTimeControllerProvider).value;
     final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
     final timer = ref.watch(timerControllerProvider).value;
+    final flashPoints =
+        ref.watch(flashPointsControllerProvider).value ?? const [];
 
     _purgeFiredIdsForSourceChanges(completion, timer);
 
@@ -49,7 +52,7 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     // compared against its true nearest neighbor for merging — not just
     // whichever source happened to list it first.
     final candidates = [
-      ...completionFlashEvents(completion),
+      ...completionFlashEvents(completion, flashPoints),
       ...targetFlashEvents(targets),
       ...timerFlashEvents(timer),
     ]..sort((a, b) => a.instant.compareTo(b.instant));

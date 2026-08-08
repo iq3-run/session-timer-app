@@ -7,14 +7,24 @@ import 'package:session_timer/features/timer/timer_state.dart';
 void main() {
   group('completionFlashEvents', () {
     test('returns nothing when no completion time is set', () {
-      expect(completionFlashEvents(null), isEmpty);
-      expect(completionFlashEvents(const CompletionTimeState()), isEmpty);
+      expect(
+        completionFlashEvents(null, defaultCompletionFlashPointsMinutes),
+        isEmpty,
+      );
+      expect(
+        completionFlashEvents(
+          const CompletionTimeState(),
+          defaultCompletionFlashPointsMinutes,
+        ),
+        isEmpty,
+      );
     });
 
-    test('includes the exact-completion event plus every default point', () {
+    test('includes the exact-completion event plus every point passed in', () {
       final target = DateTime(2026, 8, 8, 15);
       final events = completionFlashEvents(
         CompletionTimeState(targetEpochMs: target.millisecondsSinceEpoch),
+        defaultCompletionFlashPointsMinutes,
       );
 
       expect(events, hasLength(defaultCompletionFlashPointsMinutes.length + 1));
@@ -28,14 +38,28 @@ void main() {
       );
     });
 
+    test('returns only the exact-completion event when the point list is '
+        'empty (user removed every point)', () {
+      final target = DateTime(2026, 8, 8, 15);
+      final events = completionFlashEvents(
+        CompletionTimeState(targetEpochMs: target.millisecondsSinceEpoch),
+        const [],
+      );
+
+      expect(events, hasLength(1));
+      expect(events.single.id, endsWith(':0'));
+    });
+
     test('ids embed the target epoch so a new target produces new ids', () {
       final targetA = DateTime(2026, 8, 8, 15);
       final targetB = DateTime(2026, 8, 8, 16);
       final idsA = completionFlashEvents(
         CompletionTimeState(targetEpochMs: targetA.millisecondsSinceEpoch),
+        defaultCompletionFlashPointsMinutes,
       ).map((e) => e.id).toSet();
       final idsB = completionFlashEvents(
         CompletionTimeState(targetEpochMs: targetB.millisecondsSinceEpoch),
+        defaultCompletionFlashPointsMinutes,
       ).map((e) => e.id).toSet();
 
       expect(idsA.intersection(idsB), isEmpty);

@@ -1,21 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_gear_button.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pumpAndOpenSheet(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({});
   await tester.binding.setSurfaceSize(const Size(400, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   await tester.pumpWidget(
-    MaterialApp(
-      theme: SessionTimerTheme.dark,
-      home: const Scaffold(body: SettingsGearButton()),
+    ProviderScope(
+      child: MaterialApp(
+        theme: SessionTimerTheme.dark,
+        home: const Scaffold(body: SettingsGearButton()),
+      ),
     ),
   );
   await tester.tap(find.byIcon(Icons.settings));
   await tester.pumpAndSettle();
+}
+
+/// Finds the `削除` button inside the `SettingsListItem` whose label
+/// contains [text] — needed once a section has more than one deletable
+/// row, since a bare `find.text('削除')` would be ambiguous.
+Finder _deleteButtonFor(String text) {
+  final item = find.ancestor(
+    of: find.textContaining(text),
+    matching: find.byType(SettingsListItem),
+  );
+  return find.descendant(of: item, matching: find.text('削除'));
 }
 
 void main() {
@@ -31,11 +47,13 @@ void main() {
       expect(find.text('おまけ：時刻同期（NTP風）'), findsOneWidget);
     });
 
-    testWidgets('shows the default flash points', (tester) async {
+    testWidgets('seeds the default 12 flash points on first launch', (
+      tester,
+    ) async {
       await _pumpAndOpenSheet(tester);
 
+      expect(find.text('残り 120 分'), findsOneWidget);
       expect(find.text('残り 10 分'), findsOneWidget);
-      expect(find.text('残り 5 分'), findsOneWidget);
       expect(find.text('残り 1 分'), findsOneWidget);
     });
 
@@ -51,16 +69,16 @@ void main() {
       expect(find.text('残り 7 分'), findsOneWidget);
     });
 
-    testWidgets('removing a flash point drops it from the list', (
-      tester,
-    ) async {
+    testWidgets('removing a flash point drops only that point from the '
+        'list', (tester) async {
       await _pumpAndOpenSheet(tester);
-      expect(find.text('残り 10 分'), findsOneWidget);
+      expect(find.text('残り 1 分'), findsOneWidget);
 
-      await tester.tap(find.text('削除').first);
+      await tester.tap(_deleteButtonFor('残り 1 分'));
       await tester.pumpAndSettle();
 
-      expect(find.text('残り 10 分'), findsNothing);
+      expect(find.text('残り 1 分'), findsNothing);
+      expect(find.text('残り 120 分'), findsOneWidget);
     });
 
     testWidgets('notify switch toggles without touching real state', (
@@ -129,13 +147,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('週末テスト'), findsOneWidget);
 
-      final milestoneItem = find.ancestor(
-        of: find.textContaining('週末テスト'),
-        matching: find.byType(SettingsListItem),
-      );
-      await tester.tap(
-        find.descendant(of: milestoneItem, matching: find.text('削除')),
-      );
+      await tester.tap(_deleteButtonFor('週末テスト'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('週末テスト'), findsNothing);

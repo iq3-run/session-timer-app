@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
@@ -41,11 +42,21 @@ class _FixedTimerController extends TimerController {
   Future<TimerState> build() async => _value;
 }
 
+class _FixedFlashPointsController extends FlashPointsController {
+  _FixedFlashPointsController(this._value);
+  final List<int> _value;
+  @override
+  Future<List<int>> build() async => _value;
+}
+
 Future<ProviderContainer> _buildContainer({
   required StreamController<DateTime> clock,
   List<TimeTarget> targets = const [],
   CompletionTimeState completion = const CompletionTimeState(),
   TimerState timer = const TimerState(),
+  // Empty by default so tests aren't crowded with the 12 default
+  // completion-countdown points unless a test opts in.
+  List<int> flashPoints = const [],
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -59,14 +70,18 @@ Future<ProviderContainer> _buildContainer({
       timerControllerProvider.overrideWith(
         () => _FixedTimerController(timer),
       ),
+      flashPointsControllerProvider.overrideWith(
+        () => _FixedFlashPointsController(flashPoints),
+      ),
     ],
   );
-  // Resolve the three (fake) async source controllers before the clock
+  // Resolve the four (fake) async source controllers before the clock
   // starts ticking, so FlashQueueController's first real build sees the
   // test's data instead of racing its own loading state.
   await container.read(completionTimeControllerProvider.future);
   await container.read(timeTargetsControllerProvider.future);
   await container.read(timerControllerProvider.future);
+  await container.read(flashPointsControllerProvider.future);
   // Keep the queue controller (and therefore nowProvider) subscribed for the
   // whole test, matching the always-on widget tree in the real app.
   container.listen(flashQueueControllerProvider, (_, _) {});
@@ -254,12 +269,16 @@ void main() {
             timerControllerProvider.overrideWith(
               () => _FixedTimerController(const TimerState()),
             ),
+            flashPointsControllerProvider.overrideWith(
+              () => _FixedFlashPointsController(const []),
+            ),
           ],
         );
         addTearDown(container.dispose);
         await container.read(completionTimeControllerProvider.future);
         await container.read(timeTargetsControllerProvider.future);
         await container.read(timerControllerProvider.future);
+        await container.read(flashPointsControllerProvider.future);
         container.listen(flashQueueControllerProvider, (_, _) {});
         final id = 'completion:${target.millisecondsSinceEpoch}:0';
 
