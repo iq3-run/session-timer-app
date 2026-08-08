@@ -76,9 +76,13 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   Future<void> _mutateNow(
     List<TimeTarget> Function(List<TimeTarget>) update,
   ) async {
-    final current = state.value ?? const <TimeTarget>[];
-    final updated = _sorted(update(current));
     try {
+      // Must await `future`, not read `state.value` directly: if a mutation
+      // is queued before build() has finished loading from SharedPreferences,
+      // `state` is still AsyncLoading (value == null) and falling back to []
+      // would silently overwrite every already-persisted target on disk.
+      final current = await future;
+      final updated = _sorted(update(current));
       final prefs = await ref.read(sharedPreferencesProvider.future);
       final persisted = await _persist(prefs, updated);
       state = persisted ? AsyncData(updated) : _persistenceFailure();

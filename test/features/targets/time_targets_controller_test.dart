@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
@@ -201,6 +203,44 @@ void main() {
           timeTargetsControllerProvider.future,
         );
 
+        expect(targets, hasLength(2));
+      },
+    );
+
+    test(
+      'a mutation queued before the initial load resolves does not wipe '
+      'already-persisted targets',
+      () async {
+        final existingEpochMs = DateTime.now()
+            .add(const Duration(hours: 1))
+            .millisecondsSinceEpoch;
+        SharedPreferences.setMockInitialValues({
+          timeTargetsJsonKey: '[{"id":"existing","epochMs":$existingEpochMs}]',
+        });
+        final prefsCompleter = Completer<SharedPreferences>();
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWith(
+              (ref) => prefsCompleter.future,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        // build() is now blocked awaiting sharedPreferencesProvider. Queue a
+        // mutation before it resolves.
+        final newTargetTime = DateTime.now().add(const Duration(hours: 2));
+        final addFuture = container
+            .read(timeTargetsControllerProvider.notifier)
+            .addTarget(newTargetTime);
+
+        prefsCompleter.complete(await SharedPreferences.getInstance());
+        await addFuture;
+        final targets = await container.read(
+          timeTargetsControllerProvider.future,
+        );
+
+        expect(targets.map((t) => t.id), contains('existing'));
         expect(targets, hasLength(2));
       },
     );
