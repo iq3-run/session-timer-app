@@ -68,13 +68,16 @@ between them), `cancelAll()` still runs before all of them, and default `eagerEr
 failing `zonedSchedule` no longer aborts scheduling of the remaining events the way the old
 sequential loop did — a net robustness improvement, not a lost guarantee.
 
-**Gap found on this re-review**: the fix commit added no regression test proving the queue actually
-prevents interleaving (no concurrent-call test in `notification_service_test.dart`) and no test for
-`init()` retrying after a failure — contrast with the stopwatch mutation-queue fix
-([[project_stopwatch_pr_patterns]], `ensureRunning()` entry), which added a test confirmed to fail
-deterministically on the pre-fix code and pass on the post-fix code. Flagged as Warning, not
-Critical (the fix itself is correct on manual trace-through). Watch whether this becomes a pattern —
-if a future queue/race fix in this repo also ships without a proving test, it's worth raising as a
+**Gap found on this re-review, closed same PR**: the fix commit (9cd8790) shipped with no
+regression test proving the queue prevents interleaving. A follow-up commit on the same PR #23
+branch (7fc4a0b, "test: add regression test for rescheduleAll serialization") added one —
+`test/features/notifications/notification_service_test.dart`'s "serializes overlapping calls
+instead of interleaving their cancelAll/zonedSchedule steps" test, which gates a mocked
+`zonedSchedule` on a `Completer` and asserts the recorded method-call order stays strictly
+`cancelAll → zonedSchedule → cancelAll → zonedSchedule` across two overlapping calls, rather than
+both `cancelAll`s landing first. **Still no test for `init()` retrying after a failure** — that
+gap remains open. Watch whether this becomes a pattern — if a future queue/race fix in this repo
+ships without a proving test *and it doesn't get added before merge*, it's worth raising as a
 repo-wide gap rather than a one-off.
 
 ## `Future<void>? _cache ??= _computeOnce()` memoization pattern — verify failure semantics
