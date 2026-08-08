@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/clock/current_time_display.dart';
+import 'package:session_timer/features/completion/completion_countdown_section.dart';
 
-/// Placeholder home screen, replaced feature-by-feature starting with the
-/// current-time / completion-countdown display.
 class ClockScreen extends StatelessWidget {
   const ClockScreen({super.key});
 
@@ -10,13 +10,16 @@ class ClockScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: SessionTimerColors.background,
-      body: Center(
-        child: Text(
-          'SESSION TIMER',
-          style: TextStyle(
-            color: SessionTimerColors.muted,
-            fontSize: 16,
-            letterSpacing: 4,
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CurrentTimeDisplay(),
+              SizedBox(height: 8),
+              CompletionCountdownSection(),
+            ],
           ),
         ),
       ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Color palette carried over from the HTML prototype (docs/prototype-reference.html)
+/// Color palette carried over from the HTML prototype (docs/session-timer.html)
 /// so the native app keeps the same OLED-black, low-repaint visual language.
 abstract final class SessionTimerColors {
   static const background = Color(0xFF000000);
@@ -11,6 +11,17 @@ abstract final class SessionTimerColors {
   static const white = Color(0xFFE9EDE9);
   static const red = Color(0xFFFF3B30);
   static const muted = Color(0xFF7C8580);
+}
+
+/// Shared text styles for the large time displays (current time, countdowns)
+/// so every screen stays visually consistent without copy-pasted literals.
+abstract final class SessionTimerTextStyles {
+  static const label = TextStyle(
+    color: SessionTimerColors.muted,
+    fontSize: 12,
+    letterSpacing: 2,
+  );
+  static const value = TextStyle(fontSize: 56, fontWeight: FontWeight.w600);
 }
 
 abstract final class SessionTimerTheme {
