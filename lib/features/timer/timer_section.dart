@@ -9,6 +9,7 @@ import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
 
 const _defaultSetupDuration = Duration(minutes: 5);
+const _tickInterval = Duration(seconds: 1);
 
 class TimerSection extends ConsumerWidget {
   const TimerSection({super.key});
@@ -93,7 +94,7 @@ class _TimerBodyState extends State<_TimerBody> {
   void _syncTicker() {
     final isRunning = widget.state?.isRunning ?? false;
     if (isRunning && _ticker == null) {
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _ticker = Timer.periodic(_tickInterval, (_) {
         if (mounted) setState(() {});
       });
     } else if (!isRunning && _ticker != null) {
