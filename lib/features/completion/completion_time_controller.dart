@@ -23,6 +23,9 @@ class CompletionTimeController extends AsyncNotifier<CompletionTimeState> {
 
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     if (storedEpochMs <= nowEpochMs) {
+      // Best-effort cleanup: the state is "unset" either way since the
+      // target has expired, and a failed remove() self-heals — the next
+      // build() hits this same expired branch and retries.
       await prefs.remove(completionTimeEpochMsKey);
       return const CompletionTimeState();
     }
@@ -33,30 +36,34 @@ class CompletionTimeController extends AsyncNotifier<CompletionTimeState> {
     final prefs = await ref.read(sharedPreferencesProvider.future);
     final epochMs = target.millisecondsSinceEpoch;
     try {
-      await prefs.setInt(completionTimeEpochMsKey, epochMs);
-      state = AsyncData(CompletionTimeState(targetEpochMs: epochMs));
+      final persisted = await prefs.setInt(completionTimeEpochMsKey, epochMs);
+      state = persisted
+          ? AsyncData(CompletionTimeState(targetEpochMs: epochMs))
+          : _persistenceFailure('persist');
     } on Exception catch (e, st) {
-      state = AsyncError(
-        Exception(
-          'Failed to persist completion time ($completionTimeEpochMsKey): $e',
-        ),
-        st,
-      );
+      state = AsyncError(e, st);
     }
   }
 
   Future<void> clear() async {
     final prefs = await ref.read(sharedPreferencesProvider.future);
     try {
-      await prefs.remove(completionTimeEpochMsKey);
-      state = const AsyncData(CompletionTimeState());
+      final cleared = await prefs.remove(completionTimeEpochMsKey);
+      state = cleared
+          ? const AsyncData(CompletionTimeState())
+          : _persistenceFailure('clear');
     } on Exception catch (e, st) {
-      state = AsyncError(
-        Exception(
-          'Failed to clear completion time ($completionTimeEpochMsKey): $e',
-        ),
-        st,
-      );
+      state = AsyncError(e, st);
     }
+  }
+
+  AsyncValue<CompletionTimeState> _persistenceFailure(String action) {
+    return AsyncError(
+      Exception(
+        'SharedPreferences reported failure to $action completion time '
+        '($completionTimeEpochMsKey)',
+      ),
+      StackTrace.current,
+    );
   }
 }

@@ -86,8 +86,10 @@ void main() {
       final state = await container.read(
         completionTimeControllerProvider.future,
       );
+      final prefs = await container.read(sharedPreferencesProvider.future);
 
       expect(state.targetEpochMs, isNull);
+      expect(prefs.getInt(completionTimeEpochMsKey), isNull);
     });
   });
 }

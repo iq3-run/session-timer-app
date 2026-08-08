@@ -87,6 +87,7 @@ class _ClearButton extends StatelessWidget {
       top: 0,
       right: 0,
       child: IconButton(
+        tooltip: '完了時刻をクリア',
         icon: const Icon(
           Icons.close,
           color: SessionTimerColors.muted,
