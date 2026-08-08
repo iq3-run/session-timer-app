@@ -155,4 +155,37 @@ Pattern to remember: if a 3rd persisted-model file needs the same epoch
 bound, it should import `epoch_bounds.dart` too rather than adding another
 private copy.
 
+**Notifier mutating private instance fields inside `build()` itself (not just
+inside action methods) — confirmed safe, now a 2nd instance**:
+`flash_queue_controller.dart` (`feat/flash-effect`, 2026-08-09)'s
+`FlashQueueController.build()` mutates `_firedIds`/`_queue`/`_active`
+directly on every re-run (triggered every ~1s via `ref.watch(nowProvider)`),
+not just from action methods like `advance()`. This is a step further than
+the stopwatch/targets `_mutationQueue`/`_lastGood` pattern above (which only
+mutates fields from action methods, not from `build()` itself), but is
+reviewed as safe for the same reason: the provider is a plain
+`NotifierProvider` (no `.autoDispose`), so the container — and therefore the
+Notifier instance and its fields — lives for the whole app session; a hot
+restart (not hot reload) is the only thing that resets it, and that resets
+`state` too, so there's no split-brain window. Don't flag "mutating fields in
+build()" as inherently unsafe in this repo without first checking whether the
+provider is `autoDispose` — it isn't, here or in the stopwatch/targets
+controllers.
+
+**`ref.listen` was unused in this repo until `feat/flash-effect` (2026-08-09,
+PR #20)**: every existing widget that needed to react to a *change* in
+provider state (not just read its current value) did so by manually diffing
+against a stored field — e.g. `flash_overlay.dart`'s `_FlashOverlayState`
+originally compared `active.id != _lastActiveId` inside `build()` to decide
+whether to call `_controller.forward()`, rather than using
+`ref.listen(provider, (prev, next) { ... })`, which is Riverpod's documented
+tool for exactly this (side effects on state change, as opposed to
+`ref.watch` for rendering). Flagged as Warning during that PR's local
+code-reviewer pass and fixed in the same PR (commit `d292c5c`): the manual
+`_lastActiveId` latch was replaced with `ref.listen`. This is now the
+repo's first precedent — a future `ConsumerStatefulWidget` that manually
+latches a previous value to detect change instead of using `ref.listen`
+should be flagged with this precedent cited, not treated as a fresh
+finding.
+
 Related: [[project_readme_maintenance_gap]]
