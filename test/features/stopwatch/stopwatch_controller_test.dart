@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
+import 'package:session_timer/features/timer/timer_controller.dart';
+import 'package:session_timer/features/timer/timer_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
@@ -297,6 +299,67 @@ void main() {
 
         final actualCallGapMs = pauseCallEpochMs - startCallEpochMs;
         expect(state.accumulatedMs, closeTo(actualCallGapMs, 40));
+      },
+    );
+
+    test('reset() also resets an active (still counting down) timer', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(stopwatchControllerProvider.future);
+      await container.read(timerControllerProvider.future);
+      await container
+          .read(timerControllerProvider.notifier)
+          .start(TimerMode.normal, const Duration(minutes: 5));
+
+      await container.read(stopwatchControllerProvider.notifier).reset();
+      final timer = await container.read(timerControllerProvider.future);
+
+      expect(timer.isRunning, isFalse);
+    });
+
+    test(
+      'resetAndRestart() resets the timer when it is already overdue',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        await container.read(timerControllerProvider.future);
+        await container
+            .read(timerControllerProvider.notifier)
+            .start(TimerMode.normal, const Duration(milliseconds: 10));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        await container
+            .read(stopwatchControllerProvider.notifier)
+            .resetAndRestart();
+        final timer = await container.read(timerControllerProvider.future);
+
+        expect(timer.isRunning, isFalse);
+      },
+    );
+
+    test(
+      'resetAndRestart() leaves a still-counting-down timer alone',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        await container.read(timerControllerProvider.future);
+        await container
+            .read(timerControllerProvider.notifier)
+            .start(TimerMode.normal, const Duration(minutes: 5));
+        final before = await container.read(timerControllerProvider.future);
+
+        await container
+            .read(stopwatchControllerProvider.notifier)
+            .resetAndRestart();
+        final after = await container.read(timerControllerProvider.future);
+
+        expect(after.isRunning, isTrue);
+        expect(after.targetEpochMs, before.targetEpochMs);
       },
     );
   });

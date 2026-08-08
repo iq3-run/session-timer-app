@@ -4,6 +4,7 @@ import 'package:session_timer/features/clock/current_time_display.dart';
 import 'package:session_timer/features/completion/completion_countdown_section.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_section.dart';
 import 'package:session_timer/features/targets/time_targets_section.dart';
+import 'package:session_timer/features/timer/timer_section.dart';
 
 class ClockScreen extends StatelessWidget {
   const ClockScreen({super.key});
@@ -25,6 +26,8 @@ class ClockScreen extends StatelessWidget {
                 TimeTargetsSection(),
                 SizedBox(height: 16),
                 StopwatchSection(),
+                SizedBox(height: 16),
+                TimerSection(),
               ],
             ),
           ),

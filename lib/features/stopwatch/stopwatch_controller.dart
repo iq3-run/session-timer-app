@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
+import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // A single JSON key (rather than one key per field) so a partial
@@ -61,11 +62,27 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     });
   }
 
-  Future<void> reset() => _mutate((_) => const StopwatchState());
+  /// Long-press: full reset. Unconditionally resets the linked/independent
+  /// timer too (spec 3-1節: ストップウォッチの長押しリセットはタイマーも
+  /// リセットする).
+  Future<void> reset() async {
+    await _mutate((_) => const StopwatchState());
+    await ref.read(timerControllerProvider.notifier).reset();
+  }
 
-  Future<void> resetAndRestart() {
-    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    return _mutate((_) => StopwatchState(runningSinceEpochMs: nowEpochMs));
+  /// Double-tap: reset + immediate restart. Only cascades to the timer if
+  /// it's currently overdue/counting up — a timer still counting down is
+  /// left alone (spec 3-1節: タイマーが完了（超過）していなければそのまま、
+  /// すでに超過していればタイマーもリセットする).
+  Future<void> resetAndRestart() async {
+    final now = DateTime.now();
+    await _mutate(
+      (_) => StopwatchState(runningSinceEpochMs: now.millisecondsSinceEpoch),
+    );
+    final timer = await ref.read(timerControllerProvider.future);
+    if (timer.isOverdueAt(now)) {
+      await ref.read(timerControllerProvider.notifier).reset();
+    }
   }
 
   Future<void> _mutate(StopwatchState Function(StopwatchState) update) {
