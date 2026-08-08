@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/clock/current_time_display.dart';
 import 'package:session_timer/features/completion/completion_countdown_section.dart';
+import 'package:session_timer/features/stopwatch/stopwatch_section.dart';
 import 'package:session_timer/features/targets/time_targets_section.dart';
 
 class ClockScreen extends StatelessWidget {
@@ -22,6 +23,8 @@ class ClockScreen extends StatelessWidget {
                 CompletionCountdownSection(),
                 SizedBox(height: 16),
                 TimeTargetsSection(),
+                SizedBox(height: 16),
+                StopwatchSection(),
               ],
             ),
           ),
