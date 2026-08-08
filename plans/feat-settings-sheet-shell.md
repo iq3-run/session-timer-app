@@ -27,6 +27,7 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/24>
 ephemeralな状態だったため、この振る舞いは元のプロトタイプに忠実。
 
 理由：
+
 - 本issueのスコープは「UIの土台」であり、実データへの配線は#22等の別issueが
   担当する。ここでRiverpod controllerを新設すると、後続issueが同じ責務の
   controllerを二重に作る/差し替えることになり手戻りが生じる。
@@ -48,7 +49,7 @@ NTP同期ボタンは実際のネットワークfetchを行わない（本issue�
 
 ## File layout
 
-```
+```text
 lib/features/settings/
   settings_gear_button.dart       # ClockScreen内に置く導線。タップでシートをshowModalBottomSheetで開く
   settings_sheet.dart             # StatefulWidget。ephemeral stateを保持し、4セクションを合成
@@ -80,7 +81,7 @@ lib/features/settings/
   SessionTimerColors.panel, shape: RoundedRectangleBorder(borderRadius:
   BorderRadius.vertical(top: Radius.circular(16))), isScrollControlled:
   true, builder: ...)`。内容は`SingleChildScrollView`+`Column`で4セクション
-  + 閉じるボタン。
+  と閉じるボタン。
 - **フラッシュポイント設定**：見出し「完了◯分前フラッシュ」、現在値の
   一覧（`Chip`的な行、削除ボタン付き）、`TextField(keyboardType:
   TextInputType.number)` + 「追加」`FilledButton`。
