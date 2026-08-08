@@ -48,9 +48,14 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
     final now = watchNow(ref);
     final firedIds = ref.watch(flashQueueControllerProvider).firedIds;
     final targetEpochMs = target.millisecondsSinceEpoch;
+    // Reclamped on every build, not just when _onSwipe sets it — the
+    // settings sheet can shrink the point list out from under an active
+    // custom window at any time, and a stale out-of-range _windowStart
+    // would otherwise render zero chips until the 5s idle revert fires.
     final windowStart =
-        _windowStart ??
-        _defaultWindowStart(sortedPoints, targetEpochMs, firedIds);
+        (_windowStart ??
+                _defaultWindowStart(sortedPoints, targetEpochMs, firedIds))
+            .clamp(0, _maxWindowStart(sortedPoints));
 
     return GestureDetector(
       onHorizontalDragEnd: (details) =>
@@ -99,7 +104,9 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
   }
 
   int _maxWindowStart(List<int> sortedPoints) =>
-      (sortedPoints.length - _visibleChipCount).clamp(0, sortedPoints.length);
+      sortedPoints.length > _visibleChipCount
+      ? sortedPoints.length - _visibleChipCount
+      : 0;
 }
 
 class _ChipRowContent extends StatelessWidget {

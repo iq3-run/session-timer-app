@@ -26,12 +26,21 @@ This repo (session-timer-app, Flutter/Dart) has a deliberate, repeated architect
   inconsistency across related fields — see stopwatch's `stopwatch_state_json` merging
   `accumulatedMs` + `runningSinceEpochMs`.
 
-**Why this matters for review**: this ~70-line skeleton (mutation queue + `_lastGood` +
-`_initialLoad` + `_persistenceFailure` + `_readPersisted`/`_persist` pair) is now duplicated
-between two controllers. It's a real DRY candidate but was a deliberate choice (plan doc says
-"follow the same pattern as TimeTargetsController") rather than an oversight — flag as
-**Suggestion** only ("consider extracting a shared base/mixin if a third feature repeats this"),
-not Warning/Critical, unless a third instance appears, at which point it should become a Warning.
+**Why this matters for review**: this ~40-70-line skeleton (mutation queue + `_lastGood` +
+`_initialLoad` + `_persistenceFailure` + `_readPersisted`/`_persist` pair) started as a
+2-instance duplication (TimeTargetsController, StopwatchController) and was deliberate at the
+time (plan doc says "follow the same pattern as TimeTargetsController").
+
+**Threshold crossed (2026-08-09, `feat/flash-points-persistence`, PR for issue #26)**: a 4th
+instance now exists — `TimerController` (`feat/countdown-timer`, pre-existing, not separately
+flagged at the time) and `FlashPointsController` (this PR) both duplicate the same skeleton
+alongside the original two. Reviewed and recommended **extraction now** (Warning, not
+Suggestion) — e.g. a `MutationQueueNotifier<T>` base/mixin in `lib/core/` taking
+read/persist/seed callbacks, or a shared helper class the four controllers compose. Four
+near-identical copies is well past the "flag as Warning at a 3rd instance" bar set when this
+was a 2-instance Suggestion. If a 5th controller adds this same skeleton without extracting,
+treat that as a repeat of an already-flagged-twice DRY violation, not a fresh discovery — the
+recommendation has now been made explicitly at least once and should carry more weight.
 
 **Comment style**: this codebase uses multi-line (3-6 line) `//` comment blocks throughout
 (not just in the stopwatch PR) to explain non-obvious WHY — clock-skew clamping, mutation-queue

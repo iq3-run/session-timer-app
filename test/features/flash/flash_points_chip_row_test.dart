@@ -30,6 +30,15 @@ class _FixedFlashPointsController extends FlashPointsController {
   Future<List<int>> build() async => _value;
 }
 
+class _MutableFlashPointsController extends FlashPointsController {
+  _MutableFlashPointsController(this._initial);
+  final List<int> _initial;
+  @override
+  Future<List<int>> build() async => _initial;
+
+  void setPoints(List<int> points) => state = AsyncData(points);
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required DateTime now,
@@ -167,5 +176,58 @@ void main() {
 
       expect(find.text('残120分フラッシュ'), findsOneWidget);
     });
+
+    testWidgets(
+      'reclamps a swiped-to window when the point list shrinks under it, '
+      'instead of rendering blank until the idle revert fires',
+      (tester) async {
+        final target = DateTime(2099, 1, 1, 12);
+        final flashPointsController = _MutableFlashPointsController(
+          defaultCompletionFlashPointsMinutes,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              nowProvider.overrideWith(
+                (ref) =>
+                    Stream.value(target.subtract(const Duration(hours: 3))),
+              ),
+              completionTimeControllerProvider.overrideWith(
+                () => _FixedCompletionController(
+                  CompletionTimeState(
+                    targetEpochMs: target.millisecondsSinceEpoch,
+                  ),
+                ),
+              ),
+              flashQueueControllerProvider.overrideWith(
+                () => _FixedFlashQueueController(const {}),
+              ),
+              flashPointsControllerProvider.overrideWith(
+                () => flashPointsController,
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: FlashPointsChipRow()),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await tester.fling(
+          find.byType(FlashPointsChipRow),
+          const Offset(-300, 0),
+          800,
+        );
+        await tester.pump();
+        expect(find.text('残45分フラッシュ'), findsOneWidget);
+
+        flashPointsController.setPoints(const [10, 5, 1]);
+        await tester.pump();
+
+        expect(find.text('残10分フラッシュ'), findsOneWidget);
+        expect(find.text('残5分フラッシュ'), findsOneWidget);
+        expect(find.text('残1分フラッシュ'), findsOneWidget);
+      },
+    );
   });
 }
