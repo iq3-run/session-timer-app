@@ -40,9 +40,12 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
         .watch(completionTimeControllerProvider)
         .value
         ?.targetTime;
-    final sortedPoints = _sortDescending(
-      ref.watch(flashPointsControllerProvider).value ?? const [],
-    );
+    final flashPoints =
+        ref.watch(flashPointsControllerProvider).value ?? const [];
+    final sortedPoints = _sortDescending([
+      for (final p in flashPoints)
+        if (p.flashEnabled) p.minutes,
+    ]);
     if (target == null || sortedPoints.isEmpty) return const SizedBox.shrink();
 
     final now = watchNow(ref);

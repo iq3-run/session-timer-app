@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/notifications/notification_event_source.dart';
 import 'package:session_timer/features/targets/time_target.dart';
@@ -33,10 +34,14 @@ class _FixedTimerController extends TimerController {
 
 class _FixedFlashPointsController extends FlashPointsController {
   _FixedFlashPointsController(this._value);
-  final List<int> _value;
+  final List<FlashPointConfig> _value;
   @override
-  Future<List<int>> build() async => _value;
+  Future<List<FlashPointConfig>> build() async => _value;
 }
+
+List<FlashPointConfig> _allEnabled(List<int> minutes) => [
+  for (final m in minutes) FlashPointConfig(minutes: m),
+];
 
 void main() {
   test(
@@ -70,7 +75,7 @@ void main() {
           ),
           flashPointsControllerProvider.overrideWith(
             () => _FixedFlashPointsController(
-              defaultCompletionFlashPointsMinutes,
+              _allEnabled(defaultCompletionFlashPointsMinutes),
             ),
           ),
         ],
@@ -111,8 +116,9 @@ void main() {
           () => _FixedTimerController(const TimerState()),
         ),
         flashPointsControllerProvider.overrideWith(
-          () =>
-              _FixedFlashPointsController(defaultCompletionFlashPointsMinutes),
+          () => _FixedFlashPointsController(
+            _allEnabled(defaultCompletionFlashPointsMinutes),
+          ),
         ),
       ],
     );
@@ -124,4 +130,51 @@ void main() {
 
     expect(container.read(notificationCandidateEventsProvider), isEmpty);
   });
+
+  test(
+    'excludes a completion point whose flash is off, and one whose flash is '
+    'on but notify is off, while keeping one with both on',
+    () async {
+      final completionTarget = DateTime(2099, 1, 1, 12);
+      final completion = CompletionTimeState(
+        targetEpochMs: completionTarget.millisecondsSinceEpoch,
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          completionTimeControllerProvider.overrideWith(
+            () => _FixedCompletionController(completion),
+          ),
+          timeTargetsControllerProvider.overrideWith(
+            () => _FixedTargetsController(const []),
+          ),
+          timerControllerProvider.overrideWith(
+            () => _FixedTimerController(const TimerState()),
+          ),
+          flashPointsControllerProvider.overrideWith(
+            () => _FixedFlashPointsController(const [
+              FlashPointConfig(minutes: 10, flashEnabled: false),
+              FlashPointConfig(minutes: 5, notifyEnabled: false),
+              FlashPointConfig(minutes: 3),
+            ]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(completionTimeControllerProvider.future);
+      await container.read(timeTargetsControllerProvider.future);
+      await container.read(timerControllerProvider.future);
+      await container.read(flashPointsControllerProvider.future);
+
+      final ids = container
+          .read(notificationCandidateEventsProvider)
+          .map((e) => e.id)
+          .toSet();
+      final epoch = completionTarget.millisecondsSinceEpoch;
+
+      expect(ids, isNot(contains('completion:$epoch:10')));
+      expect(ids, isNot(contains('completion:$epoch:5')));
+      expect(ids, contains('completion:$epoch:3'));
+    },
+  );
 }

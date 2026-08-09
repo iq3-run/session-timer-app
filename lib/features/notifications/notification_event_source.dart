@@ -16,8 +16,12 @@ final notificationCandidateEventsProvider = Provider<List<FlashEvent>>((ref) {
   final timer = ref.watch(timerControllerProvider).value;
   final flashPoints =
       ref.watch(flashPointsControllerProvider).value ?? const [];
+  final notifyMinutes = [
+    for (final p in flashPoints)
+      if (p.flashEnabled && p.notifyEnabled) p.minutes,
+  ];
   return [
-    ...completionFlashEvents(completion, flashPoints),
+    ...completionFlashEvents(completion, notifyMinutes),
     ...targetFlashEvents(targets),
     ...timerFlashEvents(timer),
   ];

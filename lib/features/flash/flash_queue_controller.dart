@@ -44,6 +44,10 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     final timer = ref.watch(timerControllerProvider).value;
     final flashPoints =
         ref.watch(flashPointsControllerProvider).value ?? const [];
+    final flashEnabledMinutes = [
+      for (final p in flashPoints)
+        if (p.flashEnabled) p.minutes,
+    ];
 
     _purgeFiredIdsForSourceChanges(completion, timer);
 
@@ -52,7 +56,7 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     // compared against its true nearest neighbor for merging — not just
     // whichever source happened to list it first.
     final candidates = [
-      ...completionFlashEvents(completion, flashPoints),
+      ...completionFlashEvents(completion, flashEnabledMinutes),
       ...targetFlashEvents(targets),
       ...timerFlashEvents(timer),
     ]..sort((a, b) => a.instant.compareTo(b.instant));

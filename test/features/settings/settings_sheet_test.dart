@@ -25,7 +25,8 @@ Future<void> _pumpAndOpenSheet(WidgetTester tester) async {
 
 /// Finds the `削除` button inside the `SettingsListItem` whose label
 /// contains [text] — needed once a section has more than one deletable
-/// row, since a bare `find.text('削除')` would be ambiguous.
+/// row, since a bare `find.text('削除')` would be ambiguous. Used for the
+/// milestone section, which still uses the shared `SettingsListItem`.
 Finder _deleteButtonFor(String text) {
   final item = find.ancestor(
     of: find.textContaining(text),
@@ -36,13 +37,12 @@ Finder _deleteButtonFor(String text) {
 
 void main() {
   group('SettingsSheet', () {
-    testWidgets('gear button opens the sheet with all four sections', (
+    testWidgets('gear button opens the sheet with all three sections', (
       tester,
     ) async {
       await _pumpAndOpenSheet(tester);
 
       expect(find.text('完了◯分前フラッシュ'), findsOneWidget);
-      expect(find.text('通知'), findsOneWidget);
       expect(find.text('おまけ：週末（マイルストーン）'), findsOneWidget);
       expect(find.text('おまけ：時刻同期（NTP風）'), findsOneWidget);
     });
@@ -74,24 +74,75 @@ void main() {
       await _pumpAndOpenSheet(tester);
       expect(find.text('残り 1 分'), findsOneWidget);
 
-      await tester.tap(_deleteButtonFor('残り 1 分'));
+      await tester.tap(find.byKey(const Key('removeFlashPoint_1')));
       await tester.pumpAndSettle();
 
       expect(find.text('残り 1 分'), findsNothing);
       expect(find.text('残り 120 分'), findsOneWidget);
     });
 
-    testWidgets('notify switch toggles without touching real state', (
-      tester,
-    ) async {
+    testWidgets('flash points start with both toggles on', (tester) async {
       await _pumpAndOpenSheet(tester);
-      final switchFinder = find.byType(Switch);
-      expect(tester.widget<Switch>(switchFinder).value, isFalse);
 
-      await tester.tap(switchFinder);
+      expect(
+        tester.widget<Switch>(find.byKey(const Key('flashToggle_1'))).value,
+        isTrue,
+      );
+      expect(
+        tester.widget<Switch>(find.byKey(const Key('notifyToggle_1'))).value,
+        isTrue,
+      );
+    });
+
+    testWidgets(
+      "turning a point's flash off also forces its notify off and locks "
+      'the notify switch',
+      (tester) async {
+        await _pumpAndOpenSheet(tester);
+
+        await tester.tap(find.byKey(const Key('flashToggle_1')));
+        await tester.pumpAndSettle();
+
+        final notifySwitch = tester.widget<Switch>(
+          find.byKey(const Key('notifyToggle_1')),
+        );
+        expect(notifySwitch.value, isFalse);
+        expect(notifySwitch.onChanged, isNull);
+      },
+    );
+
+    testWidgets(
+      'turning flash back on does not automatically restore notify',
+      (tester) async {
+        await _pumpAndOpenSheet(tester);
+
+        await tester.tap(find.byKey(const Key('flashToggle_1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('flashToggle_1')));
+        await tester.pumpAndSettle();
+
+        final notifySwitch = tester.widget<Switch>(
+          find.byKey(const Key('notifyToggle_1')),
+        );
+        expect(notifySwitch.value, isFalse);
+        expect(notifySwitch.onChanged, isNotNull);
+      },
+    );
+
+    testWidgets('toggling notify alone leaves flash on', (tester) async {
+      await _pumpAndOpenSheet(tester);
+
+      await tester.tap(find.byKey(const Key('notifyToggle_1')));
       await tester.pumpAndSettle();
 
-      expect(tester.widget<Switch>(switchFinder).value, isTrue);
+      expect(
+        tester.widget<Switch>(find.byKey(const Key('flashToggle_1'))).value,
+        isTrue,
+      );
+      expect(
+        tester.widget<Switch>(find.byKey(const Key('notifyToggle_1'))).value,
+        isFalse,
+      );
     });
 
     testWidgets('adding a milestone requires a picked date', (tester) async {
@@ -170,7 +221,7 @@ void main() {
       await tester.tap(find.byKey(const Key('closeSettingsSheetButton')));
       await tester.pumpAndSettle();
 
-      expect(find.text('通知'), findsNothing);
+      expect(find.text('完了◯分前フラッシュ'), findsNothing);
     });
   });
 }

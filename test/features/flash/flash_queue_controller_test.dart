@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
+import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
 import 'package:session_timer/features/targets/time_target.dart';
@@ -44,9 +45,9 @@ class _FixedTimerController extends TimerController {
 
 class _FixedFlashPointsController extends FlashPointsController {
   _FixedFlashPointsController(this._value);
-  final List<int> _value;
+  final List<FlashPointConfig> _value;
   @override
-  Future<List<int>> build() async => _value;
+  Future<List<FlashPointConfig>> build() async => _value;
 }
 
 Future<ProviderContainer> _buildContainer({
@@ -56,7 +57,7 @@ Future<ProviderContainer> _buildContainer({
   TimerState timer = const TimerState(),
   // Empty by default so tests aren't crowded with the 12 default
   // completion-countdown points unless a test opts in.
-  List<int> flashPoints = const [],
+  List<FlashPointConfig> flashPoints = const [],
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -293,6 +294,32 @@ void main() {
         await _tick(clock, target);
 
         expect(container.read(flashQueueControllerProvider).active?.id, id);
+      },
+    );
+
+    test(
+      'a flash-disabled completion point never activates, even once its '
+      'window is due',
+      () async {
+        final clock = StreamController<DateTime>.broadcast();
+        addTearDown(clock.close);
+        final target = DateTime(2099, 1, 1, 12);
+        final container = await _buildContainer(
+          clock: clock,
+          completion: CompletionTimeState(
+            targetEpochMs: target.millisecondsSinceEpoch,
+          ),
+          flashPoints: const [
+            FlashPointConfig(minutes: 5, flashEnabled: false),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await _tick(clock, target.subtract(const Duration(minutes: 5)));
+
+        final state = container.read(flashQueueControllerProvider);
+        expect(state.active, isNull);
+        expect(state.firedIds, isEmpty);
       },
     );
   });
