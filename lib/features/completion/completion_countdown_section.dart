@@ -19,7 +19,7 @@ class CompletionCountdownSection extends ConsumerWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _pickCompletionTime(context, ref),
+      onTap: () => _pickCompletionTime(context, ref, target),
       child: Stack(
         children: [
           _CountdownBody(target: target),
@@ -33,10 +33,16 @@ class CompletionCountdownSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickCompletionTime(BuildContext context, WidgetRef ref) async {
+  Future<void> _pickCompletionTime(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime? currentTarget,
+  ) async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: currentTarget == null
+          ? TimeOfDay.now()
+          : TimeOfDay.fromDateTime(currentTarget),
     );
     if (picked == null || !context.mounted) return;
     final target = resolveNextOccurrence(picked, DateTime.now());
