@@ -91,4 +91,44 @@ error path so the next call retries. Check for this same `??=`-memoize-a-Future 
 before assuming any future instance is safe — it depends on whether retry-after-failure was
 actually intended.
 
+## `requestExactAlarmsPermission()` does not re-prompt once granted — verified in plugin source (2026-08-09, issue #39 PR)
+
+Reviewed `flutter_local_notifications` 22.2.0's Android implementation
+(`FlutterLocalNotificationsPlugin.java`, `requestExactAlarmsPermission`): it calls
+`alarmManager.canScheduleExactAlarms()` itself first and only launches the
+`ACTION_REQUEST_SCHEDULE_EXACT_ALARM` settings screen when not already granted; if already
+granted it completes immediately with no UI. So `NotificationScheduler._bootstrap` calling
+`requestPermissions()` unconditionally on every app launch does **not** re-prompt/re-interrupt a
+user who already granted it — confirmed not a bug, don't flag this shape again without
+re-checking the installed plugin version first (a future upgrade could change this). Note: for a
+user who has *not* granted it, this does send them to the Settings screen on every launch until
+they do — that matches Android's own recommended pattern for this permission (no "don't ask
+again" concept exists for it) and was treated as acceptable, not a violation.
+
+`canScheduleExactNotifications()`/`_scheduleMode()` being called on every `_rescheduleNow` (not
+cached) was also reviewed as fine cost-wise — the native handler is a synchronous
+`AlarmManager.canScheduleExactAlarms()` check (no I/O), and `rescheduleAll` already serializes via
+`_rescheduleQueue` (see race note above), so one more cheap channel round-trip per reschedule is
+not a real perf concern. Minor: it does sit between `cancelAll()` and the `zonedSchedule` loop, so
+a (very unlikely, given the above) exception there would leave zero notifications scheduled until
+the next successful reschedule — flagged only as a Suggestion, not worth blocking on.
+
+**Test-gap pattern, resolved same PR**: an earlier revision added a field to `_notificationDetails`
+(`priority: Priority.high` alongside `importance: Importance.max`) with only an `importance`
+assertion; CodeRabbit caught the gap and the `priority` assertion was added to the same test
+before merge (`test/features/notifications/notification_service_test.dart`, "schedules at max
+importance and high priority"). Still worth watching for this "added two related fields, tested
+one" shape in future notification-detail PRs.
+
+**Channel ID must be bumped when changing importance/priority** (found by CodeRabbit, issue #39):
+Android notification channels are immutable once created — re-creating an existing channel ID with
+different `importance`/sound/etc. is silently ignored by the OS for any device that already has
+that channel from an earlier app version. The `_androidChannelId` constant in
+`notification_service.dart` was bumped from `'flash_points'` to `'flash_points_v2'` alongside the
+`Importance.max`/`Priority.high` change so the new defaults actually take effect, rather than
+deleting/recreating the old channel (which would also discard any user customization of it). Any
+future change to channel-level notification behavior (importance, sound, vibration pattern, etc.)
+needs the same treatment — check for this whenever `_notificationDetails`'s `AndroidNotificationDetails`
+channel-level fields change, not just when `zonedSchedule`'s per-call fields change.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_readme_maintenance_gap]]
