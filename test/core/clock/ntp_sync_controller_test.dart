@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/ntp_sync_controller.dart';
@@ -248,5 +250,48 @@ void main() {
 
       expect(container.read(ntpOffsetMsProvider), 0);
     });
+  });
+
+  group('preferIPv4Address', () {
+    test(
+      'prefers an IPv4 address when the lookup returns both families',
+      () async {
+        final resolved = await preferIPv4Address(
+          'example.com',
+          (host) async => [
+            InternetAddress('2001:db8::1', type: InternetAddressType.IPv6),
+            InternetAddress('203.0.113.1', type: InternetAddressType.IPv4),
+          ],
+        );
+
+        expect(resolved, '203.0.113.1');
+      },
+    );
+
+    test(
+      'falls back to the first result when only IPv6 was returned',
+      () async {
+        final resolved = await preferIPv4Address(
+          'example.com',
+          (host) async => [
+            InternetAddress('2001:db8::1', type: InternetAddressType.IPv6),
+          ],
+        );
+
+        expect(resolved, '2001:db8::1');
+      },
+    );
+
+    test(
+      'falls back to the original host when the lookup returns nothing',
+      () async {
+        final resolved = await preferIPv4Address(
+          'example.com',
+          (host) async => [],
+        );
+
+        expect(resolved, 'example.com');
+      },
+    );
   });
 }

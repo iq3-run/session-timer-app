@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:meta/meta.dart';
 import 'package:ntp/ntp.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 
@@ -38,8 +41,46 @@ class NtpSyncState {
 typedef NtpOffsetFetcher =
     Future<int> Function(String host, {required Duration timeout});
 
-Future<int> _fetchViaNtpPackage(String host, {required Duration timeout}) =>
-    NTP.getNtpOffset(lookUpAddress: host, timeout: timeout);
+/// Resolves a hostname to its addresses, injectable so tests can supply
+/// deterministic results instead of hitting real DNS. Matches
+/// `InternetAddress.lookup`'s signature (minus its optional `type` param,
+/// which callers here don't need to override) so the default binding below
+/// is a direct tear-off.
+typedef DnsLookup = Future<List<InternetAddress>> Function(String host);
+
+Future<int> _fetchViaNtpPackage(
+  String host, {
+  required Duration timeout,
+  DnsLookup dnsLookup = InternetAddress.lookup,
+}) async {
+  final resolvedHost = await preferIPv4Address(host, dnsLookup);
+  return NTP.getNtpOffset(lookUpAddress: resolvedHost, timeout: timeout);
+}
+
+/// Some networks have a broken/unreachable IPv6 route to an otherwise
+/// perfectly reachable NTP host — confirmed on a real device via `adb shell
+/// ping6` showing 100% loss to the default NTP host while plain IPv4 `ping`
+/// succeeded. `NTP.getNtpOffset` has no address-family preference of its
+/// own — it just uses whichever address `lookUpAddress` resolves to first —
+/// so resolve here first and pass a literal IPv4 address through when one
+/// is available, falling back to the lookup's first result (which may be
+/// IPv6, or the original hostname if the lookup returned nothing)
+/// otherwise.
+///
+/// Not private (just `@visibleForTesting`) so a test can exercise the
+/// IPv4-preference logic directly against a fake [DnsLookup], instead of
+/// only through [_fetchViaNtpPackage], which always hits the real NTP
+/// package's network call.
+@visibleForTesting
+Future<String> preferIPv4Address(String host, DnsLookup dnsLookup) async {
+  final addresses = await dnsLookup(host);
+  if (addresses.isEmpty) return host;
+  final ipv4Addresses = addresses.where(
+    (a) => a.type == InternetAddressType.IPv4,
+  );
+  return (ipv4Addresses.isNotEmpty ? ipv4Addresses.first : addresses.first)
+      .address;
+}
 
 /// Blank/whitespace-only input falls back to [defaultNtpServerHost]. Also
 /// used by the settings UI so the server field reflects the same
