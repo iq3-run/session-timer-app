@@ -63,17 +63,24 @@ class NotificationService {
   }
 
   Future<void> requestPermissions() async {
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+    await _androidPlugin?.requestNotificationsPermission();
+    // A decline (or the plugin already having the permission, in which
+    // case this is a no-op — see `_scheduleMode`) doesn't stop notification
+    // setup: any exception here still gets caught by the caller
+    // (`NotificationScheduler._bootstrap`), and the iOS call below runs
+    // regardless since it targets a different platform implementation.
+    await _androidPlugin?.requestExactAlarmsPermission();
     await _plugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
   }
+
+  AndroidFlutterLocalNotificationsPlugin? get _androidPlugin => _plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
 
   /// Serializes [rescheduleAll] calls so an in-flight cancel-and-rebuild
   /// can't be interleaved with a newer one — e.g. two rapid state edits
@@ -99,6 +106,7 @@ class NotificationService {
     await _plugin.cancelAll();
     final now = DateTime.now();
     final upcoming = events.where((event) => event.instant.isAfter(now));
+    final scheduleMode = await _scheduleMode();
     await Future.wait(
       upcoming.map(
         (event) => _plugin.zonedSchedule(
@@ -107,10 +115,24 @@ class NotificationService {
           body: event.label,
           scheduledDate: tz.TZDateTime.from(event.instant, tz.local),
           notificationDetails: _notificationDetails,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          androidScheduleMode: scheduleMode,
         ),
       ),
     );
+  }
+
+  /// Exact scheduling requires the user to have granted `SCHEDULE_EXACT_ALARM`
+  /// (Android 12+); re-checked on every reschedule rather than cached, since
+  /// the user can flip it in system settings at any time without the app
+  /// knowing. Non-Android platforms (where `_androidPlugin` is null) fall
+  /// back to inexact too — the value is only read on Android regardless, but
+  /// keeps this method meaningful platform-agnostically.
+  Future<AndroidScheduleMode> _scheduleMode() async {
+    final exactAllowed =
+        await _androidPlugin?.canScheduleExactNotifications() ?? false;
+    return exactAllowed
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   static const _notificationDetails = NotificationDetails(
@@ -118,6 +140,10 @@ class NotificationService {
       _androidChannelId,
       _androidChannelName,
       channelDescription: _androidChannelDescription,
+      // Max importance so a flash-point notification appears as a
+      // heads-up popup instead of only showing silently in the shade.
+      importance: Importance.max,
+      priority: Priority.high,
     ),
   );
 }

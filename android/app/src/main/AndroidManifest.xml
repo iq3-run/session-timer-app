@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Requested at runtime (NotificationService.requestPermissions) so
+         flash-point notifications can fire at their exact scheduled time
+         instead of Android's battery-optimized inexact window. Android
+         13+ requires the user to grant this explicitly; the app falls
+         back to inexact scheduling when it isn't granted. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <application
         android:label="session_timer"
         android:name="${applicationName}"

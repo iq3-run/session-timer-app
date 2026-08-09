@@ -22,10 +22,17 @@ class _RecordedCall {
   final Object? arguments;
 }
 
+/// `scheduleMode` and the `AndroidNotificationDetails` fields (e.g.
+/// `importance`) are nested under `platformSpecifics` in the plugin's
+/// `zonedSchedule` method-channel arguments, not top-level.
+Map<dynamic, dynamic> _platformSpecifics(Map<dynamic, dynamic> arguments) =>
+    arguments['platformSpecifics']! as Map<dynamic, dynamic>;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late List<_RecordedCall> calls;
+  late bool canScheduleExactAlarms;
 
   setUp(() {
     calls = [];
@@ -35,11 +42,13 @@ void main() {
     // `FlutterLocalNotificationsPlatform.instance` is otherwise left
     // uninitialized.
     AndroidFlutterLocalNotificationsPlugin.registerWith();
+    canScheduleExactAlarms = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
           calls.add(_RecordedCall(call.method, call.arguments));
           return switch (call.method) {
             'initialize' => true,
+            'canScheduleExactNotifications' => canScheduleExactAlarms,
             _ => null,
           };
         });
@@ -55,6 +64,19 @@ void main() {
     FlutterLocalNotificationsPlugin(),
     localTimezoneIdentifier: () async => 'Etc/UTC',
   );
+
+  group('NotificationService.requestPermissions', () {
+    test('also requests exact-alarm permission on Android', () async {
+      final service = buildService();
+
+      await service.requestPermissions();
+
+      expect(
+        calls.map((c) => c.method),
+        contains('requestExactAlarmsPermission'),
+      );
+    });
+  });
 
   group('NotificationService.rescheduleAll', () {
     test('cancels all pending notifications before rescheduling', () async {
@@ -117,6 +139,77 @@ void main() {
     });
 
     test(
+      'schedules exactly when the user has granted exact-alarm permission',
+      () async {
+        canScheduleExactAlarms = true;
+        final service = buildService();
+        final future = FlashEvent(
+          id: 'target:t1:1',
+          instant: DateTime.now().add(const Duration(hours: 1)),
+          label: 'test',
+        );
+
+        await service.rescheduleAll([future]);
+
+        final scheduled = calls.singleWhere(
+          (c) => c.method == 'zonedSchedule',
+        );
+        final arguments = scheduled.arguments! as Map<dynamic, dynamic>;
+        expect(
+          _platformSpecifics(arguments)['scheduleMode'],
+          AndroidScheduleMode.exactAllowWhileIdle.name,
+        );
+      },
+    );
+
+    test(
+      'falls back to inexact scheduling without exact-alarm permission',
+      () async {
+        canScheduleExactAlarms = false;
+        final service = buildService();
+        final future = FlashEvent(
+          id: 'target:t1:1',
+          instant: DateTime.now().add(const Duration(hours: 1)),
+          label: 'test',
+        );
+
+        await service.rescheduleAll([future]);
+
+        final scheduled = calls.singleWhere(
+          (c) => c.method == 'zonedSchedule',
+        );
+        final arguments = scheduled.arguments! as Map<dynamic, dynamic>;
+        expect(
+          _platformSpecifics(arguments)['scheduleMode'],
+          AndroidScheduleMode.inexactAllowWhileIdle.name,
+        );
+      },
+    );
+
+    test(
+      'schedules at max importance and high priority so it can appear as '
+      'a heads-up popup',
+      () async {
+        final service = buildService();
+        final future = FlashEvent(
+          id: 'target:t1:1',
+          instant: DateTime.now().add(const Duration(hours: 1)),
+          label: 'test',
+        );
+
+        await service.rescheduleAll([future]);
+
+        final scheduled = calls.singleWhere(
+          (c) => c.method == 'zonedSchedule',
+        );
+        final arguments = scheduled.arguments! as Map<dynamic, dynamic>;
+        final platformSpecifics = _platformSpecifics(arguments);
+        expect(platformSpecifics['importance'], Importance.max.value);
+        expect(platformSpecifics['priority'], Priority.high.value);
+      },
+    );
+
+    test(
       'serializes overlapping calls instead of interleaving their '
       'cancelAll/zonedSchedule steps',
       () async {
@@ -157,8 +250,10 @@ void main() {
         expect(calls.map((c) => c.method).toList(), [
           'initialize',
           'cancelAll',
+          'canScheduleExactNotifications',
           'zonedSchedule',
           'cancelAll',
+          'canScheduleExactNotifications',
           'zonedSchedule',
         ]);
         final scheduledBodies = calls

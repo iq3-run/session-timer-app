@@ -91,4 +91,32 @@ error path so the next call retries. Check for this same `??=`-memoize-a-Future 
 before assuming any future instance is safe — it depends on whether retry-after-failure was
 actually intended.
 
+## `requestExactAlarmsPermission()` does not re-prompt once granted — verified in plugin source (2026-08-09, issue #39 PR)
+
+Reviewed `flutter_local_notifications` 22.2.0's Android implementation
+(`FlutterLocalNotificationsPlugin.java`, `requestExactAlarmsPermission`): it calls
+`alarmManager.canScheduleExactAlarms()` itself first and only launches the
+`ACTION_REQUEST_SCHEDULE_EXACT_ALARM` settings screen when not already granted; if already
+granted it completes immediately with no UI. So `NotificationScheduler._bootstrap` calling
+`requestPermissions()` unconditionally on every app launch does **not** re-prompt/re-interrupt a
+user who already granted it — confirmed not a bug, don't flag this shape again without
+re-checking the installed plugin version first (a future upgrade could change this). Note: for a
+user who has *not* granted it, this does send them to the Settings screen on every launch until
+they do — that matches Android's own recommended pattern for this permission (no "don't ask
+again" concept exists for it) and was treated as acceptable, not a violation.
+
+`canScheduleExactNotifications()`/`_scheduleMode()` being called on every `_rescheduleNow` (not
+cached) was also reviewed as fine cost-wise — the native handler is a synchronous
+`AlarmManager.canScheduleExactAlarms()` check (no I/O), and `rescheduleAll` already serializes via
+`_rescheduleQueue` (see race note above), so one more cheap channel round-trip per reschedule is
+not a real perf concern. Minor: it does sit between `cancelAll()` and the `zonedSchedule` loop, so
+a (very unlikely, given the above) exception there would leave zero notifications scheduled until
+the next successful reschedule — flagged only as a Suggestion, not worth blocking on.
+
+**Test-gap pattern**: this PR added a field to `_notificationDetails`
+(`priority: Priority.high` alongside `importance: Importance.max`) but only wrote a test asserting
+`importance`, not `priority`, even though both are asserted the same way via
+`_platformSpecifics(arguments)['key']`. Watch for this "added two related fields, tested one" shape
+in future notification-detail PRs.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_readme_maintenance_gap]]
