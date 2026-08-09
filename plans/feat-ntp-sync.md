@@ -179,22 +179,39 @@ one `syncNow` call is ever in flight — nothing to serialize.
 ## `lib/core/clock/now_provider.dart`
 
 ```dart
-final nowProvider = StreamProvider<DateTime>((ref) => _tickingClock(ref));
+final nowProvider = StreamProvider<DateTime>((ref) {
+  final offsetMs = ref.watch(ntpOffsetMsProvider);
+  return _tickingClock().map((t) => t.add(Duration(milliseconds: offsetMs)));
+});
 
-Stream<DateTime> _tickingClock(Ref ref) async* {
-  yield _correctedNow(ref);
-  yield* Stream.periodic(const Duration(seconds: 1), (_) => _correctedNow(ref));
+Stream<DateTime> _tickingClock() async* {
+  yield DateTime.now();
+  yield* Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
 }
-
-DateTime _correctedNow(Ref ref) =>
-    DateTime.now().add(Duration(milliseconds: ref.read(ntpOffsetMsProvider)));
 ```
 
-Deliberately `ref.read` (polled once per tick), not `ref.watch` — this is
-inside an ongoing generator, not a `build()`; switching the offset takes
-effect on the next 1s tick, which matches the granularity every other
-`nowProvider` consumer already accepts. `watchNow(WidgetRef ref)` itself
-is unchanged.
+`ref.watch` at the top of the builder (not `ref.read` inside the
+generator) — an earlier draft called `ref.read(ntpOffsetMsProvider)` from
+inside `_tickingClock`'s `async*` body, which deadlocked: that body only
+starts running once something actually listens to the stream, and reading
+a second, unrelated provider from within that listen-time execution
+reentered the container in a way it never recovered from (`flutter test`
+hung for the full 30s timeout, in both a full-app widget test and a
+minimal bare-`StreamProvider` repro with no NTP code involved at all).
+Watching at build-time is the standard, always-safe Riverpod path — a
+successful/failed sync changes `ntpOffsetMsProvider`, Riverpod rebuilds
+`nowProvider` (tearing down and restarting the periodic ticker), and the
+correction is visible on the very next tick after that, not up to 1s
+later as an earlier draft assumed. `watchNow(WidgetRef ref)` itself is
+unchanged.
+
+Also note for any future test of `nowProvider` itself: `container.read(nowProvider.future)`
+hangs indefinitely for a bare `StreamProvider` in this project's Riverpod
+version unless something is also `listen()`ing (confirmed with a minimal
+repro unrelated to this feature) — `.future` works fine on the
+`AsyncNotifierProvider`-based `NtpSyncController`, just not here. Use
+`container.listen(nowProvider, callback)` instead (see
+`test/core/clock/now_provider_test.dart`).
 
 ## `lib/features/settings/ntp_sync_settings_section.dart`
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/settings/flash_points_settings_section.dart';
@@ -7,14 +8,11 @@ import 'package:session_timer/features/settings/ntp_sync_settings_section.dart';
 import 'package:session_timer/features/settings/weekend_milestone.dart';
 import 'package:session_timer/features/settings/weekend_milestones_settings_section.dart';
 
-const _unsyncedStatusText = '未同期（端末時刻を使用中）';
-const _syncPlaceholderStatusText = '同期は未実装です（実装予定: issue #1）';
-
 /// The settings sheet's shell, mirroring docs/session-timer.html's `#sheet`.
-/// Flash points (add/remove/flash-toggle/notify-toggle) are wired to
-/// `FlashPointsController` (persisted); the milestone/NTP sections below
-/// remain ephemeral to this widget's lifetime, not yet wired to the app's
-/// real state.
+/// Flash points (add/remove/flash-toggle/notify-toggle) and NTP sync are
+/// wired to their respective controllers (persisted); the milestone
+/// section below remains ephemeral to this widget's lifetime, not yet
+/// wired to the app's real state.
 class SettingsSheet extends ConsumerStatefulWidget {
   const SettingsSheet({super.key});
 
@@ -37,7 +35,6 @@ class SettingsSheet extends ConsumerStatefulWidget {
 class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   List<WeekendMilestone> _milestones = [];
   int _nextMilestoneId = 0;
-  String _ntpStatusText = _unsyncedStatusText;
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +68,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
         onRemove: _removeMilestone,
       ),
       NtpSyncSettingsSection(
-        statusText: _ntpStatusText,
-        onSyncPressed: _syncNow,
+        state: ref.watch(ntpSyncControllerProvider),
+        onSync: _syncNtp,
       ),
       const SizedBox(height: 12),
       FilledButton(
@@ -83,8 +80,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     ];
   }
 
-  void _syncNow() =>
-      setState(() => _ntpStatusText = _syncPlaceholderStatusText);
+  void _syncNtp(String host) =>
+      ref.read(ntpSyncControllerProvider.notifier).syncNow(host);
 
   void _addFlashPoint(int minutes) =>
       ref.read(flashPointsControllerProvider.notifier).addPoint(minutes);

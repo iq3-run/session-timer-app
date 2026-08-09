@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_gear_button.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pumpAndOpenSheet(WidgetTester tester) async {
+/// Deterministic, network-free stand-in for the real NTP lookup — every
+/// test in this file goes through this unless it passes a different
+/// fetcher to `_pumpAndOpenSheet` (e.g. to simulate a failure).
+Future<int> _fakeNtpOffsetFetcher(String host, {required Duration timeout}) =>
+    Future.value(250);
+
+Future<void> _pumpAndOpenSheet(
+  WidgetTester tester, {
+  NtpOffsetFetcher fetcher = _fakeNtpOffsetFetcher,
+}) async {
   SharedPreferences.setMockInitialValues({});
   await tester.binding.setSurfaceSize(const Size(400, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   await tester.pumpWidget(
     ProviderScope(
+      overrides: [ntpOffsetFetcherProvider.overrideWithValue(fetcher)],
       child: MaterialApp(
         theme: SessionTimerTheme.dark,
         home: const Scaffold(body: SettingsGearButton()),
@@ -224,16 +235,106 @@ void main() {
       expect(find.textContaining('週末テスト'), findsNothing);
     });
 
-    testWidgets('ntp sync button flips the status text', (tester) async {
+    testWidgets('ntp server field defaults to NICT', (tester) async {
+      await _pumpAndOpenSheet(tester);
+
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('ntpServerHostField')))
+            .controller
+            ?.text,
+        defaultNtpServerHost,
+      );
+    });
+
+    testWidgets('ntp sync success replaces the status text with the result', (
+      tester,
+    ) async {
       await _pumpAndOpenSheet(tester);
       expect(find.text('未同期（端末時刻を使用中）'), findsOneWidget);
 
-      await tester.tap(find.text('サーバー時刻に同期'));
+      await tester.tap(find.byKey(const Key('ntpSyncButton')));
       await tester.pumpAndSettle();
 
       expect(find.text('未同期（端末時刻を使用中）'), findsNothing);
-      expect(find.text('同期は未実装です（実装予定: issue #1）'), findsOneWidget);
+      expect(find.textContaining('同期完了（誤差補正 250ms）'), findsOneWidget);
     });
+
+    testWidgets('ntp sync failure shows the failure status text', (
+      tester,
+    ) async {
+      await _pumpAndOpenSheet(
+        tester,
+        fetcher: (host, {required timeout}) =>
+            Future.error(Exception('no net')),
+      );
+
+      await tester.tap(find.byKey(const Key('ntpSyncButton')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('同期失敗（インターネット接続を確認してください）'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('syncing with a custom host persists that host', (
+      tester,
+    ) async {
+      await _pumpAndOpenSheet(tester);
+
+      await tester.enterText(
+        find.byKey(const Key('ntpServerHostField')),
+        'pool.ntp.org',
+      );
+      await tester.tap(find.byKey(const Key('ntpSyncButton')));
+      await tester.pumpAndSettle();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(ntpServerHostKey), 'pool.ntp.org');
+    });
+
+    testWidgets('syncing with a blank host normalizes the field to NICT', (
+      tester,
+    ) async {
+      await _pumpAndOpenSheet(tester);
+
+      await tester.enterText(find.byKey(const Key('ntpServerHostField')), '  ');
+      await tester.tap(find.byKey(const Key('ntpSyncButton')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('ntpServerHostField')))
+            .controller
+            ?.text,
+        defaultNtpServerHost,
+      );
+    });
+
+    testWidgets(
+      'the synced status text does not change on an unrelated rebuild',
+      (tester) async {
+        await _pumpAndOpenSheet(tester);
+        await tester.tap(find.byKey(const Key('ntpSyncButton')));
+        await tester.pumpAndSettle();
+        final statusBefore =
+            find.textContaining('同期完了').evaluate().single.widget as Text;
+
+        // Editing the unrelated milestone section triggers a SettingsSheet
+        // rebuild — the NTP status text must stay pinned to the sync's own
+        // `lastSyncedAt`, not jump to whatever time this rebuild happens at.
+        await tester.enterText(
+          find.byKey(const Key('milestoneLabelField')),
+          '週末テスト',
+        );
+        await tester.pumpAndSettle();
+        final statusAfter =
+            find.textContaining('同期完了').evaluate().single.widget as Text;
+
+        expect(statusAfter.data, statusBefore.data);
+      },
+    );
 
     testWidgets('close button dismisses the sheet', (tester) async {
       await _pumpAndOpenSheet(tester);
