@@ -5,6 +5,7 @@ import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/flash/flash_points_chip_row.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
@@ -25,26 +26,30 @@ class _FixedFlashQueueController extends FlashQueueController {
 
 class _FixedFlashPointsController extends FlashPointsController {
   _FixedFlashPointsController(this._value);
-  final List<int> _value;
+  final List<FlashPointConfig> _value;
   @override
-  Future<List<int>> build() async => _value;
+  Future<List<FlashPointConfig>> build() async => _value;
 }
 
 class _MutableFlashPointsController extends FlashPointsController {
   _MutableFlashPointsController(this._initial);
-  final List<int> _initial;
+  final List<FlashPointConfig> _initial;
   @override
-  Future<List<int>> build() async => _initial;
+  Future<List<FlashPointConfig>> build() async => _initial;
 
-  void setPoints(List<int> points) => state = AsyncData(points);
+  void setPoints(List<FlashPointConfig> points) => state = AsyncData(points);
 }
+
+List<FlashPointConfig> _allEnabled(List<int> minutes) => [
+  for (final m in minutes) FlashPointConfig(minutes: m),
+];
 
 Future<void> _pump(
   WidgetTester tester, {
   required DateTime now,
   CompletionTimeState completion = const CompletionTimeState(),
   Set<String> firedIds = const {},
-  List<int> flashPoints = defaultCompletionFlashPointsMinutes,
+  List<FlashPointConfig>? flashPoints,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -57,7 +62,9 @@ Future<void> _pump(
           () => _FixedFlashQueueController(firedIds),
         ),
         flashPointsControllerProvider.overrideWith(
-          () => _FixedFlashPointsController(flashPoints),
+          () => _FixedFlashPointsController(
+            flashPoints ?? _allEnabled(defaultCompletionFlashPointsMinutes),
+          ),
         ),
       ],
       child: const MaterialApp(home: Scaffold(body: FlashPointsChipRow())),
@@ -102,7 +109,7 @@ void main() {
         completion: CompletionTimeState(
           targetEpochMs: target.millisecondsSinceEpoch,
         ),
-        flashPoints: const [10, 5],
+        flashPoints: _allEnabled(const [10, 5]),
       );
 
       expect(find.text('残10分フラッシュ'), findsOneWidget);
@@ -183,7 +190,7 @@ void main() {
       (tester) async {
         final target = DateTime(2099, 1, 1, 12);
         final flashPointsController = _MutableFlashPointsController(
-          defaultCompletionFlashPointsMinutes,
+          _allEnabled(defaultCompletionFlashPointsMinutes),
         );
         await tester.pumpWidget(
           ProviderScope(
@@ -221,7 +228,7 @@ void main() {
         await tester.pump();
         expect(find.text('残45分フラッシュ'), findsOneWidget);
 
-        flashPointsController.setPoints(const [10, 5, 1]);
+        flashPointsController.setPoints(_allEnabled(const [10, 5, 1]));
         await tester.pump();
 
         expect(find.text('残10分フラッシュ'), findsOneWidget);
@@ -229,5 +236,24 @@ void main() {
         expect(find.text('残1分フラッシュ'), findsOneWidget);
       },
     );
+
+    testWidgets('hides a point whose flash is off, but keeps one whose only '
+        'notify is off', (tester) async {
+      final target = DateTime(2099, 1, 1, 12);
+      await _pump(
+        tester,
+        now: target.subtract(const Duration(hours: 3)),
+        completion: CompletionTimeState(
+          targetEpochMs: target.millisecondsSinceEpoch,
+        ),
+        flashPoints: const [
+          FlashPointConfig(minutes: 10, flashEnabled: false),
+          FlashPointConfig(minutes: 5, notifyEnabled: false),
+        ],
+      );
+
+      expect(find.text('残10分フラッシュ'), findsNothing);
+      expect(find.text('残5分フラッシュ'), findsOneWidget);
+    });
   });
 }

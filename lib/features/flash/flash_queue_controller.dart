@@ -39,11 +39,18 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   @override
   FlashQueueState build() {
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final completion = ref.watch(completionTimeControllerProvider).value;
-    final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
-    final timer = ref.watch(timerControllerProvider).value;
-    final flashPoints =
-        ref.watch(flashPointsControllerProvider).value ?? const [];
+    final completionAsync = ref.watch(completionTimeControllerProvider);
+    final targetsAsync = ref.watch(timeTargetsControllerProvider);
+    final timerAsync = ref.watch(timerControllerProvider);
+    final flashPointsAsync = ref.watch(flashPointsControllerProvider);
+    final completion = completionAsync.value;
+    final targets = targetsAsync.value ?? const [];
+    final timer = timerAsync.value;
+    final flashPoints = flashPointsAsync.value ?? const [];
+    final flashEnabledMinutes = [
+      for (final p in flashPoints)
+        if (p.flashEnabled) p.minutes,
+    ];
 
     _purgeFiredIdsForSourceChanges(completion, timer);
 
@@ -52,10 +59,22 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     // compared against its true nearest neighbor for merging — not just
     // whichever source happened to list it first.
     final candidates = [
-      ...completionFlashEvents(completion, flashPoints),
+      ...completionFlashEvents(completion, flashEnabledMinutes),
       ...targetFlashEvents(targets),
       ...timerFlashEvents(timer),
     ]..sort((a, b) => a.instant.compareTo(b.instant));
+
+    // Only trust `candidates` as the full picture when every source
+    // resolved cleanly this build — a source in AsyncError (e.g. a failed
+    // FlashPointsController persist) reads as an empty/null value, which
+    // would otherwise look identical to "this source's events are
+    // genuinely gone" and wipe unrelated already-queued events.
+    final sourcesHealthy =
+        completionAsync.hasValue &&
+        targetsAsync.hasValue &&
+        timerAsync.hasValue &&
+        flashPointsAsync.hasValue;
+    if (sourcesHealthy) _purgeQueuedEventsNoLongerCandidates(candidates);
 
     for (final event in candidates) {
       _admit(event, now);
@@ -89,6 +108,18 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   void _purgeStaleFiredIds(String prefix, Object? current, Object? previous) {
     if (identical(current, previous)) return;
     _firedIds.removeWhere((id) => id.startsWith(prefix));
+  }
+
+  /// Drops queued (not yet playing) events whose id no longer appears among
+  /// [candidates] — e.g. a flash point disabled while its event was still
+  /// waiting in `_queue`. Deliberately leaves `_active` alone: interrupting
+  /// an animation already in progress needs `FlashOverlay`'s completion
+  /// callback to validate the event id before calling `advance()`, which is
+  /// a UX decision (cut the flash short vs. let it finish) left for a
+  /// separate change.
+  void _purgeQueuedEventsNoLongerCandidates(List<FlashEvent> candidates) {
+    final candidateIds = candidates.map((e) => e.id).toSet();
+    _queue.removeWhere((e) => !candidateIds.contains(e.id));
   }
 
   void _promoteNextIfIdle() {

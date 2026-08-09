@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
+import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
 import 'package:session_timer/features/targets/time_target.dart';
@@ -44,9 +45,18 @@ class _FixedTimerController extends TimerController {
 
 class _FixedFlashPointsController extends FlashPointsController {
   _FixedFlashPointsController(this._value);
-  final List<int> _value;
+  final List<FlashPointConfig> _value;
   @override
-  Future<List<int>> build() async => _value;
+  Future<List<FlashPointConfig>> build() async => _value;
+}
+
+class _MutableFlashPointsController extends FlashPointsController {
+  _MutableFlashPointsController(this._initial);
+  final List<FlashPointConfig> _initial;
+  @override
+  Future<List<FlashPointConfig>> build() async => _initial;
+
+  void setPoints(List<FlashPointConfig> points) => state = AsyncData(points);
 }
 
 Future<ProviderContainer> _buildContainer({
@@ -56,7 +66,7 @@ Future<ProviderContainer> _buildContainer({
   TimerState timer = const TimerState(),
   // Empty by default so tests aren't crowded with the 12 default
   // completion-countdown points unless a test opts in.
-  List<int> flashPoints = const [],
+  List<FlashPointConfig> flashPoints = const [],
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -293,6 +303,122 @@ void main() {
         await _tick(clock, target);
 
         expect(container.read(flashQueueControllerProvider).active?.id, id);
+      },
+    );
+
+    test(
+      'a flash-disabled completion point never activates, even once its '
+      'window is due',
+      () async {
+        final clock = StreamController<DateTime>.broadcast();
+        addTearDown(clock.close);
+        final target = DateTime(2099, 1, 1, 12);
+        final container = await _buildContainer(
+          clock: clock,
+          completion: CompletionTimeState(
+            targetEpochMs: target.millisecondsSinceEpoch,
+          ),
+          flashPoints: const [
+            FlashPointConfig(minutes: 5, flashEnabled: false),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await _tick(clock, target.subtract(const Duration(minutes: 5)));
+
+        final state = container.read(flashQueueControllerProvider);
+        expect(state.active, isNull);
+        expect(state.firedIds, isEmpty);
+      },
+    );
+
+    test(
+      'a queued (not yet active) completion point is dropped once its flash '
+      'is disabled, instead of firing anyway when promoted',
+      () async {
+        final clock = StreamController<DateTime>.broadcast();
+        addTearDown(clock.close);
+        final target = DateTime(2099, 1, 1, 12);
+        final completionEpoch = target.millisecondsSinceEpoch;
+        // The '5' point's window opens 2s after the target's, so a single
+        // tick at the target's instant admits both — more than the 1s merge
+        // threshold apart, so the target is promoted to active and the
+        // completion point is left queued behind it.
+        final targetInstant = target
+            .subtract(const Duration(minutes: 5))
+            .subtract(const Duration(seconds: 2));
+        final flashPointsController = _MutableFlashPointsController(const [
+          FlashPointConfig(minutes: 5),
+        ]);
+        final container = ProviderContainer(
+          overrides: [
+            nowProvider.overrideWith((ref) => clock.stream),
+            completionTimeControllerProvider.overrideWith(
+              () => _FixedCompletionController(
+                CompletionTimeState(targetEpochMs: completionEpoch),
+              ),
+            ),
+            timeTargetsControllerProvider.overrideWith(
+              () => _FixedTargetsController([
+                TimeTarget(
+                  id: 't1',
+                  epochMs: targetInstant.millisecondsSinceEpoch,
+                ),
+              ]),
+            ),
+            timerControllerProvider.overrideWith(
+              () => _FixedTimerController(const TimerState()),
+            ),
+            flashPointsControllerProvider.overrideWith(
+              () => flashPointsController,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container.read(completionTimeControllerProvider.future);
+        await container.read(timeTargetsControllerProvider.future);
+        await container.read(timerControllerProvider.future);
+        await container.read(flashPointsControllerProvider.future);
+        container.listen(flashQueueControllerProvider, (_, _) {});
+
+        await _tick(clock, targetInstant);
+        expect(
+          container.read(flashQueueControllerProvider).active?.id,
+          'target:t1:${targetInstant.millisecondsSinceEpoch}',
+        );
+
+        flashPointsController.setPoints(const [
+          FlashPointConfig(minutes: 5, flashEnabled: false),
+        ]);
+        await Future<void>.delayed(Duration.zero);
+        // Reading the provider (not just `.notifier`) forces any pending
+        // rebuild from the setPoints mutation above to flush before
+        // advance() inspects `_queue` — otherwise advance() could act on a
+        // stale, not-yet-purged queue.
+        container.read(flashQueueControllerProvider);
+
+        container.read(flashQueueControllerProvider.notifier).advance();
+        final afterAdvance = container.read(flashQueueControllerProvider);
+        expect(afterAdvance.active, isNull);
+
+        // Past the disabled point's own original instant (target - 5min),
+        // but well short of the always-on exact-completion event at
+        // `target` itself — isolates "the disabled point specifically never
+        // resurfaces" from that unrelated always-fires event.
+        await _tick(
+          clock,
+          target
+              .subtract(const Duration(minutes: 5))
+              .add(
+                const Duration(seconds: 1),
+              ),
+        );
+        // The disabled point was already marked "window entered" back when
+        // it was first admitted into `_queue` during the initial tick —
+        // `_admit` records that unconditionally before the merge/queue
+        // decision, so its id staying in `firedIds` here is expected, not a
+        // sign the purge failed. `active` staying null is the real check.
+        expect(container.read(flashQueueControllerProvider).active, isNull);
       },
     );
   });
