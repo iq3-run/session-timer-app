@@ -46,13 +46,14 @@ is minutes in the past reproduces the stuck state deterministically. See PR
 history / the diagnosis session for the throwaway probe test; it is not kept
 in the repo.
 
-## The fix shape (not yet applied as of this writing)
+## The applied fix
 
 Don't rely on the AnimationController to synthesize a completion callback for
-an already-expired catch-up. In the `ref.listen` callback, check whether
+an already-expired catch-up. In the `ref.listen` callback (extracted as
+`_onActiveEventChanged` in the applied fix), check whether
 `_elapsedProgress(event) >= 1.0` *before* calling `forward()`; if so, treat it
 like `FlashQueueController._admit`'s existing "missed window" case and call
-`advance()` directly instead of animating.
+`advance()` directly instead of animating. Landed in PR #40.
 
 ## Generalization — check other call sites
 

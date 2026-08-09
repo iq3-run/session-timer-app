@@ -34,7 +34,8 @@ fires, `FlashQueueController.advance()` is never called, and `_active` /
 `_controller.value` stay pinned forever at the stale event / `1.0`, which
 `_isVisibleSegment` maps to a permanently-visible (odd) segment.
 
-- `lib/features/flash/flash_overlay.dart:42-47` (the `ref.listen` callback)
+- `lib/features/flash/flash_overlay.dart`, the `_onActiveEventChanged`
+  method registered via `ref.listen` in `build()`
 
 ## Fix
 
