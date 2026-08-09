@@ -26,12 +26,21 @@ This repo (session-timer-app, Flutter/Dart) has a deliberate, repeated architect
   inconsistency across related fields — see stopwatch's `stopwatch_state_json` merging
   `accumulatedMs` + `runningSinceEpochMs`.
 
-**Why this matters for review**: this ~70-line skeleton (mutation queue + `_lastGood` +
-`_initialLoad` + `_persistenceFailure` + `_readPersisted`/`_persist` pair) is now duplicated
-between two controllers. It's a real DRY candidate but was a deliberate choice (plan doc says
-"follow the same pattern as TimeTargetsController") rather than an oversight — flag as
-**Suggestion** only ("consider extracting a shared base/mixin if a third feature repeats this"),
-not Warning/Critical, unless a third instance appears, at which point it should become a Warning.
+**Why this matters for review**: this ~40-70-line skeleton (mutation queue + `_lastGood` +
+`_initialLoad` + `_persistenceFailure` + `_readPersisted`/`_persist` pair) started as a
+2-instance duplication (TimeTargetsController, StopwatchController) and was deliberate at the
+time (plan doc says "follow the same pattern as TimeTargetsController").
+
+**Threshold crossed (2026-08-09, `feat/flash-points-persistence`, PR for issue #26)**: a 4th
+instance now exists — `TimerController` (`feat/countdown-timer`, pre-existing, not separately
+flagged at the time) and `FlashPointsController` (this PR) both duplicate the same skeleton
+alongside the original two. Reviewed and recommended **extraction now** (Warning, not
+Suggestion) — e.g. a `MutationQueueNotifier<T>` base/mixin in `lib/core/` taking
+read/persist/seed callbacks, or a shared helper class the four controllers compose. Four
+near-identical copies is well past the "flag as Warning at a 3rd instance" bar set when this
+was a 2-instance Suggestion. If a 5th controller adds this same skeleton without extracting,
+treat that as a repeat of an already-flagged-twice DRY violation, not a fresh discovery — the
+recommendation has now been made explicitly at least once and should carry more weight.
 
 **Comment style**: this codebase uses multi-line (3-6 line) `//` comment blocks throughout
 (not just in the stopwatch PR) to explain non-obvious WHY — clock-skew clamping, mutation-queue
@@ -219,5 +228,70 @@ reviewer), not a fresh violation. Don't conflate the two: doc-comment
 issue-references are the recurring violation to flag; the same references
 inside user-visible strings here are an adjudicated exception, cited once,
 not re-flagged.
+
+**Cross-controller `ref.read` inside `build()` itself (not just action methods) —
+new variant, confirmed safe (2026-08-09, `feat/flash-points-persistence`, commit
+792bced, issue #26)**: `FlashPointsController.build()` now does
+`final completion = await ref.read(completionTimeControllerProvider.future);`
+directly inside `build()` (not `ref.watch`), to apply a one-time "revive
+defaults / prune stale customs at startup" rule against the current completion
+time without ever re-triggering when the completion time changes later in the
+same session. This is a step beyond the `ref.read` pattern noted above (which
+was action-method-to-action-method); here one controller's `build()` reads
+another controller's `.future` once. Verified safe and correct: (1) no cycle —
+`CompletionTimeController.build()` doesn't read `FlashPointsController` back;
+(2) truly one-shot — `FlashPointsController.build()` only watches
+`sharedPreferencesProvider` (resolved once, never changes), so nothing causes
+`build()` to re-run later in the session, confirming the "not a continuous
+check" claim in the doc comment; (3) hand-traced the `hasPassed`/`isDefault`
+arithmetic (`moment = completionTarget - minutesBefore`; passed once
+`moment <= now`, i.e. `minutesBefore >= D` for a target `D` minutes out) against
+5+ cases including the boundary direction bug class flagged below — all
+correct, `flutter test test/features/flash/` and `flutter analyze` both clean.
+One notable non-bug: the "completion time is overdue" branch of
+`_applyStartupRules` is unreachable in production — by the time
+`ref.read(completionTimeControllerProvider.future)` resolves,
+`CompletionTimeController.build()`'s own self-heal has already reset an
+overdue target to `null`, so the overdue-but-non-null path only exists in
+tests via a `_FixedCompletionController` override that bypasses that self-heal.
+Not a defect (the plan doc itself says this case "converges" to the same
+result as the null case) — worth knowing if a future review sees that branch
+and wonders why it's untriggered in the running app. If a *third* controller
+adds a build()-time one-shot `ref.read(otherController.future)` dependency,
+this is the precedent to cite for "is this safe" — check the same three things
+(no cycle, no watched dependency that would turn it into a repeat, and the
+hand-traced arithmetic), don't treat it as automatically fine just because two
+prior instances were.
+
+**Boundary-arithmetic bug class this repo has hit before — checked clean here**:
+the same file's history already had a "picked a minute value that's
+accidentally a member of `defaultCompletionFlashPointsMinutes`" /
+"comparison direction backwards" bug class (see test file diff in commit
+792bced using deliberately non-default values 99/7/11/13/17/19, with an
+explanatory comment identifying them as non-default). Re-verify this by hand
+each time a future PR touches flash-point minute arithmetic — don't assume
+it's fixed permanently just because this instance was clean.
+
+**Follow-up correction commit reviewed and confirmed correct (2026-08-09, commit
+`3c569c4` on the same `feat/flash-points-persistence` PR #28, still open)**:
+the truth-table fix to `_applyStartupRules` (missing defaults now revive early
+only when `completionTarget == null`, otherwise only once their own moment has
+passed — matching the user's 2x4 truth table) was hand-traced against all 8
+relevant cells and is correct. The new "stays gone while both completion time
+and its own moment are still ahead" test is a genuine regression test —
+verified by reading the pre-fix `792bced` version of `_applyStartupRules`,
+whose return statement was `[...defaultCompletionFlashPointsMinutes,
+...survivingCustoms]` (all 12 defaults unconditionally, every time,
+regardless of persisted state or `completionTarget`) — that old code would
+have made this exact test fail (`contains(120)` would be true). Also: this
+commit is the first time `_applyStartupRules` itself was flagged for length —
+it grew from ~22 lines (already borderline at the time of `792bced`, not
+flagged then) to 34 lines (signature+body) by adding the `keptDefaults`/
+`missingDefaults`/`revivedDefaults` block, clearing the 20-line MUST
+threshold by a wide margin. Raised as Warning, fixed same-PR (commit
+`4c8ddfc`) by extracting `_defaultsToKeep`/`_customsToKeep`/`_isDefault`/
+`_hasPassed` — each now well under 20 lines. If a future PR re-grows this
+area past the limit, cite this as the second time it's happened, not a
+fresh discovery.
 
 Related: [[project_readme_maintenance_gap]]

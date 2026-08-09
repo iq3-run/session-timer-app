@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/notifications/notification_event_source.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
@@ -28,6 +29,13 @@ class _FixedTimerController extends TimerController {
   final TimerState _value;
   @override
   Future<TimerState> build() async => _value;
+}
+
+class _FixedFlashPointsController extends FlashPointsController {
+  _FixedFlashPointsController(this._value);
+  final List<int> _value;
+  @override
+  Future<List<int>> build() async => _value;
 }
 
 void main() {
@@ -60,19 +68,28 @@ void main() {
           timerControllerProvider.overrideWith(
             () => _FixedTimerController(timer),
           ),
+          flashPointsControllerProvider.overrideWith(
+            () => _FixedFlashPointsController(
+              defaultCompletionFlashPointsMinutes,
+            ),
+          ),
         ],
       );
       addTearDown(container.dispose);
       await container.read(completionTimeControllerProvider.future);
       await container.read(timeTargetsControllerProvider.future);
       await container.read(timerControllerProvider.future);
+      await container.read(flashPointsControllerProvider.future);
 
       final actual = container
           .read(notificationCandidateEventsProvider)
           .map((e) => e.id)
           .toSet();
       final expected = [
-        ...completionFlashEvents(completion),
+        ...completionFlashEvents(
+          completion,
+          defaultCompletionFlashPointsMinutes,
+        ),
         ...targetFlashEvents(targets),
         ...timerFlashEvents(timer),
       ].map((e) => e.id).toSet();
@@ -93,12 +110,17 @@ void main() {
         timerControllerProvider.overrideWith(
           () => _FixedTimerController(const TimerState()),
         ),
+        flashPointsControllerProvider.overrideWith(
+          () =>
+              _FixedFlashPointsController(defaultCompletionFlashPointsMinutes),
+        ),
       ],
     );
     addTearDown(container.dispose);
     await container.read(completionTimeControllerProvider.future);
     await container.read(timeTargetsControllerProvider.future);
     await container.read(timerControllerProvider.future);
+    await container.read(flashPointsControllerProvider.future);
 
     expect(container.read(notificationCandidateEventsProvider), isEmpty);
   });

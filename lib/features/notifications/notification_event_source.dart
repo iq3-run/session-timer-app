@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 
@@ -13,8 +14,10 @@ final notificationCandidateEventsProvider = Provider<List<FlashEvent>>((ref) {
   final completion = ref.watch(completionTimeControllerProvider).value;
   final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
   final timer = ref.watch(timerControllerProvider).value;
+  final flashPoints =
+      ref.watch(flashPointsControllerProvider).value ?? const [];
   return [
-    ...completionFlashEvents(completion),
+    ...completionFlashEvents(completion, flashPoints),
     ...targetFlashEvents(targets),
     ...timerFlashEvents(timer),
   ];

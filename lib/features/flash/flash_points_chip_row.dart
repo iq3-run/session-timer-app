@@ -6,15 +6,14 @@ import 'package:session_timer/core/clock/duration_format.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
-import 'package:session_timer/features/flash/flash_event.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
 
 const _visibleChipCount = 3;
 const _idleRevertDelay = Duration(seconds: 5);
 
-final List<int> _sortedFlashPointsMinutes = [
-  ...defaultCompletionFlashPointsMinutes,
-]..sort((a, b) => b.compareTo(a));
+List<int> _sortDescending(List<int> minutes) =>
+    [...minutes]..sort((a, b) => b.compareTo(a));
 
 /// 完了◯分前 flash points, shown 3 at a time with swipe paging that reverts
 /// to the default (next-to-fire) window after 5s idle (spec 3-4節).
@@ -41,17 +40,28 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
         .watch(completionTimeControllerProvider)
         .value
         ?.targetTime;
-    if (target == null) return const SizedBox.shrink();
+    final sortedPoints = _sortDescending(
+      ref.watch(flashPointsControllerProvider).value ?? const [],
+    );
+    if (target == null || sortedPoints.isEmpty) return const SizedBox.shrink();
 
     final now = watchNow(ref);
     final firedIds = ref.watch(flashQueueControllerProvider).firedIds;
     final targetEpochMs = target.millisecondsSinceEpoch;
+    // Reclamped on every build, not just when _onSwipe sets it — the
+    // settings sheet can shrink the point list out from under an active
+    // custom window at any time, and a stale out-of-range _windowStart
+    // would otherwise render zero chips until the 5s idle revert fires.
     final windowStart =
-        _windowStart ?? _defaultWindowStart(targetEpochMs, firedIds);
+        (_windowStart ??
+                _defaultWindowStart(sortedPoints, targetEpochMs, firedIds))
+            .clamp(0, _maxWindowStart(sortedPoints));
 
     return GestureDetector(
-      onHorizontalDragEnd: (details) => _onSwipe(details, windowStart),
+      onHorizontalDragEnd: (details) =>
+          _onSwipe(details, sortedPoints, windowStart),
       child: _ChipRowContent(
+        sortedPoints: sortedPoints,
         target: target,
         now: now,
         firedIds: firedIds,
@@ -60,20 +70,28 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
     );
   }
 
-  int _defaultWindowStart(int targetEpochMs, Set<String> firedIds) {
-    final firstPending = _sortedFlashPointsMinutes.indexWhere(
+  int _defaultWindowStart(
+    List<int> sortedPoints,
+    int targetEpochMs,
+    Set<String> firedIds,
+  ) {
+    final firstPending = sortedPoints.indexWhere(
       (m) => !firedIds.contains('completion:$targetEpochMs:$m'),
     );
-    final maxStart = _sortedFlashPointsMinutes.length - _visibleChipCount;
+    final maxStart = _maxWindowStart(sortedPoints);
     if (firstPending == -1) return maxStart;
     return firstPending.clamp(0, maxStart);
   }
 
-  void _onSwipe(DragEndDetails details, int currentWindowStart) {
+  void _onSwipe(
+    DragEndDetails details,
+    List<int> sortedPoints,
+    int currentWindowStart,
+  ) {
     final velocity = details.primaryVelocity ?? 0;
     if (velocity == 0) return;
 
-    final maxStart = _sortedFlashPointsMinutes.length - _visibleChipCount;
+    final maxStart = _maxWindowStart(sortedPoints);
     final step = velocity < 0 ? _visibleChipCount : -_visibleChipCount;
     setState(
       () => _windowStart = (currentWindowStart + step).clamp(0, maxStart),
@@ -84,16 +102,23 @@ class _FlashPointsChipRowState extends ConsumerState<FlashPointsChipRow> {
       if (mounted) setState(() => _windowStart = null);
     });
   }
+
+  int _maxWindowStart(List<int> sortedPoints) =>
+      sortedPoints.length > _visibleChipCount
+      ? sortedPoints.length - _visibleChipCount
+      : 0;
 }
 
 class _ChipRowContent extends StatelessWidget {
   const _ChipRowContent({
+    required this.sortedPoints,
     required this.target,
     required this.now,
     required this.firedIds,
     required this.windowStart,
   });
 
+  final List<int> sortedPoints;
   final DateTime target;
   final DateTime now;
   final Set<String> firedIds;
@@ -102,9 +127,7 @@ class _ChipRowContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final targetEpochMs = target.millisecondsSinceEpoch;
-    final visible = _sortedFlashPointsMinutes
-        .skip(windowStart)
-        .take(_visibleChipCount);
+    final visible = sortedPoints.skip(windowStart).take(_visibleChipCount);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -118,9 +141,7 @@ class _ChipRowContent extends StatelessWidget {
             fired: firedIds.contains('completion:$targetEpochMs:$m'),
           ),
         _Ellipsis(
-          visible:
-              windowStart + _visibleChipCount <
-              _sortedFlashPointsMinutes.length,
+          visible: windowStart + _visibleChipCount < sortedPoints.length,
         ),
       ],
     );

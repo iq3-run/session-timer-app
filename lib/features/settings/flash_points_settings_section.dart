@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 
-/// UI-only mirror of the prototype's flash-point add/remove list
-/// (docs/session-timer.html `#flashList`/`#flashMinInput`). [minutes] is
-/// ephemeral state owned by `SettingsSheet`, not backed by
-/// `FlashQueueController`.
+/// Flash-point add/remove list, mirroring the prototype's
+/// (docs/session-timer.html `#flashList`/`#flashMinInput`). [minutes] and
+/// the add/remove callbacks are supplied by the caller, which owns whatever
+/// backs them.
 class FlashPointsSettingsSection extends StatelessWidget {
   const FlashPointsSettingsSection({
     required this.minutes,

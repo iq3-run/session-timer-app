@@ -78,4 +78,18 @@ device-notifications PR, and this one. The
 standing proposal (checklist item in `plans/*.md` template) has not been
 acted on yet — raise it again next time, more insistently.
 
+**Recurred a 6th time in `feat/flash-points-persistence` (2026-08-09, issue #26)**: this PR wired
+flash-point add/remove to real persisted state (`FlashPointsController`), but README.md line 36
+still says `settings/`（UIの土台のみ、各項目の実配線は別Issue）— "UI shell only, actual wiring is
+a separate issue" — which is now false for the flash-points item specifically (still true for
+notification/milestone/NTP, which remain ephemeral). README.md was initially missed in the
+commit under review, then corrected within the same PR once flagged. Same
+"prose goes stale when a feature crosses from shell to wired" failure shape as the 5th
+recurrence (settings-sheet-shell PR), just one level more specific (a sub-clause about `settings/`
+rather than whether the whole folder exists). Six recurrences now across PR #11, #18, #20,
+device-notifications PR, settings-sheet-shell PR, and this one. The standing proposal (a `plans/*.md`
+checklist item for README) has still not been acted on — this is the second time this note says
+"raise it more insistently"; if it recurs a 7th time, propose it directly to the user rather than
+just recording it here again.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_notification_scheduler_patterns]]

@@ -11,8 +11,8 @@ const flashAnimationDuration = Duration(milliseconds: 3000);
 /// the HTML prototype's `steps(1) 6` strobe animation.
 const flashBlinkCount = 6;
 
-/// Default 完了◯分前 flash points (docs/session-timer-spec.md 3-3節). Fixed
-/// for now — no settings-sheet customization UI exists yet.
+/// Default 完了◯分前 flash points (docs/session-timer-spec.md 3-3節), used
+/// to seed `FlashPointsController` on first launch.
 const defaultCompletionFlashPointsMinutes = [
   120,
   90,
@@ -53,9 +53,12 @@ class FlashEvent {
   DateTime get windowStart => instant.subtract(flashAnimationDuration);
 }
 
-/// The exact-completion flash plus the 完了◯分前 points, or `[]` if no
-/// completion time is set.
-List<FlashEvent> completionFlashEvents(CompletionTimeState? completion) {
+/// The exact-completion flash plus one flash per entry in [minutesBefore],
+/// or `[]` if no completion time is set.
+List<FlashEvent> completionFlashEvents(
+  CompletionTimeState? completion,
+  List<int> minutesBefore,
+) {
   final target = completion?.targetTime;
   if (target == null) return const [];
   final targetEpochMs = target.millisecondsSinceEpoch;
@@ -65,7 +68,7 @@ List<FlashEvent> completionFlashEvents(CompletionTimeState? completion) {
       instant: target,
       label: '完了時刻です',
     ),
-    for (final m in defaultCompletionFlashPointsMinutes)
+    for (final m in minutesBefore)
       FlashEvent(
         id: 'completion:$targetEpochMs:$m',
         instant: target.subtract(Duration(minutes: m)),
