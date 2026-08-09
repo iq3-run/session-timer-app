@@ -6,6 +6,10 @@ import 'package:session_timer/app.dart';
 import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 
 void main() {
+  // runApp() normally calls WidgetsFlutterBinding.ensureInitialized() as its
+  // first line — but the unawaited NTP auto-sync below can hit a platform
+  // channel (SharedPreferences) before runApp() executes, so init explicitly.
+  WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   unawaited(_autoSyncNtpAtStartup(container));
   runApp(

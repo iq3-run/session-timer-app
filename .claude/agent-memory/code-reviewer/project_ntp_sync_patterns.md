@@ -81,4 +81,34 @@ every other catch in this codebase (including `syncNow`'s own, in the
 same file, for `SharedPreferences` failures) uses `on Exception` — this
 is a correct, intentional asymmetry, not an inconsistency to flag.
 
+**Follow-up bug (issue #36, branch `fix/36-startup-binding-race`, reviewed
+2026-08-09, uncommitted)**: the `main()`-only network-isolation pattern
+above created a startup race the original PR review didn't catch —
+`unawaited(_autoSyncNtpAtStartup(container))` runs synchronously up to its
+first `await`, and `NtpSyncController.build()`'s
+`ref.watch(sharedPreferencesProvider.future)` call happens before that
+first `await`, so it could reach `SharedPreferences.getInstance()`'s
+platform channel before `runApp()` (which normally calls
+`WidgetsFlutterBinding.ensureInitialized()` as its first line) ever ran.
+Confirmed on a real device via `adb logcat`; the thrown `FlutterError`
+(not an `Exception`) escaped `_autoSyncNtpAtStartup`'s `on Exception`
+catch and permanently poisoned Riverpod's cached
+`sharedPreferencesProvider` future, breaking every feature that persists
+through it for the rest of the app session. **Fix confirmed correct**:
+add `WidgetsFlutterBinding.ensureInitialized();` as the literal first line
+of `main()`, before `ProviderContainer()` and the `unawaited(...)` call.
+Verified idiomatic — matches `runApp()`'s own internal first line
+(`flutter/src/widgets/binding.dart`), idempotent, and `WidgetsFlutterBinding`
+needs no new import since `package:flutter/material.dart` already
+re-exports `widgets.dart`. `dart format`/`flutter analyze` clean on the
+file. No regression test is possible for this specific race (`main()` is
+never invoked by `flutter test`, same reason the network-isolation
+pattern above exists) — the plan file (`plans/fix-startup-binding-race.md`)
+correctly scopes verification to manual on-device testing only; don't ask
+for a widget test that can't exist here. Comment added at the fix site is
+a 4-line WHY block — covered by the repo's established multi-line-comment
+exemption (see [[project_stopwatch_pr_patterns]]), and doesn't reference
+the issue number or plan file, so it doesn't repeat the doc-comment
+content violation flagged elsewhere in that file.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_flash_point_toggle_patterns]]
