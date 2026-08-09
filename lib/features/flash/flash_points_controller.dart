@@ -42,9 +42,12 @@ class FlashPointsController extends AsyncNotifier<List<int>> {
     }
   }
 
-  Future<void> addPoint(int minutes) => _mutate(
-    (points) => points.contains(minutes) ? points : [...points, minutes],
-  );
+  Future<void> addPoint(int minutes) {
+    if (minutes <= 0) return Future.value();
+    return _mutate(
+      (points) => points.contains(minutes) ? points : [...points, minutes],
+    );
+  }
 
   Future<void> removePoint(int minutes) =>
       _mutate((points) => points.where((m) => m != minutes).toList());
@@ -91,7 +94,7 @@ class FlashPointsController extends AsyncNotifier<List<int>> {
       return [...defaultCompletionFlashPointsMinutes];
     }
     if (decoded is! List) return [...defaultCompletionFlashPointsMinutes];
-    return decoded.whereType<int>().toList();
+    return decoded.whereType<int>().where((m) => m > 0).toList();
   }
 
   Future<bool> _persist(SharedPreferences prefs, List<int> points) {

@@ -82,7 +82,8 @@ acted on yet — raise it again next time, more insistently.
 flash-point add/remove to real persisted state (`FlashPointsController`), but README.md line 36
 still says `settings/`（UIの土台のみ、各項目の実配線は別Issue）— "UI shell only, actual wiring is
 a separate issue" — which is now false for the flash-points item specifically (still true for
-notification/milestone/NTP, which remain ephemeral). The PR didn't touch README.md at all. Same
+notification/milestone/NTP, which remain ephemeral). README.md was initially missed in the
+commit under review, then corrected within the same PR once flagged. Same
 "prose goes stale when a feature crosses from shell to wired" failure shape as the 5th
 recurrence (settings-sheet-shell PR), just one level more specific (a sub-clause about `settings/`
 rather than whether the whole folder exists). Six recurrences now across PR #11, #18, #20,

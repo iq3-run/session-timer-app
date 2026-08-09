@@ -11,7 +11,7 @@ import 'package:shared_preferences_platform_interface/shared_preferences_platfor
 /// [failNextWrite] is armed — used to simulate a transient SharedPreferences
 /// I/O failure without needing a full fake platform implementation.
 class _FlakyStore extends InMemorySharedPreferencesStore {
-  _FlakyStore.empty() : super.empty();
+  _FlakyStore.withData(super.data) : super.withData();
 
   bool failNextWrite = false;
 
@@ -85,6 +85,24 @@ void main() {
       expect(points, [10, 5]);
     });
 
+    test('addPoint ignores zero and negative values', () async {
+      SharedPreferences.setMockInitialValues({
+        flashPointsMinutesJsonKey: jsonEncode([10, 5]),
+      });
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(flashPointsControllerProvider.future);
+      final notifier = container.read(flashPointsControllerProvider.notifier);
+
+      await notifier.addPoint(0);
+      await notifier.addPoint(-3);
+      final points = await container.read(
+        flashPointsControllerProvider.future,
+      );
+
+      expect(points, [10, 5]);
+    });
+
     test('removePoint drops the matching value', () async {
       SharedPreferences.setMockInitialValues({
         flashPointsMinutesJsonKey: jsonEncode([10, 5, 1]),
@@ -125,8 +143,13 @@ void main() {
       addTearDown(
         () => SharedPreferencesStorePlatform.instance = previousStore,
       );
+      // Resets SharedPreferences' own internal instance cache, which
+      // otherwise survives across tests in this file and would make the
+      // next getInstance() call below ignore the flaky store entirely.
       SharedPreferences.setMockInitialValues({});
-      final store = _FlakyStore.empty();
+      final store = _FlakyStore.withData({
+        'flutter.$flashPointsMinutesJsonKey': jsonEncode([10, 5]),
+      });
       SharedPreferencesStorePlatform.instance = store;
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -141,12 +164,12 @@ void main() {
       );
 
       // A subsequent successful mutation recovers from the last-good list
-      // rather than being permanently stuck on the failed one.
+      // (not the failed one) — the failed `7` must not have snuck in.
       await container.read(flashPointsControllerProvider.notifier).addPoint(3);
       final points = await container.read(
         flashPointsControllerProvider.future,
       );
-      expect(points, containsAll([3]));
+      expect(points, [10, 5, 3]);
     });
   });
 }
