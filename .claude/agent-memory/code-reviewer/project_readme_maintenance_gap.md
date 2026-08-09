@@ -107,4 +107,14 @@ well past the point where logging alone is doing anything. If an eighth recurren
 this, treat "propose the plans/*.md README checklist item" as overdue rather than a fresh
 suggestion.
 
+**Resolved (process fix), 2026-08-09**: the user accepted the escalated proposal. The user's
+global `~/.claude/CLAUDE.md` Bug Fix / Feature Request Workflow now has an explicit numbered
+step (inserted as step 5, between "implement" and "PR description") requiring a README/docs
+staleness check before the PR is opened, called out by name as covering the
+"shell-to-wired" failure shape specifically. This is a global rule, not project-specific, so it
+applies to every repo's workflow, not just this one. Stop escalating this pattern per-PR now that
+the process fix exists — if it recurs *after* this date, that means the new workflow step itself
+is being skipped (a different problem: workflow-step compliance), not that the step needs
+inventing again. Flag that distinction if it comes up.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_notification_scheduler_patterns]]
