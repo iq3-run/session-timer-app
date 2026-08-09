@@ -145,6 +145,26 @@ void main() {
       );
     });
 
+    testWidgets(
+      'flash and notify switches expose their label to screen readers',
+      (tester) async {
+        final handle = tester.ensureSemantics();
+        await _pumpAndOpenSheet(tester);
+
+        final flashSemantics = tester.getSemantics(
+          find.byKey(const Key('flashToggle_1')),
+        );
+        final notifySemantics = tester.getSemantics(
+          find.byKey(const Key('notifyToggle_1')),
+        );
+
+        expect(flashSemantics.label, contains('フラッシュ'));
+        expect(notifySemantics.label, contains('通知'));
+
+        handle.dispose();
+      },
+    );
+
     testWidgets('adding a milestone requires a picked date', (tester) async {
       await _pumpAndOpenSheet(tester);
       final itemCountBefore = find.byType(SettingsListItem).evaluate().length;

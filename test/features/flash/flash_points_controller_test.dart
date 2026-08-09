@@ -210,6 +210,31 @@ void main() {
       expect(_minutes(points), contains(7));
     });
 
+    test(
+      'flashEnabled/notifyEnabled toggle values survive across a fresh '
+      'container (persisted), not just the minute value',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          flashPointsMinutesJsonKey: _persistedJson([11]),
+        });
+        final container = ProviderContainer();
+        await container.read(flashPointsControllerProvider.future);
+        final notifier = container.read(flashPointsControllerProvider.notifier);
+        await notifier.setFlashEnabled(11, enabled: false);
+        container.dispose();
+
+        final reloaded = ProviderContainer();
+        addTearDown(reloaded.dispose);
+        final points = await reloaded.read(
+          flashPointsControllerProvider.future,
+        );
+
+        final point = points.firstWhere((p) => p.minutes == 11);
+        expect(point.flashEnabled, isFalse);
+        expect(point.notifyEnabled, isFalse);
+      },
+    );
+
     group('setFlashEnabled / setNotifyEnabled', () {
       test('setFlashEnabled(false) also forces notify off', () async {
         SharedPreferences.setMockInitialValues({

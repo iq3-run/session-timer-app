@@ -9,6 +9,11 @@ metadata:
 
 ## Invariant enforced only in `copyWith`, not in the primary constructor — bug class to watch for
 
+**Fixed same-PR (2026-08-09)**: moved the invariant into `FlashPointConfig`'s constructor via the
+initializer-list computation shown below. `tryFromJson` and any future call site are safe
+automatically now; kept below as a bug-class reference for other models with a similar
+cross-field invariant.
+
 `FlashPointConfig`'s doc comment on `copyWith` claims "this is the one place that constraint
 [flashEnabled=false forces notifyEnabled=false] is enforced, rather than every call site
 remembering to check it." That's true for `copyWith` itself, but the plain `const` constructor
@@ -50,6 +55,11 @@ the constructor, not just in `copyWith`.
 
 ## First Flutter `build()` method flagged for exceeding 20 lines
 
+**Fixed same-PR (2026-08-09)**: extracted `SettingsRowContainer`/`SettingsDeleteButton` into
+`settings_sheet_widgets.dart`, shared by both `SettingsListItem` and `_FlashPointRow`.
+`_FlashPointRow.build()` is now well under 20 lines and no longer duplicates the container/
+delete-button chrome.
+
 Prior widget `build()` methods in this repo topped out around 24 lines (e.g.
 `weekend_milestones_settings_section.dart`'s add-row build), which had not previously been
 flagged — declarative widget-tree bodies get some slack versus imperative code. This PR's
@@ -72,5 +82,25 @@ pattern.
 [[project_stopwatch_pr_patterns]] (`ensureRunning()`, `settings-sheet-shell`'s six files). Grepped
 the rest of the diff; no other file in this PR does this. Fixed reference: drop the `（issue
 #22）`/`、issue #22）` trailing citations, keep the WHY.
+
+## Queue-purge gap when a source's candidate set shrinks mid-session — found by CodeRabbit, fixed same-PR
+
+`FlashQueueController.build()` recomputes `candidates` fresh every build from current source
+state, but only ever fed new candidates into `_admit()` — it never purged `_queue` entries whose
+id dropped out of the current candidate set (e.g. a flash point's `flashEnabled` flipping off
+while its event was already sitting in `_queue`, not yet promoted to `_active`). Real bug, but
+narrower than CodeRabbit's "Major/already-registered events survive indefinitely" framing — the
+window is only `flashAnimationDuration` (3s) wide, so an event can only be mid-queue for a few
+seconds total, not indefinitely. Fixed by purging `_queue` entries not present in the current
+build's `candidateIds` before the `_admit` loop (`_purgeQueuedEventsNoLongerCandidates`).
+Deliberately left `_active` (a currently-*playing* animation) untouched — interrupting it needs
+`FlashOverlay`'s completion callback to validate the event id before calling `advance()`, which is
+a UX decision (cut the flash short vs. let it finish), not a pure bug fix; flagged as a possible
+follow-up, not bundled into this fix.
+
+General pattern worth watching for in this codebase: any provider that builds a mutable queue/set
+incrementally across rebuilds from a recomputed candidate list needs an explicit purge step for
+entries that drop out of the candidate set — admission-only logic (`_admit`-shaped) silently
+leaves stale entries unless something explicitly diffs against the new candidate set.
 
 Related: [[project_stopwatch_pr_patterns]], [[project_readme_maintenance_gap]]

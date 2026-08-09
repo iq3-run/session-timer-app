@@ -108,25 +108,27 @@ class _ToggleLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onChanged == null;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: disabled
-                ? SessionTimerColors.muted
-                : SessionTimerColors.white,
-            fontSize: 10,
+    return MergeSemantics(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: disabled
+                  ? SessionTimerColors.muted
+                  : SessionTimerColors.white,
+              fontSize: 10,
+            ),
           ),
-        ),
-        Switch(
-          key: switchKey,
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: SessionTimerColors.amber,
-        ),
-      ],
+          Switch(
+            key: switchKey,
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: SessionTimerColors.amber,
+          ),
+        ],
+      ),
     );
   }
 }

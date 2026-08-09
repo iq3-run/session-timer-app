@@ -226,6 +226,11 @@ class FlashPointsSettingsSection extends StatelessWidget {
 - `flutter analyze`
 - `flutter test`
 - debug build
+- `code-reviewer`サブエージェント **と** Gemini CLI（`--skip-trust`、committed+
+  staged+unstagedの全diff）の両方のローカルレビューを、PRの作成・追加push・
+  マージいずれの前にも完了させること。日次クォータ切れでGeminiが実行できない
+  場合は、その旨をPR説明に明記した上で、クォータ回復後に必ず再実行する
+  （スキップしたまま放置しない）。
 - BlueStacks/実機で設定シートから: ①あるポイントのフラッシュをOFFにすると、
   そのポイントのチップが消え、実際にフラッシュしないこと ②通知トグルがフラッ
   シュOFF中は操作不可であること ③フラッシュを再度ONにした後、通知トグルが

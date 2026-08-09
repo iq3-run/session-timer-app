@@ -61,6 +61,8 @@ class FlashQueueController extends Notifier<FlashQueueState> {
       ...timerFlashEvents(timer),
     ]..sort((a, b) => a.instant.compareTo(b.instant));
 
+    _purgeQueuedEventsNoLongerCandidates(candidates);
+
     for (final event in candidates) {
       _admit(event, now);
     }
@@ -93,6 +95,18 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   void _purgeStaleFiredIds(String prefix, Object? current, Object? previous) {
     if (identical(current, previous)) return;
     _firedIds.removeWhere((id) => id.startsWith(prefix));
+  }
+
+  /// Drops queued (not yet playing) events whose id no longer appears among
+  /// [candidates] — e.g. a flash point disabled while its event was still
+  /// waiting in `_queue`. Deliberately leaves `_active` alone: interrupting
+  /// an animation already in progress needs `FlashOverlay`'s completion
+  /// callback to validate the event id before calling `advance()`, which is
+  /// a UX decision (cut the flash short vs. let it finish) left for a
+  /// separate change.
+  void _purgeQueuedEventsNoLongerCandidates(List<FlashEvent> candidates) {
+    final candidateIds = candidates.map((e) => e.id).toSet();
+    _queue.removeWhere((e) => !candidateIds.contains(e.id));
   }
 
   void _promoteNextIfIdle() {
