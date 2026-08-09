@@ -25,7 +25,7 @@ void main() {
 normally called inside `runApp()`, but `runApp()` hasn't executed yet at
 this point in `main()`, so the channel call throws:
 
-```
+```text
 Unhandled Exception: Binding has not yet been initialized.
 #11 sharedPreferencesProvider (shared_preferences_provider.dart:5)
 #25 NtpSyncController.build (ntp_sync_controller.dart:80)
