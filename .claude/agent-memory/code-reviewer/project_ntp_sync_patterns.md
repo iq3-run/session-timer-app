@@ -111,4 +111,39 @@ exemption (see [[project_stopwatch_pr_patterns]]), and doesn't reference
 the issue number or plan file, so it doesn't repeat the doc-comment
 content violation flagged elsewhere in that file.
 
+**Issue #42 fix (`fix/42-ntp-ipv4-fallback`, reviewed 2026-08-09, staged not yet
+committed): IPv6-broken-route fallback in `_fetchViaNtpPackage`.** Root cause
+(confirmed via reading `ntp-2.0.0`'s own source, not memory): `NTP.getNtpOffset`
+does `InternetAddress.lookup(lookUpAddress)` and always uses `addresses.first`
+with no family preference, and critically its `timeout` param only wraps the
+*socket receive* step, never the DNS lookup — so the new app-side `dnsLookup`
+call this PR adds is not a new unbounded-network-call risk, it's the exact same
+previously-unbounded lookup, just relocated. Confirmed no regression.
+`preferIPv4Address(host, dnsLookup)` (`@visibleForTesting`, not private) is
+correct on all three branches (prefers IPv4, falls back to first/possibly-IPv6
+result, falls back to original hostname string on empty list) and a thrown
+`dnsLookup` (e.g. real `SocketException` on lookup failure) propagates
+unhandled through `_fetchViaNtpPackage` into `_attemptSync`'s existing
+`on Object` catch, same as before — verified by reading, not just asserted.
+`@visibleForTesting` is a *good* precedent here, not a violation: this is the
+first use in the repo, and it's the objectively correct idiom for unit-testing
+a function that's conceptually private but can't be (Dart privacy is per-file,
+so a real `_`-prefixed top-level function is unreachable from
+`test/.../*_test.dart`). Don't second-guess this pattern in future reviews —
+cite it as the precedent if another pure helper needs the same treatment.
+`pubspec.yaml`/`pubspec.lock` diff was minimal as expected (`meta` promoted
+transitive → direct main, matching version already resolved, no unrelated
+bumps).
+
+**Doc-comment content rule — recurred a 4th time here**, same violation
+category as [[project_stopwatch_pr_patterns]]'s entry: the new
+`preferIPv4Address` doc comment includes "(issue #42)" inline. This is now
+4 occurrences across this repo's history (`ensureRunning()`,
+`feat/settings-sheet-shell`'s 6 files, `main.dart`'s `_autoSyncNtpAtStartup`
+"(spec 3-6)", now this). The multi-line-WHY-block *length* exemption is
+solid and shouldn't be re-litigated, but the *content* rule (no issue/task/
+plan-file self-references) keeps slipping past the agent that writes the
+code, not just past review — worth flagging clearly enough in review comments
+that it gets fixed before commit rather than caught after.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_flash_point_toggle_patterns]]
