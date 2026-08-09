@@ -95,8 +95,8 @@ seconds total, not indefinitely. Fixed by purging `_queue` entries not present i
 build's `candidateIds` before the `_admit` loop (`_purgeQueuedEventsNoLongerCandidates`).
 Deliberately left `_active` (a currently-*playing* animation) untouched — interrupting it needs
 `FlashOverlay`'s completion callback to validate the event id before calling `advance()`, which is
-a UX decision (cut the flash short vs. let it finish), not a pure bug fix; flagged as a possible
-follow-up, not bundled into this fix.
+a UX decision (cut the flash short vs. let it finish), not a pure bug fix. Spun out as issue #33
+(2026-08-09) rather than bundled into this fix.
 
 General pattern worth watching for in this codebase: any provider that builds a mutable queue/set
 incrementally across rebuilds from a recomputed candidate list needs an explicit purge step for
