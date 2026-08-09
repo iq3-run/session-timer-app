@@ -39,11 +39,14 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   @override
   FlashQueueState build() {
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final completion = ref.watch(completionTimeControllerProvider).value;
-    final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
-    final timer = ref.watch(timerControllerProvider).value;
-    final flashPoints =
-        ref.watch(flashPointsControllerProvider).value ?? const [];
+    final completionAsync = ref.watch(completionTimeControllerProvider);
+    final targetsAsync = ref.watch(timeTargetsControllerProvider);
+    final timerAsync = ref.watch(timerControllerProvider);
+    final flashPointsAsync = ref.watch(flashPointsControllerProvider);
+    final completion = completionAsync.value;
+    final targets = targetsAsync.value ?? const [];
+    final timer = timerAsync.value;
+    final flashPoints = flashPointsAsync.value ?? const [];
     final flashEnabledMinutes = [
       for (final p in flashPoints)
         if (p.flashEnabled) p.minutes,
@@ -61,7 +64,17 @@ class FlashQueueController extends Notifier<FlashQueueState> {
       ...timerFlashEvents(timer),
     ]..sort((a, b) => a.instant.compareTo(b.instant));
 
-    _purgeQueuedEventsNoLongerCandidates(candidates);
+    // Only trust `candidates` as the full picture when every source
+    // resolved cleanly this build — a source in AsyncError (e.g. a failed
+    // FlashPointsController persist) reads as an empty/null value, which
+    // would otherwise look identical to "this source's events are
+    // genuinely gone" and wipe unrelated already-queued events.
+    final sourcesHealthy =
+        completionAsync.hasValue &&
+        targetsAsync.hasValue &&
+        timerAsync.hasValue &&
+        flashPointsAsync.hasValue;
+    if (sourcesHealthy) _purgeQueuedEventsNoLongerCandidates(candidates);
 
     for (final event in candidates) {
       _admit(event, now);

@@ -103,4 +103,35 @@ incrementally across rebuilds from a recomputed candidate list needs an explicit
 entries that drop out of the candidate set — admission-only logic (`_admit`-shaped) silently
 leaves stale entries unless something explicitly diffs against the new candidate set.
 
+### Edge case found reviewing the purge fix itself (commit ebf31f8, 2026-08-09) — fixed same-round
+
+**Fixed** in the immediate follow-up commit: `build()` now watches each of the four
+`AsyncValue`s explicitly and only calls `_purgeQueuedEventsNoLongerCandidates` when all four
+`hasValue` this build — the guard suggested below, applied wholesale to the purge call site
+rather than per-source scoping (simpler, and the purge is the only consumer of `candidates` that
+needed it; the `_admit` loop was already safe on a source shrinking for one build).
+
+`_purgeQueuedEventsNoLongerCandidates` trusts `candidates` as ground truth every build, but
+`candidates` is built from `ref.watch(...).value` on four `AsyncNotifier`s
+(`completionTimeControllerProvider`, `timeTargetsControllerProvider`, `timerControllerProvider`,
+`flashPointsControllerProvider`), each with an existing `_persistenceFailure()` path that sets
+`state = AsyncError(...)` **without** a retained previous value (confirmed via
+`riverpod-3.4.2/lib/src/core/async_value.dart`: `AsyncValue.value` is `_value?.$1`, safely
+null — not a throw — so this doesn't crash, it silently empties that source's candidates for the
+build). `flashPointsControllerProvider` going to `AsyncError` is the worst case: `flashEnabledMinutes`
+becomes `[]`, which zeroes out *every* completion-point flash event from `candidates` — including
+ones from flash points that had nothing to do with the failed mutation — and the new purge would
+then drop any of those that happened to be sitting in `_queue`. Before this commit, a
+source-shrinks-for-one-build glitch just meant "no new admits that build"; now it can actively
+erase an already-legitimately-queued event. A real, already-tested path in this repo (see
+`flash_points_controller_test.dart`'s "a failed persist surfaces as AsyncError" test), but rare in
+practice — a queued (not yet active) item only exists for a ~3s window
+(`flashAnimationDuration`) per event, so the failure has to land in that narrow overlap. Raised as
+Warning (not Critical) in the ebf31f8 review; not fixed in that commit. If touching this file
+again, consider guarding the purge (and ideally the whole `_admit` loop) on `hasValue` for the
+four watched providers, or scoping the purge per source-prefix the way `_purgeStaleFiredIds`
+already does, rather than diffing against the full merged id set. Don't re-derive the
+`AsyncValue.value` semantics from scratch next time — it's confirmed safe (null, not throw) for
+riverpod 3.4.2, recorded here so future reviews can cite it directly.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_readme_maintenance_gap]]
