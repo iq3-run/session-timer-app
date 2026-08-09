@@ -85,4 +85,54 @@ void main() {
       expect(fake.state.active, isNull);
     },
   );
+
+  testWidgets(
+    'advances past an event promoted after its window fully elapsed '
+    'instead of getting stuck opaque',
+    (tester) async {
+      final fake = _FakeFlashQueueController();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [flashQueueControllerProvider.overrideWith(() => fake)],
+          child: const MaterialApp(home: FlashOverlay()),
+        ),
+      );
+
+      // First event completes normally, leaving the controller's last
+      // reported status at `completed` — the precondition for the bug.
+      // windowStart is comfortably in the future (rather than ~now, as in
+      // the "blinks" test above) so elapsed progress clamps to a
+      // deterministic 0.0 regardless of real-clock scheduling jitter
+      // between setActive() and the listener evaluating DateTime.now().
+      fake.setActive(
+        FlashEvent(
+          id: 'first',
+          instant: DateTime.now().add(
+            flashAnimationDuration + const Duration(seconds: 10),
+          ),
+          label: 'test',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(
+        flashAnimationDuration + const Duration(milliseconds: 300),
+      );
+      expect(fake.state.active, isNull);
+
+      // Second event is promoted with its window already minutes in the
+      // past (e.g. resuming from background through a missed window) —
+      // elapsed progress clamps to 1.0.
+      fake.setActive(
+        FlashEvent(
+          id: 'second-stale',
+          instant: DateTime.now().subtract(const Duration(minutes: 5)),
+          label: 'test',
+        ),
+      );
+      await tester.pump();
+
+      expect(fake.state.active, isNull); // advance() ran instead of hanging
+      expect(_overlayOpacity(tester), 0);
+    },
+  );
 }
