@@ -37,14 +37,29 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
     super.dispose();
   }
 
+  // A window that had already fully elapsed by the time this event was
+  // promoted (e.g. resuming from background through several missed
+  // windows) would otherwise call forward(from: 1.0). AnimationController
+  // treats that as a zero-duration no-op and skips notifying listeners
+  // when the controller's last reported status is already `completed`
+  // (true here, from the previous event finishing normally) — so
+  // _onStatusChanged never fires and advance() never gets called, leaving
+  // the overlay stuck fully opaque. Advance directly instead.
+  void _onActiveEventChanged(FlashQueueState? previous, FlashQueueState next) {
+    final event = next.active;
+    if (event == null || event.id == previous?.active?.id) return;
+    _controller.stop();
+    final progress = _elapsedProgress(event);
+    if (progress >= 1.0) {
+      ref.read(flashQueueControllerProvider.notifier).advance();
+      return;
+    }
+    unawaited(_controller.forward(from: progress));
+  }
+
   @override
   Widget build(BuildContext context) {
-    ref.listen(flashQueueControllerProvider, (previous, next) {
-      final event = next.active;
-      if (event == null || event.id == previous?.active?.id) return;
-      _controller.stop();
-      unawaited(_controller.forward(from: _elapsedProgress(event)));
-    });
+    ref.listen(flashQueueControllerProvider, _onActiveEventChanged);
     final active = ref.watch(flashQueueControllerProvider).active;
 
     return IgnorePointer(
