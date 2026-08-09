@@ -6,6 +6,7 @@ import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_gear_button.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 /// Deterministic, network-free stand-in for the real NTP lookup — every
 /// test in this file goes through this unless it passes a different
@@ -13,11 +14,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<int> _fakeNtpOffsetFetcher(String host, {required Duration timeout}) =>
     Future.value(250);
 
+/// Makes the next write report failure — used to force `NtpSyncController`
+/// into `AsyncError`, matching the `_FlakyStore` double already duplicated
+/// per-file elsewhere in this test suite (e.g.
+/// `flash_points_controller_test.dart`).
+class _FlakyStore extends InMemorySharedPreferencesStore {
+  _FlakyStore.empty() : super.empty();
+
+  bool failNextWrite = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) {
+    if (failNextWrite) {
+      failNextWrite = false;
+      return Future.value(false);
+    }
+    return super.setValue(valueType, key, value);
+  }
+}
+
 Future<void> _pumpAndOpenSheet(
   WidgetTester tester, {
   NtpOffsetFetcher fetcher = _fakeNtpOffsetFetcher,
+  SharedPreferencesStorePlatform? store,
 }) async {
   SharedPreferences.setMockInitialValues({});
+  if (store != null) SharedPreferencesStorePlatform.instance = store;
   await tester.binding.setSurfaceSize(const Size(400, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -277,6 +299,28 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets(
+      'an unexpected persistence failure shows the failure status text, '
+      'not unsynced',
+      (tester) async {
+        final previousStore = SharedPreferencesStorePlatform.instance;
+        addTearDown(
+          () => SharedPreferencesStorePlatform.instance = previousStore,
+        );
+        final store = _FlakyStore.empty();
+        await _pumpAndOpenSheet(tester, store: store);
+
+        store.failNextWrite = true;
+        await tester.tap(find.byKey(const Key('ntpSyncButton')));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('同期失敗（インターネット接続を確認してください）'),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('syncing with a custom host persists that host', (
       tester,

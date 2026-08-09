@@ -85,6 +85,10 @@ class _NtpSyncSettingsSectionState extends State<NtpSyncSettingsSection> {
   }
 
   String get _statusText {
+    // `hasError` first: an unexpected `SharedPreferences` failure leaves
+    // `widget.state.value` null too (same as the truly-unsynced case), so
+    // checking value alone would misreport a real failure as "unsynced".
+    if (widget.state.hasError) return _failedStatusText;
     final syncState = widget.state.value;
     if (syncState == null || syncState.status == NtpSyncStatus.unsynced) {
       return _unsyncedStatusText;

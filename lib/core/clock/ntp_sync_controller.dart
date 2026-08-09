@@ -103,7 +103,9 @@ class NtpSyncController extends AsyncNotifier<NtpSyncState> {
           status: NtpSyncStatus.syncing,
         ),
       );
-      await prefs.setString(ntpServerHostKey, targetHost);
+      if (!await prefs.setString(ntpServerHostKey, targetHost)) {
+        throw Exception('Failed to persist $ntpServerHostKey');
+      }
       state = AsyncData(await _attemptSync(targetHost));
     } on Exception catch (e, st) {
       state = AsyncError(e, st);
@@ -125,7 +127,9 @@ class NtpSyncController extends AsyncNotifier<NtpSyncState> {
         serverHost: host,
         status: NtpSyncStatus.synced,
         offsetMs: offsetMs,
-        lastSyncedAt: DateTime.now(),
+        // NTP-corrected, not raw device time — matches what `nowProvider`
+        // would report at this same instant once this offset takes effect.
+        lastSyncedAt: DateTime.now().add(Duration(milliseconds: offsetMs)),
       );
     } on Object {
       return NtpSyncState(serverHost: host, status: NtpSyncStatus.failed);

@@ -110,7 +110,7 @@ class NtpSyncState {
 /// `NTP.getNtpOffset`'s signature so the default binding is a direct
 /// tear-off; tests override this provider with a fake instead of hitting
 /// a real socket.
-typedef NtpOffsetFetcher = Future<int> Function(String host, {Duration timeout});
+typedef NtpOffsetFetcher = Future<int> Function(String host, {required Duration timeout});
 
 Future<int> _fetchViaNtpPackage(String host, {required Duration timeout}) =>
     NTP.getNtpOffset(lookUpAddress: host, timeout: timeout);
@@ -224,8 +224,10 @@ Status text:
 
 - `unsynced` → `未同期（端末時刻を使用中）` (existing constant, unchanged)
 - `syncing` → `同期中…`
-- `synced` → `同期完了（誤差補正 ${offsetMs}ms） / ${HH:mm:ss now}` (`intl`
-  `DateFormat('HH:mm:ss')`, matching `CurrentTimeDisplay`'s own formatting)
+- `synced` → `同期完了（誤差補正 ${offsetMs}ms） / ${HH:mm:ss of lastSyncedAt}`
+  (`intl` `DateFormat('HH:mm:ss')`, matching `CurrentTimeDisplay`'s own
+  formatting — `syncState.lastSyncedAt`, not a live clock read, so the
+  timestamp doesn't jump on an unrelated rebuild)
 - `failed` → `同期失敗（インターネット接続を確認してください）` (same
   wording as the HTML prototype)
 
