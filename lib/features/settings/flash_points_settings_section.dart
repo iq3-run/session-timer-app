@@ -4,7 +4,7 @@ import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 
 /// Flash-point add/remove list, each row with its own フラッシュ/通知
-/// toggle (issue #22). Mirrors the prototype's (docs/session-timer.html
+/// toggle. Mirrors the prototype's (docs/session-timer.html
 /// `#flashList`/`#flashMinInput`) add/remove UI, extended with the two
 /// switches. [points] and the callbacks are supplied by the caller, which
 /// owns whatever backs them.
@@ -60,45 +60,34 @@ class _FlashPointRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: SessionTimerColors.line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '残り ${point.minutes} 分',
-              style: const TextStyle(color: SessionTimerColors.white),
-            ),
+    return SettingsRowContainer(
+      verticalPadding: 4,
+      children: [
+        Expanded(
+          child: Text(
+            '残り ${point.minutes} 分',
+            style: const TextStyle(color: SessionTimerColors.white),
           ),
-          _ToggleLabel(
-            switchKey: Key('flashToggle_${point.minutes}'),
-            label: 'フラッシュ',
-            value: point.flashEnabled,
-            onChanged: onToggleFlash,
-          ),
-          _ToggleLabel(
-            switchKey: Key('notifyToggle_${point.minutes}'),
-            label: '通知',
-            value: point.notifyEnabled,
-            // フラッシュOFFの点は通知も強制OFF・変更不可（フラッシュしないの
-            // に通知だけ来る状態を防ぐ、issue #22）。
-            onChanged: point.flashEnabled ? onToggleNotify : null,
-          ),
-          TextButton(
-            key: Key('removeFlashPoint_${point.minutes}'),
-            onPressed: onRemove,
-            child: const Text(
-              '削除',
-              style: TextStyle(color: SessionTimerColors.red),
-            ),
-          ),
-        ],
-      ),
+        ),
+        _ToggleLabel(
+          switchKey: Key('flashToggle_${point.minutes}'),
+          label: 'フラッシュ',
+          value: point.flashEnabled,
+          onChanged: onToggleFlash,
+        ),
+        _ToggleLabel(
+          switchKey: Key('notifyToggle_${point.minutes}'),
+          label: '通知',
+          value: point.notifyEnabled,
+          // フラッシュOFFの点は通知も強制OFF・変更不可（フラッシュしないのに
+          // 通知だけ来る状態を防ぐ）。
+          onChanged: point.flashEnabled ? onToggleNotify : null,
+        ),
+        SettingsDeleteButton(
+          key: Key('removeFlashPoint_${point.minutes}'),
+          onPressed: onRemove,
+        ),
+      ],
     );
   }
 }

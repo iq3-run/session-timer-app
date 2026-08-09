@@ -1,10 +1,14 @@
 /// A single 完了◯分前 flash point plus its own flash/notify toggles.
 class FlashPointConfig {
+  /// A point never notifies without also flashing — enforced here (not just
+  /// in [copyWith]) so a value built straight from persisted JSON via
+  /// [tryFromJson] can't smuggle in `flashEnabled: false, notifyEnabled:
+  /// true`.
   const FlashPointConfig({
     required this.minutes,
     this.flashEnabled = true,
-    this.notifyEnabled = true,
-  });
+    bool notifyEnabled = true,
+  }) : notifyEnabled = flashEnabled && notifyEnabled;
 
   /// Null if [json] doesn't match the expected shape — mirrors
   /// `TimeTarget.tryFromJson`'s "one bad entry doesn't take down the whole
@@ -32,16 +36,11 @@ class FlashPointConfig {
     'notifyEnabled': notifyEnabled,
   };
 
-  /// Turning [flashEnabled] off always forces [notifyEnabled] off too — a
-  /// point never notifies without also flashing — so this is the one place
-  /// that constraint is enforced, rather than every call site remembering
-  /// to check it.
   FlashPointConfig copyWith({bool? flashEnabled, bool? notifyEnabled}) {
-    final nextFlashEnabled = flashEnabled ?? this.flashEnabled;
     return FlashPointConfig(
       minutes: minutes,
-      flashEnabled: nextFlashEnabled,
-      notifyEnabled: nextFlashEnabled && (notifyEnabled ?? this.notifyEnabled),
+      flashEnabled: flashEnabled ?? this.flashEnabled,
+      notifyEnabled: notifyEnabled ?? this.notifyEnabled,
     );
   }
 }

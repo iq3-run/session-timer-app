@@ -38,6 +38,54 @@ class SettingsSection extends StatelessWidget {
   }
 }
 
+/// Shared bordered/rounded row chrome for a settings list entry, matching
+/// the prototype's `.list-item`. [children] are laid out in a `Row` (the
+/// caller supplies its own `Expanded` label and trailing controls).
+class SettingsRowContainer extends StatelessWidget {
+  const SettingsRowContainer({
+    required this.children,
+    this.verticalPadding = 8,
+    super.key,
+  });
+
+  final List<Widget> children;
+  final double verticalPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        border: Border.all(color: SessionTimerColors.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: children),
+    );
+  }
+}
+
+/// Shared trailing "削除" control for a `SettingsRowContainer` row.
+class SettingsDeleteButton extends StatelessWidget {
+  const SettingsDeleteButton({required this.onPressed, super.key});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      child: const Text(
+        '削除',
+        style: TextStyle(color: SessionTimerColors.red),
+      ),
+    );
+  }
+}
+
 /// Shared row for a deletable entry, matching the prototype's `.list-item`.
 class SettingsListItem extends StatelessWidget {
   const SettingsListItem({
@@ -53,42 +101,28 @@ class SettingsListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: SessionTimerColors.line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                text: label,
-                style: const TextStyle(color: SessionTimerColors.white),
-                children: [
-                  if (meta != null)
-                    TextSpan(
-                      text: '  $meta',
-                      style: const TextStyle(
-                        color: SessionTimerColors.muted,
-                        fontSize: 12,
-                      ),
+    return SettingsRowContainer(
+      children: [
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              text: label,
+              style: const TextStyle(color: SessionTimerColors.white),
+              children: [
+                if (meta != null)
+                  TextSpan(
+                    text: '  $meta',
+                    style: const TextStyle(
+                      color: SessionTimerColors.muted,
+                      fontSize: 12,
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
-          TextButton(
-            onPressed: onDelete,
-            child: const Text(
-              '削除',
-              style: TextStyle(color: SessionTimerColors.red),
-            ),
-          ),
-        ],
-      ),
+        ),
+        SettingsDeleteButton(onPressed: onDelete),
+      ],
     );
   }
 }

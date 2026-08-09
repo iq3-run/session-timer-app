@@ -92,4 +92,19 @@ checklist item for README) has still not been acted on — this is the second ti
 "raise it more insistently"; if it recurs a 7th time, propose it directly to the user rather than
 just recording it here again.
 
+**Recurred a 7th time in `feat/22-flash-point-toggles` (2026-08-09)**: this PR wires the
+per-flash-point 通知 toggle into real notification scheduling (`notification_event_source.dart`
+now filters on `flashEnabled && notifyEnabled`), but README.md line 36 still says
+`settings/`（フラッシュポイントは実配線済み、**通知**/週末マイルストーン/NTP同期は今後のIssue
+で実配線予定）— claiming notification wiring is still pending, which is now false for the
+per-point notify toggle specifically (global milestone/NTP remain genuinely unwired). Same
+"prose goes stale when a feature crosses from shell to wired" shape as the 5th/6th recurrences.
+Flagged in this PR's local code-reviewer pass. Per the standing note below (6th recurrence said
+"raise it more insistently" a second time), this recurrence was escalated directly to the user
+in the review report rather than only logged here — seven recurrences across PR #11, #18, #20,
+device-notifications PR, settings-sheet-shell PR, flash-points-persistence PR, and this one is
+well past the point where logging alone is doing anything. If an eighth recurrence happens after
+this, treat "propose the plans/*.md README checklist item" as overdue rather than a fresh
+suggestion.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_notification_scheduler_patterns]]
