@@ -16,14 +16,18 @@ final flashPointsControllerProvider =
 
 /// 完了◯分前 flash points, user-editable via the settings sheet.
 ///
-/// The 12 defaults ([defaultCompletionFlashPointsMinutes]) are a permanent
-/// baseline: at every `build()` (app startup only — mirrors
+/// The 12 defaults ([defaultCompletionFlashPointsMinutes]) are a baseline
+/// applied at every `build()` (app startup only — mirrors
 /// `CompletionTimeController`'s own "clear an overdue target at startup"
-/// rule, not a continuous check), any default missing from the persisted
-/// list is added back, regardless of whether a completion time is set.
-/// Non-default (user-added) points are only pruned once their own moment
-/// (completion time − minutes) has passed, and only once a completion time
-/// exists to measure that against — see [_applyStartupRules].
+/// rule, not a continuous check): a default already present always stays.
+/// A default missing from the persisted list (the user removed it) is
+/// revived once its own moment (completion time − minutes) has passed —
+/// or unconditionally if no completion time is set at all, since there's
+/// nothing to measure a moment against. A missing default does *not* come
+/// back early just because it's missing; it only returns once its window
+/// would have passed. Non-default (user-added) points follow the mirror
+/// image: kept while no completion time is set, otherwise dropped once
+/// their own moment has passed — see [_applyStartupRules].
 class FlashPointsController extends AsyncNotifier<List<int>> {
   // Mirrors TimeTargetsController's mutation-queue pattern: see that file
   // for why _lastGood/_initialLoad exist instead of reading state directly.
@@ -59,7 +63,12 @@ class FlashPointsController extends AsyncNotifier<List<int>> {
     }
   }
 
-  /// See the class doc for the rule.
+  /// See the class doc for the rule. Note: `completionTarget` is never
+  /// actually overdue here in practice — `CompletionTimeController`
+  /// self-heals an expired target to null before this read resolves (see
+  /// `CompletionTimeController.build()`). The "overdue but non-null" case
+  /// this handles is belt-and-suspenders, not something that currently
+  /// fires.
   List<int> _applyStartupRules(
     List<int> persisted,
     DateTime? completionTarget,
@@ -75,12 +84,24 @@ class FlashPointsController extends AsyncNotifier<List<int>> {
       return !moment.isAfter(now);
     }
 
+    // A present default always stays. A missing default is revived
+    // unconditionally when there's no completion time to measure against,
+    // and otherwise only once its own moment has passed — it does NOT come
+    // back early just because it's missing.
+    final keptDefaults = persisted.where(isDefault);
+    final missingDefaults = defaultCompletionFlashPointsMinutes.where(
+      (m) => !persisted.contains(m),
+    );
+    final revivedDefaults = completionTarget == null
+        ? missingDefaults
+        : missingDefaults.where(hasPassed);
+
     final customs = persisted.where((m) => !isDefault(m));
     final survivingCustoms = completionTarget == null
         ? customs
         : customs.where((m) => !hasPassed(m));
 
-    return [...defaultCompletionFlashPointsMinutes, ...survivingCustoms];
+    return [...keptDefaults, ...revivedDefaults, ...survivingCustoms];
   }
 
   Future<void> addPoint(int minutes) {

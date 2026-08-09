@@ -229,4 +229,47 @@ issue-references are the recurring violation to flag; the same references
 inside user-visible strings here are an adjudicated exception, cited once,
 not re-flagged.
 
+**Cross-controller `ref.read` inside `build()` itself (not just action methods) —
+new variant, confirmed safe (2026-08-09, `feat/flash-points-persistence`, commit
+792bced, issue #26)**: `FlashPointsController.build()` now does
+`final completion = await ref.read(completionTimeControllerProvider.future);`
+directly inside `build()` (not `ref.watch`), to apply a one-time "revive
+defaults / prune stale customs at startup" rule against the current completion
+time without ever re-triggering when the completion time changes later in the
+same session. This is a step beyond the `ref.read` pattern noted above (which
+was action-method-to-action-method); here one controller's `build()` reads
+another controller's `.future` once. Verified safe and correct: (1) no cycle —
+`CompletionTimeController.build()` doesn't read `FlashPointsController` back;
+(2) truly one-shot — `FlashPointsController.build()` only watches
+`sharedPreferencesProvider` (resolved once, never changes), so nothing causes
+`build()` to re-run later in the session, confirming the "not a continuous
+check" claim in the doc comment; (3) hand-traced the `hasPassed`/`isDefault`
+arithmetic (`moment = completionTarget - minutesBefore`; passed once
+`moment <= now`, i.e. `minutesBefore >= D` for a target `D` minutes out) against
+5+ cases including the boundary direction bug class flagged below — all
+correct, `flutter test test/features/flash/` and `flutter analyze` both clean.
+One notable non-bug: the "completion time is overdue" branch of
+`_applyStartupRules` is unreachable in production — by the time
+`ref.read(completionTimeControllerProvider.future)` resolves,
+`CompletionTimeController.build()`'s own self-heal has already reset an
+overdue target to `null`, so the overdue-but-non-null path only exists in
+tests via a `_FixedCompletionController` override that bypasses that self-heal.
+Not a defect (the plan doc itself says this case "converges" to the same
+result as the null case) — worth knowing if a future review sees that branch
+and wonders why it's untriggered in the running app. If a *third* controller
+adds a build()-time one-shot `ref.read(otherController.future)` dependency,
+this is the precedent to cite for "is this safe" — check the same three things
+(no cycle, no watched dependency that would turn it into a repeat, and the
+hand-traced arithmetic), don't treat it as automatically fine just because two
+prior instances were.
+
+**Boundary-arithmetic bug class this repo has hit before — checked clean here**:
+the same file's history already had a "picked a minute value that's
+accidentally a member of `defaultCompletionFlashPointsMinutes`" /
+"comparison direction backwards" bug class (see test file diff in commit
+792bced using deliberately non-default values 99/7/11/13/17/19, with an
+explanatory comment identifying them as non-default). Re-verify this by hand
+each time a future PR touches flash-point minute arithmetic — don't assume
+it's fixed permanently just because this instance was clean.
+
 Related: [[project_readme_maintenance_gap]]

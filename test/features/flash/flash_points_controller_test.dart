@@ -180,25 +180,63 @@ void main() {
       // are 120/90/60/45/30/20/15/10/5/3/2/1) so these tests exercise the
       // "custom point" branch of the rule, not the "default point" branch.
 
+      // The four "missing default" scenarios from the rule table: revived
+      // unless completion is set, still ahead, AND this point's own moment
+      // hasn't arrived yet either — that's the one case it stays gone.
+
       test(
-        'a removed default is always revived, regardless of whether a '
-        'completion time is set',
+        'a removed default is revived when no completion time is set',
+        () async {
+          final withoutOne = [...defaultCompletionFlashPointsMinutes]
+            ..remove(120);
+          final points = await _buildWithCompletion(withoutOne, null);
+
+          expect(points, contains(120));
+        },
+      );
+
+      test(
+        'a removed default is revived when the completion time is overdue',
         () async {
           final withoutOne = [
             ...defaultCompletionFlashPointsMinutes,
           ]..remove(120);
+          final overdue = DateTime.now().subtract(const Duration(hours: 1));
+          final points = await _buildWithCompletion(withoutOne, overdue);
 
-          for (final completionTarget in [
-            null,
-            DateTime.now().add(const Duration(minutes: 200)),
-            DateTime.now().subtract(const Duration(hours: 1)),
-          ]) {
-            final points = await _buildWithCompletion(
-              withoutOne,
-              completionTarget,
-            );
-            expect(points, contains(120));
-          }
+          expect(points, contains(120));
+        },
+      );
+
+      test(
+        'a removed default is revived once its own moment has passed, '
+        'even while the completion time itself is still ahead',
+        () async {
+          // Completion is 30 seconds out: the "1分前" default's own moment
+          // (completion - 1min) is already 30 seconds in the past.
+          final withoutOne = [
+            ...defaultCompletionFlashPointsMinutes,
+          ]..remove(1);
+          final soon = DateTime.now().add(const Duration(seconds: 30));
+          final points = await _buildWithCompletion(withoutOne, soon);
+
+          expect(points, contains(1));
+        },
+      );
+
+      test(
+        'a removed default stays gone while both the completion time and '
+        'its own moment are still ahead',
+        () async {
+          // Completion is 200 minutes out: the "120分前" default's own
+          // moment (completion - 120min) is still 80 minutes ahead.
+          final withoutOne = [
+            ...defaultCompletionFlashPointsMinutes,
+          ]..remove(120);
+          final stillAhead = DateTime.now().add(const Duration(minutes: 200));
+          final points = await _buildWithCompletion(withoutOne, stillAhead);
+
+          expect(points, isNot(contains(120)));
         },
       );
 
@@ -225,6 +263,11 @@ void main() {
         'an overdue completion time drops every custom point but keeps all '
         '12 defaults',
         () async {
+          // The real CompletionTimeController self-heals an overdue target
+          // to null before FlashPointsController ever reads it, so this
+          // exact input is unreachable in the running app — this exercises
+          // _applyStartupRules' arithmetic in isolation via the fixed
+          // fixture, as a belt-and-suspenders check.
           final overdue = DateTime.now().subtract(const Duration(hours: 1));
           final points = await _buildWithCompletion([99, 7], overdue);
 
