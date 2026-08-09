@@ -288,8 +288,10 @@ commit is the first time `_applyStartupRules` itself was flagged for length —
 it grew from ~22 lines (already borderline at the time of `792bced`, not
 flagged then) to 34 lines (signature+body) by adding the `keptDefaults`/
 `missingDefaults`/`revivedDefaults` block, clearing the 20-line MUST
-threshold by a wide margin. Raised as Warning in this review; not yet fixed.
-If a future PR touches this function again without extracting it, cite this
-as the second time it's been flagged, not a fresh discovery.
+threshold by a wide margin. Raised as Warning, fixed same-PR (commit
+`4c8ddfc`) by extracting `_defaultsToKeep`/`_customsToKeep`/`_isDefault`/
+`_hasPassed` — each now well under 20 lines. If a future PR re-grows this
+area past the limit, cite this as the second time it's happened, not a
+fresh discovery.
 
 Related: [[project_readme_maintenance_gap]]
