@@ -5,7 +5,14 @@ import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-const _androidChannelId = 'flash_points';
+// Android notification channels are immutable once created — changing
+// importance/priority in code has no effect on a device that already has
+// this channel ID from an earlier app version, since Android silently
+// ignores re-creation with different settings for the same ID. Bumping to
+// a new ID (rather than deleting/recreating the old one, which users may
+// have customized) is the documented way to roll out new channel defaults:
+// https://developer.android.com/develop/ui/compose/notifications/channels
+const _androidChannelId = 'flash_points_v2';
 const _androidChannelName = 'フラッシュポイント通知';
 const _androidChannelDescription = '完了時刻・指定時刻・タイマーのフラッシュポイントの通知';
 const _notificationTitle = 'セッションタイマー';
