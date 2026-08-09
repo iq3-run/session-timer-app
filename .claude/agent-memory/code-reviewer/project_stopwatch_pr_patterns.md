@@ -272,4 +272,24 @@ explanatory comment identifying them as non-default). Re-verify this by hand
 each time a future PR touches flash-point minute arithmetic — don't assume
 it's fixed permanently just because this instance was clean.
 
+**Follow-up correction commit reviewed and confirmed correct (2026-08-09, commit
+`3c569c4` on the same `feat/flash-points-persistence` PR #28, still open)**:
+the truth-table fix to `_applyStartupRules` (missing defaults now revive early
+only when `completionTarget == null`, otherwise only once their own moment has
+passed — matching the user's 2x4 truth table) was hand-traced against all 8
+relevant cells and is correct. The new "stays gone while both completion time
+and its own moment are still ahead" test is a genuine regression test —
+verified by reading the pre-fix `792bced` version of `_applyStartupRules`,
+whose return statement was `[...defaultCompletionFlashPointsMinutes,
+...survivingCustoms]` (all 12 defaults unconditionally, every time,
+regardless of persisted state or `completionTarget`) — that old code would
+have made this exact test fail (`contains(120)` would be true). Also: this
+commit is the first time `_applyStartupRules` itself was flagged for length —
+it grew from ~22 lines (already borderline at the time of `792bced`, not
+flagged then) to 34 lines (signature+body) by adding the `keptDefaults`/
+`missingDefaults`/`revivedDefaults` block, clearing the 20-line MUST
+threshold by a wide margin. Raised as Warning in this review; not yet fixed.
+If a future PR touches this function again without extracting it, cite this
+as the second time it's been flagged, not a fresh discovery.
+
 Related: [[project_readme_maintenance_gap]]

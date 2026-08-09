@@ -74,34 +74,49 @@ class FlashPointsController extends AsyncNotifier<List<int>> {
     DateTime? completionTarget,
     DateTime now,
   ) {
-    bool isDefault(int minutesBefore) =>
-        defaultCompletionFlashPointsMinutes.contains(minutesBefore);
+    return [
+      ..._defaultsToKeep(persisted, completionTarget, now),
+      ..._customsToKeep(persisted, completionTarget, now),
+    ];
+  }
 
-    bool hasPassed(int minutesBefore) {
-      final moment = completionTarget!.subtract(
-        Duration(minutes: minutesBefore),
-      );
-      return !moment.isAfter(now);
-    }
-
-    // A present default always stays. A missing default is revived
-    // unconditionally when there's no completion time to measure against,
-    // and otherwise only once its own moment has passed — it does NOT come
-    // back early just because it's missing.
-    final keptDefaults = persisted.where(isDefault);
-    final missingDefaults = defaultCompletionFlashPointsMinutes.where(
+  /// A present default always stays. A missing one is revived
+  /// unconditionally when there's no completion time to measure against,
+  /// and otherwise only once its own moment has passed — it does NOT come
+  /// back early just because it's missing.
+  Iterable<int> _defaultsToKeep(
+    List<int> persisted,
+    DateTime? completionTarget,
+    DateTime now,
+  ) {
+    final missing = defaultCompletionFlashPointsMinutes.where(
       (m) => !persisted.contains(m),
     );
-    final revivedDefaults = completionTarget == null
-        ? missingDefaults
-        : missingDefaults.where(hasPassed);
+    final revived = completionTarget == null
+        ? missing
+        : missing.where((m) => _hasPassed(m, completionTarget, now));
+    return [...persisted.where(_isDefault), ...revived];
+  }
 
-    final customs = persisted.where((m) => !isDefault(m));
-    final survivingCustoms = completionTarget == null
+  /// Kept unconditionally when there's no completion time set; otherwise
+  /// dropped once a point's own moment has passed.
+  Iterable<int> _customsToKeep(
+    List<int> persisted,
+    DateTime? completionTarget,
+    DateTime now,
+  ) {
+    final customs = persisted.where((m) => !_isDefault(m));
+    return completionTarget == null
         ? customs
-        : customs.where((m) => !hasPassed(m));
+        : customs.where((m) => !_hasPassed(m, completionTarget, now));
+  }
 
-    return [...keptDefaults, ...revivedDefaults, ...survivingCustoms];
+  bool _isDefault(int minutesBefore) =>
+      defaultCompletionFlashPointsMinutes.contains(minutesBefore);
+
+  bool _hasPassed(int minutesBefore, DateTime completionTarget, DateTime now) {
+    final moment = completionTarget.subtract(Duration(minutes: minutesBefore));
+    return !moment.isAfter(now);
   }
 
   Future<void> addPoint(int minutes) {
