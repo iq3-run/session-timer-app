@@ -10,7 +10,7 @@ reported by the user during manual testing.
 Investigated by connecting the user's real device (Sony Xperia, Android 13)
 via USB and running `adb shell`:
 
-```
+```console
 $ adb shell ping ntp.nict.jp      # IPv4
 64 bytes from ntp-a3.nict.go.jp (133.243.238.244): ... success
 
