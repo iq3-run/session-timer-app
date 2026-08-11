@@ -14,12 +14,24 @@ enum SessionEventType {
 /// that comparisons like `isAtSameMomentAs` between two events can't be
 /// broken by a stray time-of-day component slipping in from a caller.
 class SessionEvent {
-  SessionEvent({required this.id, required this.type, required DateTime date})
-    : date = DateTime(date.year, date.month, date.day);
+  SessionEvent({
+    required this.id,
+    required this.type,
+    required DateTime date,
+    this.visible = true,
+  }) : date = DateTime(date.year, date.month, date.day);
 
   final String id;
   final SessionEventType type;
   final DateTime date;
+
+  /// Whether this event's row shows on the read-only "セッションスケジュー
+  /// ル" screen. Only meaningful for OR / non-first WE / WD / SS — CS, the
+  /// first WE, and CR always show regardless of this field (see
+  /// `session_chain.dart`'s `_isVisibleOnScheduleScreen`). Toggling this
+  /// never affects the 週末間/今日から day-count chain, which always runs
+  /// over every event — it only controls whether a row is drawn.
+  final bool visible;
 
   /// Every type is a single day except WE, whose first occurrence
   /// ([isFirstWeekend]) runs 3 days and later ones run 2. Whether a given
@@ -51,8 +63,17 @@ class SessionEvent {
     if (epochMs.abs() > maxEpochMs) return null;
     final matches = SessionEventType.values.where((t) => t.name == typeName);
     if (matches.isEmpty) return null;
+    // Absent (older persisted entries, from before `visible` existed)
+    // defaults to true — everything used to always show.
+    final rawVisible = json['visible'];
+    if (rawVisible != null && rawVisible is! bool) return null;
     final utc = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
-    return SessionEvent(id: id, type: matches.first, date: utc);
+    return SessionEvent(
+      id: id,
+      type: matches.first,
+      date: utc,
+      visible: (rawVisible as bool?) ?? true,
+    );
   }
 
   /// Serialized via a UTC-anchored epoch rather than [date]'s own local
@@ -67,5 +88,8 @@ class SessionEvent {
       date.month,
       date.day,
     ).millisecondsSinceEpoch,
+    // Omitted when true (the default) — keeps the common case's JSON as
+    // compact as before this field existed.
+    if (!visible) 'visible': false,
   };
 }

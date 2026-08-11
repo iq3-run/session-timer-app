@@ -112,5 +112,70 @@ void main() {
 
       expect(event.endDate(isFirstWeekend: true), DateTime(2026, 9));
     });
+
+    test('visible defaults to true', () {
+      final event = SessionEvent(
+        id: 'we',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+      );
+
+      expect(event.visible, isTrue);
+    });
+
+    test('toJson omits visible when true, includes it when false', () {
+      final visible = SessionEvent(
+        id: 'we',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+      );
+      final hidden = SessionEvent(
+        id: 'wd',
+        type: SessionEventType.workday,
+        date: DateTime(2026, 8, 21),
+        visible: false,
+      );
+
+      expect(visible.toJson().containsKey('visible'), isFalse);
+      expect(hidden.toJson()['visible'], false);
+    });
+
+    test('tryFromJson round-trips visible:false', () {
+      final event = SessionEvent(
+        id: 'wd',
+        type: SessionEventType.workday,
+        date: DateTime(2026, 8, 21),
+        visible: false,
+      );
+
+      final restored = SessionEvent.tryFromJson(event.toJson());
+
+      expect(restored?.visible, isFalse);
+    });
+
+    test(
+      'tryFromJson defaults visible to true for older data without the '
+      'field',
+      () {
+        final restored = SessionEvent.tryFromJson({
+          'id': 'we1',
+          'type': 'weekend',
+          'epochMs': 0,
+        });
+
+        expect(restored?.visible, isTrue);
+      },
+    );
+
+    test('tryFromJson rejects a non-bool visible', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'we1',
+        'type': 'weekend',
+        'epochMs': 0,
+        'visible': 'nope',
+      });
+
+      expect(restored, isNull);
+    });
   });
 }

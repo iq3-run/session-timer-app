@@ -49,11 +49,30 @@ List<ScheduleRow> buildScheduleRows(List<SessionEvent> events, DateTime today) {
   final numbers = assignSequenceNumbers(events);
   final chainEvents = events.where((e) => _chainTypes.contains(e.type)).toList()
     ..sort((a, b) => a.date.compareTo(b.date));
-  final chainRows = _buildChainRows(chainEvents, numbers, today);
+  // Numbering and gap calculations above run over every chain event
+  // regardless of visibility — only the returned rows are filtered, so a
+  // hidden event still counts toward its neighbors' 週末間/今日から values
+  // (see plans/feat-schedule-screen-split.md).
+  final chainRows = _buildChainRows(
+    chainEvents,
+    numbers,
+    today,
+  ).where((row) => _isVisibleOnScheduleScreen(row.event!, numbers)).toList();
 
   final merged = [...chainRows, ..._crRows(events, today)]
     ..sort((a, b) => a.date.compareTo(b.date));
   return _withTodayMarker(merged, today);
+}
+
+/// CS and the first WE always show; every other chain type (OR, later WE,
+/// WD, SS) follows the event's own `visible` toggle. CR never reaches this
+/// function — it's handled entirely by `_crRows`.
+bool _isVisibleOnScheduleScreen(SessionEvent event, Map<String, int> numbers) {
+  if (event.type == SessionEventType.completion) return true;
+  if (event.type == SessionEventType.weekend && numbers[event.id] == 1) {
+    return true;
+  }
+  return event.visible;
 }
 
 List<ScheduleRow> _buildChainRows(
@@ -94,7 +113,7 @@ ScheduleRow _chainRow(
       : calculateGap(fromEnd: endOf(previous), toStart: event.date);
   return ScheduleRow(
     event: event,
-    label: _label(event, numbers),
+    label: sessionEventLabel(event, numbers),
     date: event.date,
     isToday: _isOngoing(event, endOf, today),
     chainGap: chainGap,
@@ -202,7 +221,11 @@ List<ScheduleRow> _withTodayMarker(List<ScheduleRow> rows, DateTime today) {
   ];
 }
 
-String _label(SessionEvent event, Map<String, int> numbers) {
+/// Type abbreviation plus its 1-based sequence number for WE/WD/SS (from
+/// [assignSequenceNumbers]) — shared with `SessionScheduleSettingsScreen`'s
+/// full event list, which needs the same labels outside the chain-row
+/// filtering this file otherwise does.
+String sessionEventLabel(SessionEvent event, Map<String, int> numbers) {
   final number = numbers[event.id];
   return switch (event.type) {
     SessionEventType.orientation => 'OR',
