@@ -89,13 +89,20 @@ void main() {
       expect(timerFlashEvents(const TimerState()), isEmpty);
     });
 
-    test('returns the 5/3/1-minute-before points', () {
+    test('returns the exact-completion event plus the 5/3/1-minute-before '
+        'points', () {
       final target = DateTime(2026, 8, 8, 15);
       final events = timerFlashEvents(
         TimerState(targetEpochMs: target.millisecondsSinceEpoch),
       );
 
-      expect(events, hasLength(timerFlashPointsMinutes.length));
+      expect(events, hasLength(timerFlashPointsMinutes.length + 1));
+      final exact = events.singleWhere(
+        (e) => e.id == 'timer:${target.millisecondsSinceEpoch}:0',
+      );
+      expect(exact.instant, target);
+      expect(exact.label, 'タイマー終了です');
+
       for (final m in timerFlashPointsMinutes) {
         final event = events.firstWhere((e) => e.id.endsWith(':$m'));
         expect(event.instant, target.subtract(Duration(minutes: m)));
