@@ -147,4 +147,43 @@ gained a final `_isVisibleOnScheduleScreen` filter).**
   declarative widget nesting (no extractable branching/looping logic inside). Keep noting as
   Suggestion only unless a future instance has real extractable logic mixed in, not just nesting.
 
+**Follow-up (2026-08-12, issue #50/branch `feat/50-manual-event-numbering`, commit 7fadaf7 —
+`SessionEvent` gained a persisted, display-only `manualNumber` int? override for WE/WD/SS
+labels).**
+
+- **Display-only invariant verified correct by direct read, not just by the commit message's
+  claim**: grepped `_isVisibleOnScheduleScreen`, `isFirstWeekend` (both in `session_chain.dart`),
+  and `_hasVisibilityToggle` (`session_schedule_settings_screen.dart`) — all three still key off
+  `numbers[event.id]` from `assignSequenceNumbers`, never `event.manualNumber`. Only
+  `sessionEventLabel` reads `event.manualNumber ?? numbers[event.id]`. `session_chain_test.dart`
+  added dedicated tests asserting a manualNumber on the first WE doesn't change its visibility
+  exemption, its 3-day duration (chainGap to the next WE unchanged), or any other event's own
+  auto-assigned number — good, targeted coverage of exactly the invariant that mattered here.
+- **New DRY violation (Warning): `_ManualNumberDialogState._isValid`/`_parsedNumber` in
+  `session_schedule_settings_screen.dart` duplicate `_AddEventFormState._isNumberValid`/the parse
+  in `_submit()` verbatim** (same `text.isEmpty ? ... : int.tryParse(text) > 0` logic, twice).
+  The plan file (`plans/feat-manual-event-numbering.md`) explicitly calls this out as "same
+  validation logic" as a known/accepted duplication rather than proposing to share it — flag it
+  anyway per DRY, but don't be surprised it wasn't extracted; it was a scoped, acknowledged choice
+  not an oversight.
+- **`_EventRow.build` (44 lines) — Warning, not the usual top-level-Scaffold pass.** Grew past 20
+  lines by embedding a ternary that swaps the whole number-label subtree (bare `Text` vs
+  `GestureDetector`-wrapped `Text`) inline. Unlike the `SessionScheduleSettingsScreen.build`/
+  `_ManualNumberDialogState.build`/`_AddEventFormState.build` precedent already on file (pure
+  declarative widget nesting, no extractable branching → de facto Suggestion-only pass), this one
+  has real extractable branching (which widget subtree to build) — the fix is a small
+  `_numberLabel(...)` extraction, not just longer nesting. Use this as the dividing line next time
+  a widget `build()` is borderline: "does it just declare structure" vs "does it decide which
+  structure to declare".
+- **Minor comment-policy hit**: `_editManualNumber`'s doc comment ("the tap target reachable from
+  `_EventRow`'s number label") names its caller by class name — same banned category as the
+  doc-comment self-reference pattern, just naming a private class instead of a plan file this
+  time. Low severity (single file, no plan-file/issue-# citation), but same rule.
+- Everything else clean: JSON round-trip/validation (`tryFromJson` rejects non-int and <=0,
+  tolerates explicit `null` unlike `visible`, with the asymmetry's WHY correctly stated in the
+  comment), `SessionEventController.setManualNumber`/`_replaceEvent` reuse (good — extracted
+  exactly the duplicated "find by id, replace" loop that `setVisible` used to inline, no new
+  mutation-queue-skeleton instance since the controller wasn't touched at that level), 82 tests
+  pass, `flutter analyze`/`dart format` clean.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_ntp_sync_patterns]]
