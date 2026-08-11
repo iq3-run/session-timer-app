@@ -189,5 +189,88 @@ void main() {
 
       expect(restored, isNull);
     });
+
+    test('manualNumber defaults to null', () {
+      final event = SessionEvent(
+        id: 'we',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+      );
+
+      expect(event.manualNumber, isNull);
+    });
+
+    test('toJson omits manualNumber when null, includes it when set', () {
+      final auto = SessionEvent(
+        id: 'we',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+      );
+      final overridden = SessionEvent(
+        id: 'we2',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+        manualNumber: 5,
+      );
+
+      expect(auto.toJson().containsKey('manualNumber'), isFalse);
+      expect(overridden.toJson()['manualNumber'], 5);
+    });
+
+    test('tryFromJson round-trips a manualNumber', () {
+      final event = SessionEvent(
+        id: 'we',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+        manualNumber: 3,
+      );
+
+      final restored = SessionEvent.tryFromJson(event.toJson());
+
+      expect(restored?.manualNumber, 3);
+    });
+
+    test(
+      'tryFromJson defaults manualNumber to null for data without the '
+      'field, and tolerates an explicit null (unlike visible)',
+      () {
+        final missing = SessionEvent.tryFromJson({
+          'id': 'we1',
+          'type': 'weekend',
+          'epochMs': 0,
+        });
+        final explicitNull = SessionEvent.tryFromJson({
+          'id': 'we1',
+          'type': 'weekend',
+          'epochMs': 0,
+          'manualNumber': null,
+        });
+
+        expect(missing?.manualNumber, isNull);
+        expect(explicitNull?.manualNumber, isNull);
+      },
+    );
+
+    test('tryFromJson rejects a non-int manualNumber', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'we1',
+        'type': 'weekend',
+        'epochMs': 0,
+        'manualNumber': 'nope',
+      });
+
+      expect(restored, isNull);
+    });
+
+    test('tryFromJson rejects a manualNumber <= 0', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'we1',
+        'type': 'weekend',
+        'epochMs': 0,
+        'manualNumber': 0,
+      });
+
+      expect(restored, isNull);
+    });
   });
 }

@@ -147,4 +147,39 @@ gained a final `_isVisibleOnScheduleScreen` filter).**
   declarative widget nesting (no extractable branching/looping logic inside). Keep noting as
   Suggestion only unless a future instance has real extractable logic mixed in, not just nesting.
 
+**Follow-up (2026-08-12, issue #50/branch `feat/50-manual-event-numbering`, commit 7fadaf7 —
+`SessionEvent` gained a persisted, display-only `manualNumber` int? override for WE/WD/SS
+labels).**
+
+- **Display-only invariant verified correct by direct read, not just by the commit message's
+  claim**: grepped `_isVisibleOnScheduleScreen`, `isFirstWeekend` (both in `session_chain.dart`),
+  and `_hasVisibilityToggle` (`session_schedule_settings_screen.dart`) — all three still key off
+  `numbers[event.id]` from `assignSequenceNumbers`, never `event.manualNumber`. Only
+  `sessionEventLabel` reads `event.manualNumber ?? numbers[event.id]`. `session_chain_test.dart`
+  added dedicated tests asserting a manualNumber on the first WE doesn't change its visibility
+  exemption, its 3-day duration (chainGap to the next WE unchanged), or any other event's own
+  auto-assigned number — good, targeted coverage of exactly the invariant that mattered here.
+- **DRY violation and `_EventRow.build` length — RESOLVED same PR (commit a30ed5f), before push.**
+  `_ManualNumberDialogState`/`_AddEventFormState`'s duplicated validate/parse logic was extracted
+  into top-level `_isValidManualNumberText`/`_parseManualNumberText`, and `_EventRow.build`'s
+  number-label ternary was pulled into a `_numberLabel(...)` helper, bringing `build()` back under
+  20 lines. CodeRabbit re-flagged both against a stale memory read before this note was updated —
+  don't re-raise either.
+- **Minor comment-policy hit — also resolved same PR**: `_editManualNumber`'s doc comment no
+  longer names `_EventRow` by class name.
+- **Follow-up (2026-08-12, CodeRabbit on PR #51): `GestureDetector` isn't keyboard-focusable —
+  fixed by swapping to `InkWell`** (`editNumber_<id>`), which gets focus/Enter-Space activation for
+  free. Added a widget test driving it via `Focus.of(...).requestFocus()` +
+  `tester.sendKeyEvent(LogicalKeyboardKey.enter)` — note `Focus.of` must be called from a
+  *descendant* of the InkWell (its Text child's context), not the InkWell's own context, since
+  `Focus.of` searches upward and the InkWell's internal Focus wraps its child as an ancestor of
+  the child, not of the InkWell widget itself. Worth remembering next time a tappable custom
+  control needs a keyboard-activation test — this exact gotcha will recur.
+- Everything else clean: JSON round-trip/validation (`tryFromJson` rejects non-int and <=0,
+  tolerates explicit `null` unlike `visible`, with the asymmetry's WHY correctly stated in the
+  comment), `SessionEventController.setManualNumber`/`_replaceEvent` reuse (good — extracted
+  exactly the duplicated "find by id, replace" loop that `setVisible` used to inline, no new
+  mutation-queue-skeleton instance since the controller wasn't touched at that level), 82 tests
+  pass, `flutter analyze`/`dart format` clean.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_ntp_sync_patterns]]

@@ -44,8 +44,13 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   }
 
   /// No-op if [type] is OR or CS and one already exists — those two are
-  /// singletons.
-  Future<void> addEvent(SessionEventType type, DateTime date) {
+  /// singletons. [manualNumber], when given, overrides the auto-assigned
+  /// sequence number in this event's label (see `SessionEvent.manualNumber`).
+  Future<void> addEvent(
+    SessionEventType type,
+    DateTime date, {
+    int? manualNumber,
+  }) {
     return _mutate((events) {
       if (_singletonTypes.contains(type) && events.any((e) => e.type == type)) {
         return events;
@@ -54,6 +59,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
         id: UniqueKey().toString(),
         type: type,
         date: date,
+        manualNumber: manualNumber,
       );
       return [...events, event];
     });
@@ -67,15 +73,46 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   /// with that id exists.
   Future<void> setVisible(String id, {required bool visible}) {
     return _mutate(
-      (events) => [
-        for (final e in events)
-          if (e.id == id)
-            SessionEvent(id: e.id, type: e.type, date: e.date, visible: visible)
-          else
-            e,
-      ],
+      (events) => _replaceEvent(
+        events,
+        id,
+        (e) => SessionEvent(
+          id: e.id,
+          type: e.type,
+          date: e.date,
+          visible: visible,
+          manualNumber: e.manualNumber,
+        ),
+      ),
     );
   }
+
+  /// Sets or clears (via `null`) [id]'s displayed-number override (see
+  /// `SessionEvent.manualNumber`). A no-op if no event with that id exists.
+  Future<void> setManualNumber(String id, int? manualNumber) {
+    return _mutate(
+      (events) => _replaceEvent(
+        events,
+        id,
+        (e) => SessionEvent(
+          id: e.id,
+          type: e.type,
+          date: e.date,
+          visible: e.visible,
+          manualNumber: manualNumber,
+        ),
+      ),
+    );
+  }
+
+  List<SessionEvent> _replaceEvent(
+    List<SessionEvent> events,
+    String id,
+    SessionEvent Function(SessionEvent) update,
+  ) => [
+    for (final e in events)
+      if (e.id == id) update(e) else e,
+  ];
 
   Future<void> _mutate(
     List<SessionEvent> Function(List<SessionEvent>) update,

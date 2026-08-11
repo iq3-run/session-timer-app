@@ -1,13 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
+import 'package:session_timer/features/schedule/session_event_numbering.dart';
 
 SessionEvent _event(
   String id,
   SessionEventType type,
   DateTime date, {
   bool visible = true,
-}) => SessionEvent(id: id, type: type, date: date, visible: visible);
+  int? manualNumber,
+}) => SessionEvent(
+  id: id,
+  type: type,
+  date: date,
+  visible: visible,
+  manualNumber: manualNumber,
+);
 
 /// OR(8/7) -> 1WE(8/21, 3日間) -> 1WD(9/5) -> 2WE(9/26, 2日間) -> 2WD(11/1).
 List<SessionEvent> _confirmedChain() => [
@@ -247,5 +255,85 @@ void main() {
 
       expect(_rowFor(rows, 'cr').isToday, isTrue);
     });
+  });
+
+  group('sessionEventLabel', () {
+    test('uses the auto-assigned number when manualNumber is unset', () {
+      final events = _confirmedChain();
+      final numbers = assignSequenceNumbers(events);
+
+      expect(sessionEventLabel(events[3], numbers), '2WE'); // we2, 2nd WE
+    });
+
+    test('prefers manualNumber over the auto-assigned number', () {
+      final events = [
+        for (final e in _confirmedChain())
+          e.id == 'we2'
+              ? _event(
+                  'we2',
+                  SessionEventType.weekend,
+                  e.date,
+                  manualNumber: 9,
+                )
+              : e,
+      ];
+      final numbers = assignSequenceNumbers(events);
+
+      expect(sessionEventLabel(events[3], numbers), '9WE');
+    });
+
+    test(
+      "a manualNumber on the first WE doesn't change its exemption from "
+      'the visibility toggle or its 3-day duration — those still key off '
+      'the real auto-assigned position, not the displayed label',
+      () {
+        final hidden = [
+          for (final e in _confirmedChain())
+            e.id == 'we1'
+                ? _event(
+                    'we1',
+                    SessionEventType.weekend,
+                    e.date,
+                    visible: false,
+                    manualNumber: 99,
+                  )
+                : e,
+        ];
+
+        final rows = buildScheduleRows(hidden, DateTime(2026));
+
+        // Still shown (first-WE exemption unaffected by manualNumber) and
+        // labeled with the override.
+        expect(_rowFor(rows, 'we1').label, '99WE');
+        // chainGap to we2 is unchanged from the un-overridden case (would
+        // shift if isFirstWeekend's 3-day duration were affected).
+        final baseline = buildScheduleRows(_confirmedChain(), DateTime(2026));
+        expect(
+          _rowFor(rows, 'we2').chainGap?.days,
+          _rowFor(baseline, 'we2').chainGap?.days,
+        );
+      },
+    );
+
+    test(
+      "a manualNumber doesn't change any other event's own auto-assigned "
+      'number',
+      () {
+        final events = [
+          for (final e in _confirmedChain())
+            e.id == 'we1'
+                ? _event(
+                    'we1',
+                    SessionEventType.weekend,
+                    e.date,
+                    manualNumber: 42,
+                  )
+                : e,
+        ];
+        final numbers = assignSequenceNumbers(events);
+
+        expect(sessionEventLabel(events[3], numbers), '2WE'); // we2 unaffected
+      },
+    );
   });
 }
