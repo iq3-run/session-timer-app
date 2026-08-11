@@ -61,20 +61,13 @@ List<FlashEvent> completionFlashEvents(
 ) {
   final target = completion?.targetTime;
   if (target == null) return const [];
-  final targetEpochMs = target.millisecondsSinceEpoch;
-  return [
-    FlashEvent(
-      id: 'completion:$targetEpochMs:0',
-      instant: target,
-      label: '完了時刻です',
-    ),
-    for (final m in minutesBefore)
-      FlashEvent(
-        id: 'completion:$targetEpochMs:$m',
-        instant: target.subtract(Duration(minutes: m)),
-        label: '残り$m分',
-      ),
-  ];
+  return _exactPlusMinutesBefore(
+    idPrefix: 'completion',
+    target: target,
+    minutesBefore: minutesBefore,
+    exactLabel: '完了時刻です',
+    labelFor: (m) => '残り$m分',
+  );
 }
 
 /// One flash per time target, ending exactly at its time.
@@ -95,18 +88,36 @@ List<FlashEvent> targetFlashEvents(List<TimeTarget> targets) => [
 List<FlashEvent> timerFlashEvents(TimerState? timer) {
   final target = timer?.targetTime;
   if (target == null) return const [];
+  return _exactPlusMinutesBefore(
+    idPrefix: 'timer',
+    target: target,
+    minutesBefore: timerFlashPointsMinutes,
+    exactLabel: 'タイマー終了です',
+    labelFor: (m) => 'タイマー残り$m分',
+  );
+}
+
+/// Shared shape behind [completionFlashEvents] and [timerFlashEvents]: one
+/// exact-instant flash at [target] plus one per entry in [minutesBefore].
+List<FlashEvent> _exactPlusMinutesBefore({
+  required String idPrefix,
+  required DateTime target,
+  required List<int> minutesBefore,
+  required String exactLabel,
+  required String Function(int minutes) labelFor,
+}) {
   final targetEpochMs = target.millisecondsSinceEpoch;
   return [
     FlashEvent(
-      id: 'timer:$targetEpochMs:0',
+      id: '$idPrefix:$targetEpochMs:0',
       instant: target,
-      label: 'タイマー終了です',
+      label: exactLabel,
     ),
-    for (final m in timerFlashPointsMinutes)
+    for (final m in minutesBefore)
       FlashEvent(
-        id: 'timer:$targetEpochMs:$m',
+        id: '$idPrefix:$targetEpochMs:$m',
         instant: target.subtract(Duration(minutes: m)),
-        label: 'タイマー残り$m分',
+        label: labelFor(m),
       ),
   ];
 }
