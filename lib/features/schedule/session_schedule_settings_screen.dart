@@ -74,14 +74,14 @@ class SessionScheduleSettingsScreen extends ConsumerWidget {
   }
 }
 
-class _EventList extends ConsumerWidget {
+class _EventList extends StatelessWidget {
   const _EventList({required this.events, required this.numbers});
 
   final List<SessionEvent> events;
   final Map<String, int> numbers;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     if (events.isEmpty) {
       return const Center(
         child: Text('登録されている日程はありません', style: SessionTimerTextStyles.label),

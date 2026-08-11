@@ -51,8 +51,7 @@ List<ScheduleRow> buildScheduleRows(List<SessionEvent> events, DateTime today) {
     ..sort((a, b) => a.date.compareTo(b.date));
   // Numbering and gap calculations above run over every chain event
   // regardless of visibility — only the returned rows are filtered, so a
-  // hidden event still counts toward its neighbors' 週末間/今日から values
-  // (see plans/feat-schedule-screen-split.md).
+  // hidden event still counts toward its neighbors' 週末間/今日から values.
   final chainRows = _buildChainRows(
     chainEvents,
     numbers,
@@ -222,9 +221,8 @@ List<ScheduleRow> _withTodayMarker(List<ScheduleRow> rows, DateTime today) {
 }
 
 /// Type abbreviation plus its 1-based sequence number for WE/WD/SS (from
-/// [assignSequenceNumbers]) — shared with `SessionScheduleSettingsScreen`'s
-/// full event list, which needs the same labels outside the chain-row
-/// filtering this file otherwise does.
+/// [assignSequenceNumbers]) — public so callers outside this file's own
+/// chain-row filtering can reuse the same labeling logic.
 String sessionEventLabel(SessionEvent event, Map<String, int> numbers) {
   final number = numbers[event.id];
   return switch (event.type) {
