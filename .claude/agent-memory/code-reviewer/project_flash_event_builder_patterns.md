@@ -8,43 +8,16 @@ metadata:
 # flash_event.dart builder-function duplication (2026-08-12, issue #46)
 
 `timerFlashEvents()` gained an exact-instant (`:0`) `FlashEvent` entry to match
-`completionFlashEvents()`'s existing behavior (commit 437df7a). After this change the two
-functions are structurally identical: null-check target, compute `targetEpochMs`, emit one exact
-`FlashEvent` plus one per entry in a minutes list via the same `id`/`instant`/`label` shape —
-differing only in id prefix (`timer:`/`completion:`), label text, and where the minutes list comes
-from (parameter vs. the `timerFlashPointsMinutes` const). Flagged as **Warning** (DRY, MUST-level
-rule) — not yet fixed as of this review. Not previously flagged because `timerFlashEvents` didn't
-have the exact-entry before this commit; this is the first instance of this specific duplication,
-so it does not yet meet the "recurred N times" bar that upgrades other patterns in
-[[project_stopwatch_pr_patterns]] / [[project_session_schedule_patterns]] from Suggestion to
-Warning — it's called out directly here because the two functions sit ~30 lines apart in the same
-file, making the copy obvious without even needing to grep. If a third builder function
+`completionFlashEvents()`'s existing behavior (commit 437df7a). This made the two functions
+structurally identical: null-check target, compute `targetEpochMs`, emit one exact `FlashEvent`
+plus one per entry in a minutes list via the same `id`/`instant`/`label` shape — differing only in
+id prefix (`timer:`/`completion:`), label text, and where the minutes list comes from (parameter
+vs. the `timerFlashPointsMinutes` const). Flagged as **Warning** (DRY, MUST-level rule) —
+**RESOLVED same PR**: extracted into a shared private `_exactPlusMinutesBefore` helper (commit
+d4fef13), both public functions now just null-check and delegate. Verified the extraction is
+behavior-preserving (all existing tests pass unchanged). If a third builder function
 (`targetFlashEvents` doesn't count — different shape, no minutes-before loop) ever needs this same
-exact-plus-minutes-list shape, treat that as confirmation the extraction should have happened here
-first.
-
-Suggested extraction (not applied — this review is read-only):
-
-```dart
-List<FlashEvent> _exactPlusMinutesBefore({
-  required String idPrefix,
-  required DateTime target,
-  required List<int> minutesBefore,
-  required String exactLabel,
-  required String Function(int minutes) labelFor,
-}) {
-  final targetEpochMs = target.millisecondsSinceEpoch;
-  return [
-    FlashEvent(id: '$idPrefix:$targetEpochMs:0', instant: target, label: exactLabel),
-    for (final m in minutesBefore)
-      FlashEvent(
-        id: '$idPrefix:$targetEpochMs:$m',
-        instant: target.subtract(Duration(minutes: m)),
-        label: labelFor(m),
-      ),
-  ];
-}
-```
+exact-plus-minutes-list shape, it can reuse `_exactPlusMinutesBefore` directly.
 
 Everything else in this PR was clean: id scheme has no collision risk (`timerFlashPointsMinutes =
 [5, 3, 1]`, never `0`), `FlashQueueController`/`notification_event_source.dart` consume
