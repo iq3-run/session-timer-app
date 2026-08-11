@@ -23,6 +23,14 @@ const Set<SessionEventType> _singletonTypes = {
   SessionEventType.completion,
 };
 
+/// Types that carry a sequence number (and so can take a manual override) —
+/// OR/CR/CS never have one regardless of `manualNumber`.
+const Set<SessionEventType> _numberedTypes = {
+  SessionEventType.weekend,
+  SessionEventType.workday,
+  SessionEventType.specialSession,
+};
+
 /// Whether [event] gets a show/hide-on-`SessionScheduleScreen` toggle — CS,
 /// the first WE, and CR always show there and never expose one (see
 /// `session_chain.dart`'s `_isVisibleOnScheduleScreen`, which this mirrors).
@@ -110,10 +118,19 @@ class _EventRow extends ConsumerWidget {
         children: [
           SizedBox(
             width: 48,
-            child: Text(
-              sessionEventLabel(event, numbers),
-              style: SessionTimerTextStyles.label,
-            ),
+            child: _numberedTypes.contains(event.type)
+                ? GestureDetector(
+                    key: Key('editNumber_${event.id}'),
+                    onTap: () => _editManualNumber(context, ref, event),
+                    child: Text(
+                      sessionEventLabel(event, numbers),
+                      style: SessionTimerTextStyles.label,
+                    ),
+                  )
+                : Text(
+                    sessionEventLabel(event, numbers),
+                    style: SessionTimerTextStyles.label,
+                  ),
           ),
           Expanded(
             child: Text(
@@ -134,6 +151,100 @@ class _EventRow extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// Opens a dialog to set or clear [event]'s manual number override — the
+/// tap target reachable from `_EventRow`'s number label.
+Future<void> _editManualNumber(
+  BuildContext context,
+  WidgetRef ref,
+  SessionEvent event,
+) async {
+  final result = await showDialog<_ManualNumberResult>(
+    context: context,
+    builder: (context) => _ManualNumberDialog(initial: event.manualNumber),
+  );
+  if (result == null) return;
+  await ref
+      .read(sessionEventControllerProvider.notifier)
+      .setManualNumber(event.id, result.manualNumber);
+}
+
+class _ManualNumberResult {
+  const _ManualNumberResult(this.manualNumber);
+
+  final int? manualNumber;
+}
+
+class _ManualNumberDialog extends StatefulWidget {
+  const _ManualNumberDialog({required this.initial});
+
+  final int? initial;
+
+  @override
+  State<_ManualNumberDialog> createState() => _ManualNumberDialogState();
+}
+
+class _ManualNumberDialogState extends State<_ManualNumberDialog> {
+  late final _controller = TextEditingController(
+    text: widget.initial?.toString() ?? '',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: SessionTimerColors.panel,
+      title: const Text(
+        '番号を編集',
+        style: TextStyle(color: SessionTimerColors.white),
+      ),
+      content: TextField(
+        key: const Key('manualNumberDialogField'),
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        style: const TextStyle(color: SessionTimerColors.white),
+        decoration: const InputDecoration(
+          labelText: '番号（空欄なら自動採番）',
+          labelStyle: TextStyle(color: SessionTimerColors.muted),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          key: const Key('manualNumberDialogSave'),
+          onPressed: _isValid
+              ? () => Navigator.of(
+                  context,
+                ).pop(_ManualNumberResult(_parsedNumber))
+              : null,
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+
+  int? get _parsedNumber {
+    final text = _controller.text.trim();
+    return text.isEmpty ? null : int.tryParse(text);
+  }
+
+  bool get _isValid {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return true;
+    final parsed = int.tryParse(text);
+    return parsed != null && parsed > 0;
   }
 }
 
@@ -179,28 +290,63 @@ class _AddEventForm extends ConsumerStatefulWidget {
 class _AddEventFormState extends ConsumerState<_AddEventForm> {
   SessionEventType _type = SessionEventType.weekend;
   DateTime? _pickedDate;
+  final _numberController = TextEditingController();
+
+  @override
+  void dispose() {
+    _numberController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: _typeDropdown()),
-        const SizedBox(width: 8),
-        TextButton(
-          key: const Key('scheduleDateButton'),
-          onPressed: () => _pickDate(context),
-          child: Text(
-            _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
-            style: const TextStyle(color: SessionTimerColors.muted),
+        Row(
+          children: [
+            Expanded(child: _typeDropdown()),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('scheduleDateButton'),
+              onPressed: () => _pickDate(context),
+              child: Text(
+                _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
+                style: const TextStyle(color: SessionTimerColors.muted),
+              ),
+            ),
+            FilledButton(
+              key: const Key('addScheduleEventButton'),
+              onPressed: _pickedDate == null || !_isNumberValid
+                  ? null
+                  : _submit,
+              child: const Text('追加'),
+            ),
+          ],
+        ),
+        if (_numberedTypes.contains(_type)) ...[
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('scheduleManualNumberField'),
+            controller: _numberController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: SessionTimerColors.white),
+            decoration: const InputDecoration(
+              labelText: '番号（空欄なら自動採番）',
+              labelStyle: TextStyle(color: SessionTimerColors.muted),
+            ),
+            onChanged: (_) => setState(() {}),
           ),
-        ),
-        FilledButton(
-          key: const Key('addScheduleEventButton'),
-          onPressed: _pickedDate == null ? null : _submit,
-          child: const Text('追加'),
-        ),
+        ],
       ],
     );
+  }
+
+  bool get _isNumberValid {
+    final text = _numberController.text.trim();
+    if (text.isEmpty) return true;
+    final parsed = int.tryParse(text);
+    return parsed != null && parsed > 0;
   }
 
   DropdownButton<SessionEventType> _typeDropdown() {
@@ -241,13 +387,17 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
     final date = _pickedDate;
     if (date == null) return;
     final addedType = _type;
+    final manualNumber = _numberedTypes.contains(addedType)
+        ? int.tryParse(_numberController.text.trim())
+        : null;
     unawaited(
       ref
           .read(sessionEventControllerProvider.notifier)
-          .addEvent(addedType, date),
+          .addEvent(addedType, date, manualNumber: manualNumber),
     );
     setState(() {
       _pickedDate = null;
+      _numberController.clear();
       // OR/CS are singletons — once added, their dropdown entry disables
       // itself, so the selection must move off it or it'd point at a
       // disabled item.

@@ -221,10 +221,11 @@ List<ScheduleRow> _withTodayMarker(List<ScheduleRow> rows, DateTime today) {
 }
 
 /// Type abbreviation plus its 1-based sequence number for WE/WD/SS (from
-/// [assignSequenceNumbers]) — public so callers outside this file's own
-/// chain-row filtering can reuse the same labeling logic.
+/// [assignSequenceNumbers], overridden by [SessionEvent.manualNumber] when
+/// set) — public so callers outside this file's own chain-row filtering can
+/// reuse the same labeling logic.
 String sessionEventLabel(SessionEvent event, Map<String, int> numbers) {
-  final number = numbers[event.id];
+  final number = event.manualNumber ?? numbers[event.id];
   return switch (event.type) {
     SessionEventType.orientation => 'OR',
     SessionEventType.weekend => '${number}WE',

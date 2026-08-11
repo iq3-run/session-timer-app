@@ -240,6 +240,79 @@ void main() {
       expect(events.single.visible, isTrue);
     });
 
+    test('addEvent accepts a manualNumber override', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+
+      await notifier.addEvent(
+        SessionEventType.weekend,
+        DateTime(2026, 8, 21),
+        manualNumber: 5,
+      );
+      final events = await container.read(
+        sessionEventControllerProvider.future,
+      );
+
+      expect(events.single.manualNumber, 5);
+    });
+
+    test('setManualNumber sets and clears only the matching event', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+      await notifier.addEvent(SessionEventType.weekend, DateTime(2026, 8, 21));
+      await notifier.addEvent(SessionEventType.workday, DateTime(2026, 9, 5));
+      final before = await container.read(
+        sessionEventControllerProvider.future,
+      );
+      final weekend = before.firstWhere(
+        (e) => e.type == SessionEventType.weekend,
+      );
+      final workday = before.firstWhere(
+        (e) => e.type == SessionEventType.workday,
+      );
+
+      await notifier.setManualNumber(weekend.id, 7);
+      final afterSet = await container.read(
+        sessionEventControllerProvider.future,
+      );
+      expect(
+        afterSet.firstWhere((e) => e.id == weekend.id).manualNumber,
+        7,
+      );
+      expect(
+        afterSet.firstWhere((e) => e.id == workday.id).manualNumber,
+        isNull,
+      );
+
+      await notifier.setManualNumber(weekend.id, null);
+      final afterClear = await container.read(
+        sessionEventControllerProvider.future,
+      );
+      expect(
+        afterClear.firstWhere((e) => e.id == weekend.id).manualNumber,
+        isNull,
+      );
+    });
+
+    test('setManualNumber is a no-op for an id that does not exist', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+      await notifier.addEvent(SessionEventType.weekend, DateTime(2026, 8, 21));
+
+      await notifier.setManualNumber('does-not-exist', 9);
+      final events = await container.read(
+        sessionEventControllerProvider.future,
+      );
+
+      expect(events.single.manualNumber, isNull);
+    });
+
     test('a failed persist surfaces as AsyncError without corrupting the '
         'in-memory list', () async {
       final previousStore = SharedPreferencesStorePlatform.instance;

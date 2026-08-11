@@ -19,6 +19,7 @@ class SessionEvent {
     required this.type,
     required DateTime date,
     this.visible = true,
+    this.manualNumber,
   }) : date = DateTime(date.year, date.month, date.day);
 
   final String id;
@@ -31,6 +32,14 @@ class SessionEvent {
   /// never affects the 週末間/今日から day-count chain, which always runs
   /// over every event — it only controls whether a row is drawn.
   final bool visible;
+
+  /// Overrides the auto-assigned sequence number (`assignSequenceNumbers`)
+  /// shown in this event's label (e.g. "2WE") — `null` keeps the automatic
+  /// date-order number. Only meaningful for WE/WD/SS; OR/CR/CS never carry
+  /// a number regardless of this field. Purely a display override for this
+  /// one event — it doesn't affect any other event's own auto-assigned
+  /// number, and duplicate/skipped numbers across events aren't checked.
+  final int? manualNumber;
 
   /// Every type is a single day except WE, whose first occurrence
   /// ([isFirstWeekend]) runs 3 days and later ones run 2. Whether a given
@@ -68,12 +77,18 @@ class SessionEvent {
     // missing key — `visible` has no meaningful null state to tolerate.
     final rawVisible = json['visible'];
     if (json.containsKey('visible') && rawVisible is! bool) return null;
+    // manualNumber is genuinely nullable (absent = auto), so unlike
+    // `visible` an explicit `null` here is accepted, not rejected.
+    final rawManualNumber = json['manualNumber'];
+    if (rawManualNumber != null && rawManualNumber is! int) return null;
+    if (rawManualNumber is int && rawManualNumber <= 0) return null;
     final utc = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
     return SessionEvent(
       id: id,
       type: matches.first,
       date: utc,
       visible: (rawVisible as bool?) ?? true,
+      manualNumber: rawManualNumber as int?,
     );
   }
 
@@ -92,5 +107,6 @@ class SessionEvent {
     // Omitted when true (the default) — keeps the common case's JSON as
     // compact as before this field existed.
     if (!visible) 'visible': false,
+    if (manualNumber != null) 'manualNumber': manualNumber,
   };
 }
