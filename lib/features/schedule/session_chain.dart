@@ -64,7 +64,7 @@ List<ScheduleRow> _buildChainRows(
   DateTime endOf(SessionEvent e) => e.endDate(
     isFirstWeekend: e.type == SessionEventType.weekend && numbers[e.id] == 1,
   );
-  final nearestPast = _nearestPast(chainEvents, today);
+  final nearestPast = _nearestPast(chainEvents, today, endOf);
   final nearestFuture = _nearestFuture(chainEvents, today);
   return [
     for (var i = 0; i < chainEvents.length; i++)
@@ -96,10 +96,21 @@ ScheduleRow _chainRow(
     event: event,
     label: _label(event, numbers),
     date: event.date,
-    isToday: event.date.isAtSameMomentAs(today),
+    isToday: _isOngoing(event, endOf, today),
     chainGap: chainGap,
     todayGap: _todayGapFor(event, today, endOf, nearestPast, nearestFuture),
   );
+}
+
+/// True if [today] falls anywhere within [event]'s span (start through
+/// end, inclusive) — a multi-day WE is still "today" on its 2nd/3rd day,
+/// not just its start date.
+bool _isOngoing(
+  SessionEvent event,
+  DateTime Function(SessionEvent) endOf,
+  DateTime today,
+) {
+  return !today.isBefore(event.date) && !today.isAfter(endOf(event));
 }
 
 /// 今日から column: only the single nearest-past WE/WD/SS, the single
@@ -123,9 +134,17 @@ GapResult? _todayGapFor(
       : null;
 }
 
-SessionEvent? _nearestPast(List<SessionEvent> chainEvents, DateTime today) {
+/// "Nearest past" means fully finished — an ongoing multi-day WE (today
+/// falls within its span but hasn't reached its end date yet) doesn't
+/// count, or [_todayGapFor] would compute a gap against a not-yet-reached
+/// end date and produce a nonsensical negative result.
+SessionEvent? _nearestPast(
+  List<SessionEvent> chainEvents,
+  DateTime today,
+  DateTime Function(SessionEvent) endOf,
+) {
   final past = chainEvents.where(
-    (e) => _nearestTypes.contains(e.type) && e.date.isBefore(today),
+    (e) => _nearestTypes.contains(e.type) && endOf(e).isBefore(today),
   );
   return past.isEmpty
       ? null
@@ -172,7 +191,7 @@ List<ScheduleRow> _crRows(List<SessionEvent> events, DateTime today) {
 }
 
 List<ScheduleRow> _withTodayMarker(List<ScheduleRow> rows, DateTime today) {
-  if (rows.any((r) => r.date.isAtSameMomentAs(today))) return rows;
+  if (rows.any((r) => r.isToday)) return rows;
   final insertIndex = rows.indexWhere((r) => r.date.isAfter(today));
   final todayRow = ScheduleRow(label: '今日', date: today, isToday: true);
   if (insertIndex == -1) return [...rows, todayRow];

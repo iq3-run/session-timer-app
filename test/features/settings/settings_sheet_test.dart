@@ -57,13 +57,16 @@ Future<void> _pumpAndOpenSheet(
 
 void main() {
   group('SettingsSheet', () {
-    testWidgets('gear button opens the sheet with all three sections', (
+    testWidgets('gear button opens the sheet with both remaining sections', (
       tester,
     ) async {
       await _pumpAndOpenSheet(tester);
 
       expect(find.text('完了◯分前フラッシュ'), findsOneWidget);
       expect(find.text('おまけ：時刻同期（NTP風）'), findsOneWidget);
+      // The milestone section moved to its own dedicated screen (see
+      // SessionScheduleScreen) — the sheet no longer has a third section.
+      expect(find.text('おまけ：週末（マイルストーン）'), findsNothing);
     });
 
     testWidgets('seeds the default 12 flash points on first launch', (
@@ -292,14 +295,17 @@ void main() {
         final statusBefore =
             find.textContaining('同期完了').evaluate().single.widget as Text;
 
-        // Editing the unrelated flash points section triggers a
-        // SettingsSheet rebuild — the NTP status text must stay pinned to
-        // the sync's own `lastSyncedAt`, not jump to whatever time this
-        // rebuild happens at.
+        // Adding a flash point mutates flashPointsControllerProvider,
+        // which SettingsSheet watches — that's what actually triggers the
+        // rebuild this test is guarding against (a plain enterText into an
+        // unsubmitted field wouldn't). The NTP status text must stay
+        // pinned to the sync's own `lastSyncedAt`, not jump to whatever
+        // time this rebuild happens at.
         await tester.enterText(
           find.byKey(const Key('flashMinutesField')),
           '7',
         );
+        await tester.tap(find.byKey(const Key('addFlashPointButton')));
         await tester.pumpAndSettle();
         final statusAfter =
             find.textContaining('同期完了').evaluate().single.widget as Text;

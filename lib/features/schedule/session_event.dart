@@ -9,14 +9,13 @@ enum SessionEventType {
   completion,
 }
 
-/// A single scheduled session (OR/WE/WD/CR/SS/CS). [date] is normalized to
-/// midnight — only the calendar date matters, not a time of day.
+/// A single scheduled session (OR/WE/WD/CR/SS/CS). [date] only ever carries
+/// a calendar date — normalized to midnight in the constructor itself so
+/// that comparisons like `isAtSameMomentAs` between two events can't be
+/// broken by a stray time-of-day component slipping in from a caller.
 class SessionEvent {
-  const SessionEvent({
-    required this.id,
-    required this.type,
-    required this.date,
-  });
+  SessionEvent({required this.id, required this.type, required DateTime date})
+    : date = DateTime(date.year, date.month, date.day);
 
   final String id;
   final SessionEventType type;
@@ -25,8 +24,7 @@ class SessionEvent {
   /// Every type is a single day except WE, whose first occurrence
   /// ([isFirstWeekend]) runs 3 days and later ones run 2. Whether a given
   /// WE is "first" isn't decidable from this event alone; it depends on
-  /// the full list's chronological order, so the caller
-  /// (`assignSequenceNumbers`) supplies it.
+  /// the full list's chronological order, so it's supplied by the caller.
   int durationDays({required bool isFirstWeekend}) {
     if (type != SessionEventType.weekend) return 1;
     return isFirstWeekend ? 3 : 2;
@@ -54,11 +52,7 @@ class SessionEvent {
     final matches = SessionEventType.values.where((t) => t.name == typeName);
     if (matches.isEmpty) return null;
     final utc = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
-    return SessionEvent(
-      id: id,
-      type: matches.first,
-      date: DateTime(utc.year, utc.month, utc.day),
-    );
+    return SessionEvent(id: id, type: matches.first, date: utc);
   }
 
   /// Serialized via a UTC-anchored epoch rather than [date]'s own local

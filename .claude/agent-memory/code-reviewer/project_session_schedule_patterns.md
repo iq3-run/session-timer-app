@@ -84,4 +84,30 @@ and `SettingsGearButton` each in `SizedBox(width: 48, ...)` — a new, unnamed m
 natural fit but isn't referenced). Low severity since it's a well-known Material tap-target size,
 not an arbitrary number — didn't escalate past Suggestion.
 
+**Follow-up (2026-08-11, CodeRabbit-driven fix on PR #45, working tree not yet pushed).**
+CodeRabbit caught a real correctness bug the initial review missed: `_nearestPast` filtered
+by `e.date.isBefore(today)` (event *start* before today) instead of `endOf(e).isBefore(today)`
+(event *fully finished*) — for a multi-day WE, `today` landing mid-span (e.g. WE starts Fri,
+today is Sat) got wrongly treated as "nearest past", producing a negative-day gap. Fixed by
+threading `endOf` into `_nearestPast` and adding `_spans`/`isToday` so a mid-span day still
+highlights as "today" without being counted as past. Traced by hand (start day / middle day /
+exact end day / day-after-end for both a 2-day and 3-day WE): semantics are `isToday` = today
+∈ [start, end] inclusive, `isPast` = today > end (strictly) — the two never overlap, and on the
+event's own last day it's still "ongoing" (isToday=true, not yet nearestPast), which is correct
+and intentional. No missed edge case. Same commit also fixed the `durationDays` doc comment's
+caller-naming (`the caller (\`assignSequenceNumbers\`)` → `the caller`) — good, this is the
+`[[project_stopwatch_pr_patterns]]`/`[[project_ntp_sync_patterns]]` doc-comment self-reference
+class being *self-corrected* proactively rather than needing to be flagged again.
+
+`SessionEvent`'s constructor dropped `const` and normalizes `date` to midnight itself now
+(previously callers normalized before passing in). Verified via grep: zero `const SessionEvent(`
+call sites remain anywhere in the repo (lib or test) — clean, no compile break.
+
+Confirmed independently (this repo's `_ScheduleTable`, not touched in this diff) that the
+DataTable vertical-overflow bug flagged earlier in this file's history is now fixed —
+`SingleChildScrollView` is nested (outer vertical, inner horizontal) — and the new widget test
+(`session_schedule_screen_test.dart`, 30 seeded rows, asserts `tester.getTopLeft(...).dy` moves
+after a drag) is exactly the empirically-grounded test style this memory file previously asked
+for. Close the loop: that Critical finding is resolved, no need to re-raise it.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_ntp_sync_patterns]]

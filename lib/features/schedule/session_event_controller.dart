@@ -53,7 +53,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
       final event = SessionEvent(
         id: UniqueKey().toString(),
         type: type,
-        date: DateTime(date.year, date.month, date.day),
+        date: date,
       );
       return [...events, event];
     });

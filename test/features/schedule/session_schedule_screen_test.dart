@@ -1,15 +1,23 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/schedule/session_event.dart';
+import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/schedule/session_schedule_entry_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pumpAndOpenScreen(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({});
+Future<void> _pumpAndOpenScreen(
+  WidgetTester tester, {
+  Map<String, Object> initialValues = const {},
+  Size surfaceSize = const Size(1000, 1400),
+}) async {
+  SharedPreferences.setMockInitialValues(initialValues);
   // Wide enough that the DataTable's columns (including the trailing
   // delete icon) all fit without needing a horizontal scroll to tap them.
-  await tester.binding.setSurfaceSize(const Size(1000, 1400));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   await tester.pumpWidget(
@@ -76,5 +84,45 @@ void main() {
 
       expect(find.text('1WE'), findsNothing);
     });
+
+    testWidgets(
+      'the table scrolls vertically to reach rows past the viewport',
+      (tester) async {
+        // A short viewport with 30 rows guarantees the last one starts
+        // off-screen regardless of DataTable's exact row height.
+        final events = [
+          for (var i = 0; i < 30; i++)
+            SessionEvent(
+              id: 'wd$i',
+              type: SessionEventType.workday,
+              date: DateTime(2026).add(Duration(days: i)),
+            ),
+        ];
+        await _pumpAndOpenScreen(
+          tester,
+          initialValues: {
+            sessionEventsJsonKey: jsonEncode(
+              events.map((e) => e.toJson()).toList(),
+            ),
+          },
+          surfaceSize: const Size(1000, 500),
+        );
+        // DataTable isn't lazy — every row is already in the widget tree
+        // regardless of scroll position, so `findsOneWidget` alone
+        // wouldn't catch a regression back to the single-axis scroll
+        // view. What actually matters is *where* the row is painted.
+        final beforeY = tester.getTopLeft(find.text('30WD')).dy;
+        expect(beforeY, greaterThanOrEqualTo(500));
+
+        await tester.drag(
+          find.byType(Scrollable).first,
+          const Offset(0, -5000),
+        );
+        await tester.pumpAndSettle();
+
+        final afterY = tester.getTopLeft(find.text('30WD')).dy;
+        expect(afterY, lessThan(500));
+      },
+    );
   });
 }

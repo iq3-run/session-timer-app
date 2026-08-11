@@ -48,9 +48,9 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/44>
 enum SessionEventType { orientation, weekend, workday, classroom, specialSession, completion }
 
 class SessionEvent {
-  const SessionEvent({required this.id, required this.type, required this.date});
+  SessionEvent({required this.id, required this.type, required this.date});
 
-  final int id;
+  final String id;
   final SessionEventType type;
   final DateTime date; // 日付のみ（時刻は00:00に正規化）
 
@@ -78,7 +78,7 @@ WE・WD・SSの通し番号を日付昇順で採番する純粋関数：
 ```dart
 /// 種別ごとに日付昇順で1始まりの番号を振る。同日付の同種別イベントは
 /// 元のリスト順（＝id順、追加順）でタイブレークする。
-Map<int, int> assignSequenceNumbers(List<SessionEvent> events);
+Map<String, int> assignSequenceNumbers(List<SessionEvent> events);
 ```
 
 （キー=`SessionEvent.id`、値=通し番号。OR/CR/CSは対象外なのでマップに現れない）
@@ -161,7 +161,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
     // OR/CSはすでに1件存在する場合追加を拒否（no-op）
   }
 
-  Future<void> removeEvent(int id) => _mutate(...);
+  Future<void> removeEvent(String id) => _mutate(...);
 }
 ```
 

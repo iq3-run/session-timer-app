@@ -107,6 +107,27 @@ void main() {
       },
     );
 
+    test(
+      "today falling on a WE's 2nd/3rd day still highlights that row, "
+      "and doesn't count it as \"nearest past\" (which would produce a "
+      'negative gap against its not-yet-reached end date)',
+      () {
+        // we1 spans 8/21 (Fri) through 8/23 (Sun); 8/22 is its middle day.
+        final rows = buildScheduleRows(
+          _confirmedChain(),
+          DateTime(2026, 8, 22),
+        );
+
+        expect(_rowFor(rows, 'we1').isToday, isTrue);
+        expect(_rowFor(rows, 'we1').todayGap, isNull);
+        expect(rows.where((r) => r.event == null), isEmpty);
+        // we1 being "ongoing" (not fully finished) must not block wd1
+        // (9/5) from being picked up as the nearest *future* WE/WD/SS —
+        // that pool is unaffected by this fix.
+        expect(_rowFor(rows, 'wd1').todayGap, isNotNull);
+      },
+    );
+
     test('CR events never receive a chain gap', () {
       final events = [
         ..._confirmedChain(),
