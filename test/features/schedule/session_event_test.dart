@@ -177,5 +177,17 @@ void main() {
 
       expect(restored, isNull);
     });
+
+    test('tryFromJson rejects an explicit null visible, unlike a missing '
+        'key', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'we1',
+        'type': 'weekend',
+        'epochMs': 0,
+        'visible': null,
+      });
+
+      expect(restored, isNull);
+    });
   });
 }

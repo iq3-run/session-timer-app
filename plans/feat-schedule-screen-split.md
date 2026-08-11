@@ -127,9 +127,10 @@ Future<void> setVisible(String id, {required bool visible}) {
 - 全件一覧（`ref.watch(sessionEventControllerProvider)` の生リストを日付順
   にソートしただけの、`buildScheduleRows` を通さないシンプルな一覧。CRも含
   め全件出す）。各行:
-  - ラベル（型+番号。`session_chain.dart`の`_label`相当のロジックが必要 —
-    `assignSequenceNumbers`を使い、このファイル内に同等の小さなラベル関数
-    を持たせる。CRは番号なしで固定 "CR"）
+  - ラベル（型+番号）。`session_chain.dart`の`_label`を`sessionEventLabel`
+    として公開し、`assignSequenceNumbers`の結果と合わせてこのファイルから
+    そのまま再利用する（複製すると2画面でWE番号等が食い違うリスクがある
+    ため、ロジックは1箇所に保つ）。CRは番号なしで固定 "CR"）
   - 日付
   - 表示/非表示トグル（`Switch`）: OR・2番目以降のWE・WD・SSのみ表示。1WE・
     CS・CRは「常に表示」の静的テキストのみでトグルは出さない。
@@ -161,8 +162,10 @@ Future<void> setVisible(String id, {required bool visible}) {
 ## Verification
 
 - `dart format` / `flutter analyze` / `flutter test` / debug build
-- `code-reviewer` サブエージェント（Gemini CLIは前PRでクォータ切れ中のため
-  復旧確認の上で実施。復旧していなければスキップしてPR説明に明記する）
+- `code-reviewer` サブエージェント + Gemini CLI ローカルレビュー（両方、push
+  前に実施するのが原則）。Gemini CLIがクォータ切れの場合は黙ってスキップせ
+  ず、その都度ユーザーに確認を取った上でのみ省略する（本PRでは前PR #47と同
+  じ理由でクォータ切れ、ユーザーに確認の上でスキップ。PR説明に明記する）
 - BlueStacks/実機で: ①「セッションスケジュール」に登録フォーム・削除ボタン
   が無いこと ②「日程設定」で追加・削除・トグル操作ができること ③トグル
   OFFにした行が「セッションスケジュール」側から消え、週末間/今日からの数値

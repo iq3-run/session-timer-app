@@ -63,9 +63,11 @@ class SessionEvent {
     final matches = SessionEventType.values.where((t) => t.name == typeName);
     if (matches.isEmpty) return null;
     // Absent (older persisted entries, from before `visible` existed)
-    // defaults to true — everything used to always show.
+    // defaults to true — everything used to always show. An explicit
+    // `null` is rejected like any other wrong-typed value, unlike a
+    // missing key — `visible` has no meaningful null state to tolerate.
     final rawVisible = json['visible'];
-    if (rawVisible != null && rawVisible is! bool) return null;
+    if (json.containsKey('visible') && rawVisible is! bool) return null;
     final utc = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
     return SessionEvent(
       id: id,
