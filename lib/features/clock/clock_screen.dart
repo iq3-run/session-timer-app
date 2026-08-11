@@ -4,6 +4,7 @@ import 'package:session_timer/features/clock/current_time_display.dart';
 import 'package:session_timer/features/completion/completion_countdown_section.dart';
 import 'package:session_timer/features/flash/flash_overlay.dart';
 import 'package:session_timer/features/flash/flash_points_chip_row.dart';
+import 'package:session_timer/features/schedule/session_schedule_entry_button.dart';
 import 'package:session_timer/features/settings/settings_gear_button.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_section.dart';
 import 'package:session_timer/features/targets/time_targets_section.dart';
@@ -24,7 +25,19 @@ class ClockScreen extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    SettingsGearButton(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: kMinInteractiveDimension,
+                          child: SessionScheduleEntryButton(),
+                        ),
+                        SizedBox(
+                          width: kMinInteractiveDimension,
+                          child: SettingsGearButton(),
+                        ),
+                      ],
+                    ),
                     CurrentTimeDisplay(),
                     SizedBox(height: 8),
                     CompletionCountdownSection(),
