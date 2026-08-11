@@ -73,9 +73,9 @@ gap計算）は`numbers`（自動採番の結果）をそのまま使い続け�
 ## Verification
 
 - `dart format` / `flutter analyze` / `flutter test` / debug build
-- `code-reviewer` サブエージェント + Gemini CLI ローカルレビュー（Gemini
-  はクォータ復旧を確認の上で実施。復旧していなければユーザーに確認の上
-  でのみスキップする）
+- `code-reviewer` サブエージェント + Gemini CLI ローカルレビュー（両方、push
+  前に実施するのが原則）。Gemini CLIがクォータ切れの場合は黙ってスキップせ
+  ず、その都度ユーザーに確認を取った上でのみ省略する
 - BlueStacks/実機で: ①追加フォームでWE選択時のみ番号欄が出ること ②番号
   を指定して追加すると指定した番号でラベル表示されること ③一覧の番号を
   タップして編集・自動に戻せること ④OR/CR/CSには番号編集の導線が無いこ

@@ -159,26 +159,22 @@ labels).**
   added dedicated tests asserting a manualNumber on the first WE doesn't change its visibility
   exemption, its 3-day duration (chainGap to the next WE unchanged), or any other event's own
   auto-assigned number — good, targeted coverage of exactly the invariant that mattered here.
-- **New DRY violation (Warning): `_ManualNumberDialogState._isValid`/`_parsedNumber` in
-  `session_schedule_settings_screen.dart` duplicate `_AddEventFormState._isNumberValid`/the parse
-  in `_submit()` verbatim** (same `text.isEmpty ? ... : int.tryParse(text) > 0` logic, twice).
-  The plan file (`plans/feat-manual-event-numbering.md`) explicitly calls this out as "same
-  validation logic" as a known/accepted duplication rather than proposing to share it — flag it
-  anyway per DRY, but don't be surprised it wasn't extracted; it was a scoped, acknowledged choice
-  not an oversight.
-- **`_EventRow.build` (44 lines) — Warning, not the usual top-level-Scaffold pass.** Grew past 20
-  lines by embedding a ternary that swaps the whole number-label subtree (bare `Text` vs
-  `GestureDetector`-wrapped `Text`) inline. Unlike the `SessionScheduleSettingsScreen.build`/
-  `_ManualNumberDialogState.build`/`_AddEventFormState.build` precedent already on file (pure
-  declarative widget nesting, no extractable branching → de facto Suggestion-only pass), this one
-  has real extractable branching (which widget subtree to build) — the fix is a small
-  `_numberLabel(...)` extraction, not just longer nesting. Use this as the dividing line next time
-  a widget `build()` is borderline: "does it just declare structure" vs "does it decide which
-  structure to declare".
-- **Minor comment-policy hit**: `_editManualNumber`'s doc comment ("the tap target reachable from
-  `_EventRow`'s number label") names its caller by class name — same banned category as the
-  doc-comment self-reference pattern, just naming a private class instead of a plan file this
-  time. Low severity (single file, no plan-file/issue-# citation), but same rule.
+- **DRY violation and `_EventRow.build` length — RESOLVED same PR (commit a30ed5f), before push.**
+  `_ManualNumberDialogState`/`_AddEventFormState`'s duplicated validate/parse logic was extracted
+  into top-level `_isValidManualNumberText`/`_parseManualNumberText`, and `_EventRow.build`'s
+  number-label ternary was pulled into a `_numberLabel(...)` helper, bringing `build()` back under
+  20 lines. CodeRabbit re-flagged both against a stale memory read before this note was updated —
+  don't re-raise either.
+- **Minor comment-policy hit — also resolved same PR**: `_editManualNumber`'s doc comment no
+  longer names `_EventRow` by class name.
+- **Follow-up (2026-08-12, CodeRabbit on PR #51): `GestureDetector` isn't keyboard-focusable —
+  fixed by swapping to `InkWell`** (`editNumber_<id>`), which gets focus/Enter-Space activation for
+  free. Added a widget test driving it via `Focus.of(...).requestFocus()` +
+  `tester.sendKeyEvent(LogicalKeyboardKey.enter)` — note `Focus.of` must be called from a
+  *descendant* of the InkWell (its Text child's context), not the InkWell's own context, since
+  `Focus.of` searches upward and the InkWell's internal Focus wraps its child as an ancestor of
+  the child, not of the InkWell widget itself. Worth remembering next time a tappable custom
+  control needs a keyboard-activation test — this exact gotcha will recur.
 - Everything else clean: JSON round-trip/validation (`tryFromJson` rejects non-int and <=0,
   tolerates explicit `null` unlike `visible`, with the asymmetry's WHY correctly stated in the
   comment), `SessionEventController.setManualNumber`/`_replaceEvent` reuse (good — extracted

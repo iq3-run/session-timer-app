@@ -158,7 +158,9 @@ class _EventRow extends ConsumerWidget {
       style: SessionTimerTextStyles.label,
     );
     if (!_numberedTypes.contains(event.type)) return label;
-    return GestureDetector(
+    // InkWell rather than GestureDetector — it picks up keyboard focus and
+    // Enter/Space activation for free, which a bare GestureDetector doesn't.
+    return InkWell(
       key: Key('editNumber_${event.id}'),
       onTap: () => _editManualNumber(context, ref, event),
       child: label,

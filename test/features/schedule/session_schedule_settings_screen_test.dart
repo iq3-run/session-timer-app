@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
@@ -279,6 +280,43 @@ void main() {
 
         expect(find.text('4WE'), findsOneWidget);
         expect(find.text('1WE'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      "a WE row's number opens the editor via keyboard focus + Enter, not "
+      'just tap',
+      (tester) async {
+        final events = [
+          SessionEvent(
+            id: 'we1',
+            type: SessionEventType.weekend,
+            date: DateTime(2026, 8, 21),
+          ),
+        ];
+        await _pumpScreen(
+          tester,
+          initialValues: {
+            sessionEventsJsonKey: jsonEncode(
+              events.map((e) => e.toJson()).toList(),
+            ),
+          },
+        );
+
+        // Focus.of walks upward from the given context, so it must start
+        // from a descendant of the InkWell (its Text child) — the InkWell's
+        // own context is the Focus widget's ancestor, not a descendant of
+        // it, and wouldn't find it.
+        final element = tester.element(find.text('1WE'));
+        Focus.of(element).requestFocus();
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('manualNumberDialogField')),
+          findsOneWidget,
+        );
       },
     );
 
