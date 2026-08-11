@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/settings/settings_gear_button.dart';
-import 'package:session_timer/features/settings/settings_sheet_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
@@ -56,18 +55,6 @@ Future<void> _pumpAndOpenSheet(
   await tester.pumpAndSettle();
 }
 
-/// Finds the `削除` button inside the `SettingsListItem` whose label
-/// contains [text] — needed once a section has more than one deletable
-/// row, since a bare `find.text('削除')` would be ambiguous. Used for the
-/// milestone section, which still uses the shared `SettingsListItem`.
-Finder _deleteButtonFor(String text) {
-  final item = find.ancestor(
-    of: find.textContaining(text),
-    matching: find.byType(SettingsListItem),
-  );
-  return find.descendant(of: item, matching: find.text('削除'));
-}
-
 void main() {
   group('SettingsSheet', () {
     testWidgets('gear button opens the sheet with all three sections', (
@@ -76,7 +63,6 @@ void main() {
       await _pumpAndOpenSheet(tester);
 
       expect(find.text('完了◯分前フラッシュ'), findsOneWidget);
-      expect(find.text('おまけ：週末（マイルストーン）'), findsOneWidget);
       expect(find.text('おまけ：時刻同期（NTP風）'), findsOneWidget);
     });
 
@@ -198,65 +184,6 @@ void main() {
       },
     );
 
-    testWidgets('adding a milestone requires a picked date', (tester) async {
-      await _pumpAndOpenSheet(tester);
-      final itemCountBefore = find.byType(SettingsListItem).evaluate().length;
-
-      await tester.enterText(
-        find.byKey(const Key('milestoneLabelField')),
-        '週末テスト',
-      );
-      await tester.tap(find.byKey(const Key('addMilestoneButton')));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byType(SettingsListItem).evaluate().length,
-        itemCountBefore,
-      );
-    });
-
-    testWidgets('picking a date and adding creates a milestone entry', (
-      tester,
-    ) async {
-      await _pumpAndOpenSheet(tester);
-
-      await tester.enterText(
-        find.byKey(const Key('milestoneLabelField')),
-        '週末テスト',
-      );
-      await tester.tap(find.byKey(const Key('milestoneDateButton')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('addMilestoneButton')));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('週末テスト'), findsOneWidget);
-    });
-
-    testWidgets('removing a milestone drops it from the list', (
-      tester,
-    ) async {
-      await _pumpAndOpenSheet(tester);
-
-      await tester.enterText(
-        find.byKey(const Key('milestoneLabelField')),
-        '週末テスト',
-      );
-      await tester.tap(find.byKey(const Key('milestoneDateButton')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('addMilestoneButton')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('週末テスト'), findsOneWidget);
-
-      await tester.tap(_deleteButtonFor('週末テスト'));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('週末テスト'), findsNothing);
-    });
-
     testWidgets('ntp server field defaults to NICT', (tester) async {
       await _pumpAndOpenSheet(tester);
 
@@ -365,12 +292,13 @@ void main() {
         final statusBefore =
             find.textContaining('同期完了').evaluate().single.widget as Text;
 
-        // Editing the unrelated milestone section triggers a SettingsSheet
-        // rebuild — the NTP status text must stay pinned to the sync's own
-        // `lastSyncedAt`, not jump to whatever time this rebuild happens at.
+        // Editing the unrelated flash points section triggers a
+        // SettingsSheet rebuild — the NTP status text must stay pinned to
+        // the sync's own `lastSyncedAt`, not jump to whatever time this
+        // rebuild happens at.
         await tester.enterText(
-          find.byKey(const Key('milestoneLabelField')),
-          '週末テスト',
+          find.byKey(const Key('flashMinutesField')),
+          '7',
         );
         await tester.pumpAndSettle();
         final statusAfter =

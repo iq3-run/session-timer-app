@@ -5,14 +5,12 @@ import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/settings/flash_points_settings_section.dart';
 import 'package:session_timer/features/settings/ntp_sync_settings_section.dart';
-import 'package:session_timer/features/settings/weekend_milestone.dart';
-import 'package:session_timer/features/settings/weekend_milestones_settings_section.dart';
 
 /// The settings sheet's shell, mirroring docs/session-timer.html's `#sheet`.
 /// Flash points (add/remove/flash-toggle/notify-toggle) and NTP sync are
-/// wired to their respective controllers (persisted); the milestone
-/// section below remains ephemeral to this widget's lifetime, not yet
-/// wired to the app's real state.
+/// wired to their respective controllers (persisted). The prototype's
+/// "週末（マイルストーン）" section now lives in its own dedicated screen
+/// (`SessionScheduleScreen`, reachable from `ClockScreen`), not here.
 class SettingsSheet extends ConsumerStatefulWidget {
   const SettingsSheet({super.key});
 
@@ -33,9 +31,6 @@ class SettingsSheet extends ConsumerStatefulWidget {
 }
 
 class _SettingsSheetState extends ConsumerState<SettingsSheet> {
-  List<WeekendMilestone> _milestones = [];
-  int _nextMilestoneId = 0;
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -61,11 +56,6 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
         onRemove: _removeFlashPoint,
         onToggleFlash: _setFlashEnabled,
         onToggleNotify: _setNotifyEnabled,
-      ),
-      WeekendMilestonesSettingsSection(
-        milestones: _milestones,
-        onAdd: _addMilestone,
-        onRemove: _removeMilestone,
       ),
       NtpSyncSettingsSection(
         state: ref.watch(ntpSyncControllerProvider),
@@ -96,19 +86,4 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   void _setNotifyEnabled(int minutes, {required bool enabled}) => ref
       .read(flashPointsControllerProvider.notifier)
       .setNotifyEnabled(minutes, enabled: enabled);
-
-  void _addMilestone(String label, DateTime date) {
-    final milestone = WeekendMilestone(
-      id: _nextMilestoneId++,
-      label: label,
-      date: date,
-    );
-    setState(() => _milestones = [..._milestones, milestone]);
-  }
-
-  void _removeMilestone(int id) {
-    setState(
-      () => _milestones = _milestones.where((m) => m.id != id).toList(),
-    );
-  }
 }

@@ -33,7 +33,7 @@ iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
 ## ディレクトリ構成
 
-機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期は実配線済み、週末マイルストーンは今後のIssueで実配線予定）。
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）。
 
 ```text
 lib/
@@ -48,7 +48,8 @@ lib/
     timer/       # 単独カウントダウンタイマー
     flash/       # フラッシュ演出・キューイング
     notifications/ # フラッシュポイントの端末通知スケジューリング
-    settings/    # 設定シート（フラッシュポイント・通知・マイルストーン・NTP）
+    settings/    # 設定シート（フラッシュポイント・通知・NTP）
+    schedule/    # セッションスケジュール管理（OR/WE/WD/CR/SS/CS・週末間日数計算）
 test/            # libと同じfeature構成でミラーリング
 ```
 
