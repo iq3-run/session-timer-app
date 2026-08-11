@@ -87,16 +87,21 @@ List<FlashEvent> targetFlashEvents(List<TimeTarget> targets) => [
     ),
 ];
 
-/// Timer完了 5/3/1分前 flashes, or `[]` while the timer is unset. A point
-/// already passed at the moment the timer was (re)started is naturally
-/// excluded by the queue controller's window check — no special-casing
-/// needed here (spec 3-1節: "すでに過ぎているフラッシュポイントは発火させ
-/// ない").
+/// Timer完了 5/3/1分前 flashes plus the exact-completion (0分) flash, or `[]`
+/// while the timer is unset. A point already passed at the moment the timer
+/// was (re)started is naturally excluded by the queue controller's window
+/// check — no special-casing needed here (spec 3-1節: "すでに過ぎているフラッ
+/// シュポイントは発火させない").
 List<FlashEvent> timerFlashEvents(TimerState? timer) {
   final target = timer?.targetTime;
   if (target == null) return const [];
   final targetEpochMs = target.millisecondsSinceEpoch;
   return [
+    FlashEvent(
+      id: 'timer:$targetEpochMs:0',
+      instant: target,
+      label: 'タイマー終了です',
+    ),
     for (final m in timerFlashPointsMinutes)
       FlashEvent(
         id: 'timer:$targetEpochMs:$m',
