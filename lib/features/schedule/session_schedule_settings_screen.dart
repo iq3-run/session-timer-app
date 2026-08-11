@@ -31,6 +31,20 @@ const Set<SessionEventType> _numberedTypes = {
   SessionEventType.specialSession,
 };
 
+/// Empty (auto) or a positive integer — shared by the add form's number
+/// field and the edit dialog's, so both accept/reject the same input.
+bool _isValidManualNumberText(String text) {
+  final trimmed = text.trim();
+  return trimmed.isEmpty || (int.tryParse(trimmed) ?? -1) > 0;
+}
+
+/// `null` for empty (auto) text; the caller is expected to have already
+/// checked [_isValidManualNumberText].
+int? _parseManualNumberText(String text) {
+  final trimmed = text.trim();
+  return trimmed.isEmpty ? null : int.tryParse(trimmed);
+}
+
 /// Whether [event] gets a show/hide-on-`SessionScheduleScreen` toggle — CS,
 /// the first WE, and CR always show there and never expose one (see
 /// `session_chain.dart`'s `_isVisibleOnScheduleScreen`, which this mirrors).
@@ -116,22 +130,7 @@ class _EventRow extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          SizedBox(
-            width: 48,
-            child: _numberedTypes.contains(event.type)
-                ? GestureDetector(
-                    key: Key('editNumber_${event.id}'),
-                    onTap: () => _editManualNumber(context, ref, event),
-                    child: Text(
-                      sessionEventLabel(event, numbers),
-                      style: SessionTimerTextStyles.label,
-                    ),
-                  )
-                : Text(
-                    sessionEventLabel(event, numbers),
-                    style: SessionTimerTextStyles.label,
-                  ),
-          ),
+          SizedBox(width: 48, child: _numberLabel(context, ref)),
           Expanded(
             child: Text(
               formatScheduleDate(event.date),
@@ -152,10 +151,22 @@ class _EventRow extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _numberLabel(BuildContext context, WidgetRef ref) {
+    final label = Text(
+      sessionEventLabel(event, numbers),
+      style: SessionTimerTextStyles.label,
+    );
+    if (!_numberedTypes.contains(event.type)) return label;
+    return GestureDetector(
+      key: Key('editNumber_${event.id}'),
+      onTap: () => _editManualNumber(context, ref, event),
+      child: label,
+    );
+  }
 }
 
-/// Opens a dialog to set or clear [event]'s manual number override — the
-/// tap target reachable from `_EventRow`'s number label.
+/// Opens a dialog to set or clear [event]'s manual number override.
 Future<void> _editManualNumber(
   BuildContext context,
   WidgetRef ref,
@@ -224,27 +235,15 @@ class _ManualNumberDialogState extends State<_ManualNumberDialog> {
         ),
         FilledButton(
           key: const Key('manualNumberDialogSave'),
-          onPressed: _isValid
-              ? () => Navigator.of(
-                  context,
-                ).pop(_ManualNumberResult(_parsedNumber))
+          onPressed: _isValidManualNumberText(_controller.text)
+              ? () => Navigator.of(context).pop(
+                  _ManualNumberResult(_parseManualNumberText(_controller.text)),
+                )
               : null,
           child: const Text('保存'),
         ),
       ],
     );
-  }
-
-  int? get _parsedNumber {
-    final text = _controller.text.trim();
-    return text.isEmpty ? null : int.tryParse(text);
-  }
-
-  bool get _isValid {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return true;
-    final parsed = int.tryParse(text);
-    return parsed != null && parsed > 0;
   }
 }
 
@@ -317,7 +316,9 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
             ),
             FilledButton(
               key: const Key('addScheduleEventButton'),
-              onPressed: _pickedDate == null || !_isNumberValid
+              onPressed:
+                  _pickedDate == null ||
+                      !_isValidManualNumberText(_numberController.text)
                   ? null
                   : _submit,
               child: const Text('追加'),
@@ -340,13 +341,6 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
         ],
       ],
     );
-  }
-
-  bool get _isNumberValid {
-    final text = _numberController.text.trim();
-    if (text.isEmpty) return true;
-    final parsed = int.tryParse(text);
-    return parsed != null && parsed > 0;
   }
 
   DropdownButton<SessionEventType> _typeDropdown() {
@@ -388,7 +382,7 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
     if (date == null) return;
     final addedType = _type;
     final manualNumber = _numberedTypes.contains(addedType)
-        ? int.tryParse(_numberController.text.trim())
+        ? _parseManualNumberText(_numberController.text)
         : null;
     unawaited(
       ref
