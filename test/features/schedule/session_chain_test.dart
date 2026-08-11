@@ -2,8 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 
-SessionEvent _event(String id, SessionEventType type, DateTime date) =>
-    SessionEvent(id: id, type: type, date: date);
+SessionEvent _event(
+  String id,
+  SessionEventType type,
+  DateTime date, {
+  bool visible = true,
+}) => SessionEvent(id: id, type: type, date: date, visible: visible);
 
 /// OR(8/7) -> 1WE(8/21, 3日間) -> 1WD(9/5) -> 2WE(9/26, 2日間) -> 2WD(11/1).
 List<SessionEvent> _confirmedChain() => [
@@ -137,6 +141,111 @@ void main() {
       final rows = buildScheduleRows(events, DateTime(2026, 9));
 
       expect(_rowFor(rows, 'cr').chainGap, isNull);
+    });
+
+    test('a hidden WD/SS-eligible event is dropped from the rows', () {
+      final events = [
+        ..._confirmedChain(), // wd1 is visible:true (the default)
+      ];
+      final hidden = [
+        for (final e in events)
+          e.id == 'wd1'
+              ? _event('wd1', SessionEventType.workday, e.date, visible: false)
+              : e,
+      ];
+
+      final rows = buildScheduleRows(hidden, DateTime(2026));
+
+      expect(rows.where((r) => r.event?.id == 'wd1'), isEmpty);
+    });
+
+    test(
+      "hiding an event does not change its neighbors' chain-gap values",
+      () {
+        final visibleRows = buildScheduleRows(
+          _confirmedChain(),
+          DateTime(2026),
+        );
+        final hidden = [
+          for (final e in _confirmedChain())
+            e.id == 'wd1'
+                ? _event(
+                    'wd1',
+                    SessionEventType.workday,
+                    e.date,
+                    visible: false,
+                  )
+                : e,
+        ];
+
+        final hiddenRows = buildScheduleRows(hidden, DateTime(2026));
+
+        // we2's gap is computed against wd1's end date regardless of
+        // whether wd1's own row is drawn — hiding wd1 must not make we2's
+        // gap silently jump to being measured against we1 instead.
+        expect(
+          _rowFor(hiddenRows, 'we2').chainGap?.days,
+          _rowFor(visibleRows, 'we2').chainGap?.days,
+        );
+      },
+    );
+
+    test('the first WE stays visible even when explicitly hidden', () {
+      final hidden = [
+        for (final e in _confirmedChain())
+          e.id == 'we1'
+              ? _event('we1', SessionEventType.weekend, e.date, visible: false)
+              : e,
+      ];
+
+      final rows = buildScheduleRows(hidden, DateTime(2026));
+
+      expect(rows.where((r) => r.event?.id == 'we1'), isNotEmpty);
+    });
+
+    test('a later WE (not the first) is dropped when hidden', () {
+      final hidden = [
+        for (final e in _confirmedChain())
+          e.id == 'we2'
+              ? _event('we2', SessionEventType.weekend, e.date, visible: false)
+              : e,
+      ];
+
+      final rows = buildScheduleRows(hidden, DateTime(2026));
+
+      expect(rows.where((r) => r.event?.id == 'we2'), isEmpty);
+    });
+
+    test('CS stays visible even when explicitly hidden', () {
+      final events = [
+        ..._confirmedChain(),
+        _event(
+          'cs',
+          SessionEventType.completion,
+          DateTime(2027),
+          visible: false,
+        ),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026));
+
+      expect(rows.where((r) => r.event?.id == 'cs'), isNotEmpty);
+    });
+
+    test('CR ignores visible:false — it is never subject to the toggle', () {
+      final events = [
+        ..._confirmedChain(),
+        _event(
+          'cr',
+          SessionEventType.classroom,
+          DateTime(2026, 9, 11),
+          visible: false,
+        ),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026, 9, 11));
+
+      expect(_rowFor(rows, 'cr').isToday, isTrue);
     });
   });
 }

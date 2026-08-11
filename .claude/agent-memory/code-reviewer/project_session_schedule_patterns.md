@@ -56,16 +56,14 @@ Flagged again here; extraction (`MutationQueueNotifier<T>` base/mixin) still has
 across any of these PRs. Continue flagging as Warning until it's actually extracted — this is a
 standing, repeatedly-deferred recommendation, not a fresh discovery each time.
 
-**`SessionEvent` has no dedicated `_test.dart`, unlike its siblings.** `FlashPointConfig`
-(`test/features/flash/flash_point_config_test.dart`) and `TimerState`
-(`test/features/timer/timer_state_test.dart`) both have direct unit tests for
-`tryFromJson`/`toJson` round-trip and malformed-field rejection (wrong type, missing field,
-out-of-range epoch). `SessionEvent.tryFromJson` has 5 rejection branches (wrong-typed
-id/type/epochMs, out-of-range epochMs via `maxEpochMs`, unknown enum name) and none are
-exercised anywhere — `session_event_controller_test.dart` only tests the happy path plus a
-persistence-failure (`AsyncError`) case, never a corrupt/malformed persisted JSON string. This
-is a real, concrete gap against this repo's own established convention for persisted-model
-files, not a nitpick.
+**`SessionEvent` has no dedicated `_test.dart`, unlike its siblings — RESOLVED, was stale.**
+Originally flagged 2026-08-11 against the staged (not-yet-pushed) diff. By the time PR #45
+merged, `test/features/schedule/session_event_test.dart` existed (confirmed via
+`git log --follow`: added in commit a10c206, the same PR). As of the 2026-08-12 `feat/48-
+schedule-screen-split` review it has solid `tryFromJson`/`toJson` round-trip and malformed-field
+coverage, extended further in that PR to cover the new `visible` field (defaults-to-true,
+omitted-when-true serialization, round-trip, non-bool rejection). Don't re-raise this — the gap
+this note originally described no longer exists.
 
 **Verified correct on close reading (no findings)**: `calculateGap`/`_countFridaysInRange`'s
 Friday-counting closed-form (hand-traced against all 3 of the plan's confirmed worked examples
@@ -109,5 +107,44 @@ DataTable vertical-overflow bug flagged earlier in this file's history is now fi
 (`session_schedule_screen_test.dart`, 30 seeded rows, asserts `tester.getTopLeft(...).dy` moves
 after a drag) is exactly the empirically-grounded test style this memory file previously asked
 for. Close the loop: that Critical finding is resolved, no need to re-raise it.
+
+**Follow-up (2026-08-12, issue #48/branch `feat/48-schedule-screen-split`, commit a741e85 —
+`SessionScheduleScreen` split into read-only screen + new `SessionScheduleSettingsScreen`,
+`SessionEvent` gained a persisted `visible` bool, `session_chain.dart`'s `buildScheduleRows`
+gained a final `_isVisibleOnScheduleScreen` filter).**
+
+- **Doc-comment self-reference rule recurred again (6th+ occurrence)**: `session_chain.dart`'s
+  new filter comment cites `plans/feat-schedule-screen-split.md` directly (banned plan-file
+  self-reference), and both `sessionEventLabel`'s doc comment (names its caller
+  `SessionScheduleSettingsScreen` by name) and `SessionEvent.visible`'s doc comment (names the
+  specific consumer function `session_chain.dart`'s `_isVisibleOnScheduleScreen`) hit the
+  "never reference callers" ban. The technical WHY content in all three is fine and should stay
+  — only the plan-file path / named-caller clauses need to go. This pattern has now recurred
+  across effectively every PR in this feature area; treat it as expected-to-recur and check for
+  it specifically rather than being surprised.
+- **Visibility filter logic verified correct by hand-trace**: `_isVisibleOnScheduleScreen` is
+  keyed off `numbers[event.id] == 1` (the WE's own assigned sequence number from
+  `assignSequenceNumbers`, computed over the *unfiltered* full event list) rather than date
+  order or list position — correct, and matches the same `numbers` map `_buildChainRows`/gap
+  calc already use, so there's no risk of the "first WE" exemption disagreeing with the
+  numbering shown in the label. Confirmed `buildScheduleRows` computes `numbers` and
+  `_buildChainRows` (which runs gap calc) over the full unfiltered `chainEvents` list and only
+  applies `.where(_isVisibleOnScheduleScreen)` as the very last step before merging with CR
+  rows — hiding an event cannot change a neighbor's chain-gap value. `session_chain_test.dart`
+  added a dedicated test for exactly this invariant ("hiding an event does not change its
+  neighbors' chain-gap values") plus first-WE-stays-visible, later-WE-hidden, CS-stays-visible,
+  and CR-ignores-visible cases — good coverage, no edge case found missing.
+- **`_singletonTypes` (OR/CS) duplication is pre-existing, not new**: it was already duplicated
+  between the old `session_schedule_screen.dart` and `session_event_controller.dart` before this
+  PR; the split just relocated the copy from the old screen file into the new
+  `session_schedule_settings_screen.dart` verbatim. Don't flag as newly introduced — it's a
+  standing, not-yet-fixed opportunity to share a constant (e.g. from `session_event.dart`),
+  worth a Suggestion each time a file touching it is reviewed, not a Warning.
+- `SessionScheduleSettingsScreen.build` is 28 lines, over the 20-line mandate — but the old
+  `SessionScheduleScreen.build` it was split from was already 27 lines pre-PR and was never
+  flagged for length in the prior review. Top-level `Scaffold`/`AppBar`/`body` widget trees in
+  this repo appear to get a de facto pass on the 20-line rule when the length is purely the
+  declarative widget nesting (no extractable branching/looping logic inside). Keep noting as
+  Suggestion only unless a future instance has real extractable logic mixed in, not just nesting.
 
 Related: [[project_stopwatch_pr_patterns]], [[project_ntp_sync_patterns]]

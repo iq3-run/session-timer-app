@@ -62,6 +62,21 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   Future<void> removeEvent(String id) =>
       _mutate((events) => events.where((e) => e.id != id).toList());
 
+  /// Toggles whether [id]'s row shows on the read-only "セッションスケ
+  /// ジュール" screen (see `SessionEvent.visible`). A no-op if no event
+  /// with that id exists.
+  Future<void> setVisible(String id, {required bool visible}) {
+    return _mutate(
+      (events) => [
+        for (final e in events)
+          if (e.id == id)
+            SessionEvent(id: e.id, type: e.type, date: e.date, visible: visible)
+          else
+            e,
+      ],
+    );
+  }
+
   Future<void> _mutate(
     List<SessionEvent> Function(List<SessionEvent>) update,
   ) {

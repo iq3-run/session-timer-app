@@ -190,6 +190,56 @@ void main() {
       expect(events, hasLength(1));
     });
 
+    test(
+      'setVisible flips only the matching event, leaving others alone',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(
+          sessionEventControllerProvider.notifier,
+        );
+        await notifier.addEvent(
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+        );
+        await notifier.addEvent(SessionEventType.workday, DateTime(2026, 9, 5));
+        final before = await container.read(
+          sessionEventControllerProvider.future,
+        );
+        final workday = before.firstWhere(
+          (e) => e.type == SessionEventType.workday,
+        );
+
+        await notifier.setVisible(workday.id, visible: false);
+        final after = await container.read(
+          sessionEventControllerProvider.future,
+        );
+
+        final updatedWorkday = after.firstWhere((e) => e.id == workday.id);
+        final untouchedWeekend = after.firstWhere(
+          (e) => e.type == SessionEventType.weekend,
+        );
+        expect(updatedWorkday.visible, isFalse);
+        expect(untouchedWeekend.visible, isTrue);
+      },
+    );
+
+    test('setVisible is a no-op for an id that does not exist', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+      await notifier.addEvent(SessionEventType.weekend, DateTime(2026, 8, 21));
+
+      await notifier.setVisible('does-not-exist', visible: false);
+      final events = await container.read(
+        sessionEventControllerProvider.future,
+      );
+
+      expect(events.single.visible, isTrue);
+    });
+
     test('a failed persist surfaces as AsyncError without corrupting the '
         'in-memory list', () async {
       final previousStore = SharedPreferencesStorePlatform.instance;

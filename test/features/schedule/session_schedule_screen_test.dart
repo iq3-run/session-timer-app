@@ -15,8 +15,6 @@ Future<void> _pumpAndOpenScreen(
   Size surfaceSize = const Size(1000, 1400),
 }) async {
   SharedPreferences.setMockInitialValues(initialValues);
-  // Wide enough that the DataTable's columns (including the trailing
-  // delete icon) all fit without needing a horizontal scroll to tap them.
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -32,18 +30,11 @@ Future<void> _pumpAndOpenScreen(
   await tester.pumpAndSettle();
 }
 
-Future<void> _pickDateAndAdd(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('scheduleDateButton')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('OK'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const Key('addScheduleEventButton')));
-  await tester.pumpAndSettle();
-}
-
 void main() {
   group('SessionScheduleScreen', () {
-    testWidgets('entry button opens the schedule screen', (tester) async {
+    testWidgets('entry button opens the read-only schedule table', (
+      tester,
+    ) async {
       await _pumpAndOpenScreen(tester);
 
       expect(find.text('セッションスケジュール'), findsOneWidget);
@@ -51,38 +42,43 @@ void main() {
       expect(find.text('今日から'), findsOneWidget);
     });
 
-    testWidgets('the add button stays disabled until a date is picked', (
+    testWidgets('has no add form — registration moved to 日程設定', (
       tester,
     ) async {
       await _pumpAndOpenScreen(tester);
 
-      final button = tester.widget<FilledButton>(
-        find.byKey(const Key('addScheduleEventButton')),
-      );
-      expect(button.onPressed, isNull);
+      expect(find.byKey(const Key('scheduleTypeDropdown')), findsNothing);
+      expect(find.byKey(const Key('addScheduleEventButton')), findsNothing);
     });
 
-    testWidgets(
-      'picking a date and adding creates a row labeled 1WE (the default '
-      'type)',
-      (tester) async {
-        await _pumpAndOpenScreen(tester);
+    testWidgets('has no per-row delete button — moved to 日程設定', (
+      tester,
+    ) async {
+      await _pumpAndOpenScreen(
+        tester,
+        initialValues: {
+          sessionEventsJsonKey: jsonEncode([
+            SessionEvent(
+              id: 'we1',
+              type: SessionEventType.weekend,
+              date: DateTime(2026, 8, 21),
+            ).toJson(),
+          ]),
+        },
+      );
 
-        await _pickDateAndAdd(tester);
-
-        expect(find.text('1WE'), findsOneWidget);
-      },
-    );
-
-    testWidgets('deleting a row removes it from the table', (tester) async {
-      await _pumpAndOpenScreen(tester);
-      await _pickDateAndAdd(tester);
       expect(find.text('1WE'), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsNothing);
+    });
 
-      await tester.tap(find.byIcon(Icons.close));
+    testWidgets('the settings button navigates to 日程設定', (tester) async {
+      await _pumpAndOpenScreen(tester);
+
+      await tester.tap(find.byKey(const Key('scheduleSettingsButton')));
       await tester.pumpAndSettle();
 
-      expect(find.text('1WE'), findsNothing);
+      expect(find.text('日程設定'), findsOneWidget);
+      expect(find.byKey(const Key('scheduleTypeDropdown')), findsOneWidget);
     });
 
     testWidgets(
