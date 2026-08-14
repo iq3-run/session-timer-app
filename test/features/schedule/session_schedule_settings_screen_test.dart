@@ -419,10 +419,13 @@ void main() {
         );
         expect(picker.initialDate, DateTime(2026, 8, 21));
 
+        await tester.tap(find.text('22'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
 
-        expect(find.text('8/21(金)'), findsOneWidget);
+        expect(find.text('8/22(土)'), findsOneWidget);
+        expect(find.text('8/21(金)'), findsNothing);
       },
     );
 

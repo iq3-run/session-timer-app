@@ -14,6 +14,17 @@ import 'package:session_timer/features/schedule/session_schedule_formatting.dart
 final _earliestScheduleDate = DateTime(2000);
 final _latestScheduleDate = DateTime(2100);
 
+/// Keeps a `showDatePicker` `initialDate` within [_earliestScheduleDate,
+/// _latestScheduleDate] — `showDatePicker` asserts on an out-of-range value,
+/// and [date] may come from already-persisted data this screen didn't
+/// itself just pick (e.g. an older/foreign import) rather than always being
+/// bounded by this screen's own picker calls.
+DateTime _clampToScheduleRange(DateTime date) {
+  if (date.isBefore(_earliestScheduleDate)) return _earliestScheduleDate;
+  if (date.isAfter(_latestScheduleDate)) return _latestScheduleDate;
+  return date;
+}
+
 const Map<SessionEventType, String> _typeNames = {
   SessionEventType.orientation: 'オリエンテーション(OR)',
   SessionEventType.weekend: '週末(WE)',
@@ -203,7 +214,7 @@ Future<void> _editDate(
 ) async {
   final picked = await showDatePicker(
     context: context,
-    initialDate: event.date,
+    initialDate: _clampToScheduleRange(event.date),
     firstDate: _earliestScheduleDate,
     lastDate: _latestScheduleDate,
   );
@@ -406,7 +417,7 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
   Future<void> _pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _pickedDate ?? DateTime.now(),
+      initialDate: _clampToScheduleRange(_pickedDate ?? DateTime.now()),
       firstDate: _earliestScheduleDate,
       lastDate: _latestScheduleDate,
     );
