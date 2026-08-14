@@ -9,6 +9,11 @@ import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/schedule/session_event_numbering.dart';
 import 'package:session_timer/features/schedule/session_schedule_formatting.dart';
 
+/// Shared bounds for every `showDatePicker` call on this screen (add form
+/// and per-row edit alike).
+final _earliestScheduleDate = DateTime(2000);
+final _latestScheduleDate = DateTime(2100);
+
 const Map<SessionEventType, String> _typeNames = {
   SessionEventType.orientation: 'オリエンテーション(OR)',
   SessionEventType.weekend: '週末(WE)',
@@ -131,12 +136,7 @@ class _EventRow extends ConsumerWidget {
       child: Row(
         children: [
           SizedBox(width: 48, child: _numberLabel(context, ref)),
-          Expanded(
-            child: Text(
-              formatScheduleDate(event.date),
-              style: const TextStyle(color: SessionTimerColors.white),
-            ),
-          ),
+          Expanded(child: _dateLabel(context, ref)),
           _VisibilityControl(
             event: event,
             numbers: numbers,
@@ -166,6 +166,17 @@ class _EventRow extends ConsumerWidget {
       child: label,
     );
   }
+
+  Widget _dateLabel(BuildContext context, WidgetRef ref) {
+    return InkWell(
+      key: Key('editDate_${event.id}'),
+      onTap: () => _editDate(context, ref, event),
+      child: Text(
+        formatScheduleDate(event.date),
+        style: const TextStyle(color: SessionTimerColors.white),
+      ),
+    );
+  }
 }
 
 /// Opens a dialog to set or clear [event]'s manual number override.
@@ -182,6 +193,27 @@ Future<void> _editManualNumber(
   await ref
       .read(sessionEventControllerProvider.notifier)
       .setManualNumber(event.id, result.manualNumber);
+}
+
+/// Opens a picker, pre-selected to [event]'s current date, to change it.
+Future<void> _editDate(
+  BuildContext context,
+  WidgetRef ref,
+  SessionEvent event,
+) async {
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: event.date,
+    firstDate: _earliestScheduleDate,
+    lastDate: _latestScheduleDate,
+  );
+  if (picked == null || !context.mounted) return;
+  await ref
+      .read(sessionEventControllerProvider.notifier)
+      .setDate(
+        event.id,
+        picked,
+      );
 }
 
 class _ManualNumberResult {
@@ -301,47 +333,49 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(child: _typeDropdown()),
-            const SizedBox(width: 8),
-            TextButton(
-              key: const Key('scheduleDateButton'),
-              onPressed: () => _pickDate(context),
-              child: Text(
-                _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
-                style: const TextStyle(color: SessionTimerColors.muted),
-              ),
-            ),
-            FilledButton(
-              key: const Key('addScheduleEventButton'),
-              onPressed:
-                  _pickedDate == null ||
-                      !_isValidManualNumberText(_numberController.text)
-                  ? null
-                  : _submit,
-              child: const Text('追加'),
-            ),
-          ],
-        ),
         if (_numberedTypes.contains(_type)) ...[
-          const SizedBox(height: 8),
-          TextField(
-            key: const Key('scheduleManualNumberField'),
-            controller: _numberController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: SessionTimerColors.white),
-            decoration: const InputDecoration(
-              labelText: '番号（空欄なら自動採番）',
-              labelStyle: TextStyle(color: SessionTimerColors.muted),
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
+          _numberField(),
+          const SizedBox(width: 8),
         ],
+        Expanded(child: _typeDropdown()),
+        const SizedBox(width: 8),
+        TextButton(
+          key: const Key('scheduleDateButton'),
+          onPressed: () => _pickDate(context),
+          child: Text(
+            _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
+            style: const TextStyle(color: SessionTimerColors.muted),
+          ),
+        ),
+        FilledButton(
+          key: const Key('addScheduleEventButton'),
+          onPressed:
+              _pickedDate == null ||
+                  !_isValidManualNumberText(_numberController.text)
+              ? null
+              : _submit,
+          child: const Text('追加'),
+        ),
       ],
+    );
+  }
+
+  Widget _numberField() {
+    return SizedBox(
+      width: 64,
+      child: TextField(
+        key: const Key('scheduleManualNumberField'),
+        controller: _numberController,
+        keyboardType: TextInputType.number,
+        style: const TextStyle(color: SessionTimerColors.white),
+        decoration: const InputDecoration(
+          labelText: '番号',
+          labelStyle: TextStyle(color: SessionTimerColors.muted),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
     );
   }
 
@@ -360,6 +394,7 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
                 !widget.existingTypes.contains(type),
             child: Text(
               _typeNames[type]!,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: SessionTimerColors.white),
             ),
           ),
@@ -371,9 +406,9 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
   Future<void> _pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      initialDate: _pickedDate ?? DateTime.now(),
+      firstDate: _earliestScheduleDate,
+      lastDate: _latestScheduleDate,
     );
     if (picked == null || !context.mounted) return;
     setState(() => _pickedDate = picked);

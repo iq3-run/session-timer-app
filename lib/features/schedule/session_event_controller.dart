@@ -105,6 +105,24 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
     );
   }
 
+  /// Changes [id]'s date, leaving its type/visible/manualNumber unchanged.
+  /// A no-op if no event with that id exists.
+  Future<void> setDate(String id, DateTime date) {
+    return _mutate(
+      (events) => _replaceEvent(
+        events,
+        id,
+        (e) => SessionEvent(
+          id: e.id,
+          type: e.type,
+          date: date,
+          visible: e.visible,
+          manualNumber: e.manualNumber,
+        ),
+      ),
+    );
+  }
+
   List<SessionEvent> _replaceEvent(
     List<SessionEvent> events,
     String id,

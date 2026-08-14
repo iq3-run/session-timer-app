@@ -182,4 +182,35 @@ labels).**
   mutation-queue-skeleton instance since the controller wasn't touched at that level), 82 tests
   pass, `flutter analyze`/`dart format` clean.
 
+**Follow-up (2026-08-14, issue #52/branch `feat/52-schedule-picker-improvements`, working tree not yet committed — locale-aware `showDatePicker`, in-place date editing, add-form layout).**
+
+- `lib/app.dart`'s new `resolveDeviceLocale` (`@visibleForTesting`, same precedent as
+  `[[project_ntp_sync_patterns]]`'s IPv4-fallback function) uses `GlobalMaterialLocalizations.delegates`
+  — verified against the installed Flutter SDK (3.44.9,
+  `packages/flutter_localizations/lib/src/material_localizations.dart:699`) that this is a real,
+  documented convenience constant (cupertino+material+widgets delegates bundled), not a
+  hallucinated API. `intl` pinned `0.20.2` (was `^0.20.3`) in the same diff — confirmed via
+  `pubspec.lock` this is `flutter_localizations`'s own SDK-forced exact pin, not an accidental
+  downgrade; don't flag it.
+- `resolveDeviceLocale` uses a `for` loop with an early `return` over the locale list instead of
+  `firstWhere(..., orElse: ...)` — first clear instance in this repo of the "functional iteration
+  over for-loops" MUST rule being skippable-but-shouldn't-be; no prior precedent either way in this
+  memory file. Flagged as Warning.
+- New `_editDate` (settings screen) duplicates `_pickDate`'s `firstDate: DateTime(2000)` /
+  `lastDate: DateTime(2100)` literal pair verbatim — the pair already existed once in `_pickDate`
+  pre-diff, this PR is what turns it into an actual duplicate. Flag as Warning (DRY + magic
+  number) until extracted into a shared const pair or a shared date-picker helper.
+- `_AddEventFormState.build()` grew from a `Column`-of-`Row`s to a single `Row` per this issue's
+  ask; net length is ~40 lines, well past this file's established ~28-line de facto pass for
+  declarative Scaffold/widget trees (see the 2026-08-12 note above) — unlike that precedent, this
+  one already has an established local pattern for extraction (`_typeDropdown()` is already pulled
+  out as its own method) that the new manual-number `SizedBox`/`TextField` block doesn't follow.
+  Worth a Warning with a concrete extraction suggestion, not just a Suggestion.
+- Everything else clean: `SessionEventController.setDate` correctly reuses `_replaceEvent` (no new
+  mutation-queue-skeleton instance), doc comments carry WHY without caller/plan-file
+  self-reference (the pattern flagged 6+ times earlier in this file did NOT recur here — first
+  clean PR in this feature area on that specific rule), `flutter analyze`/`dart format
+  --set-exit-if-changed`/`flutter test` (36 tests across the 3 touched test files) all verified
+  clean by direct run, not just trusted from the PR description.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_ntp_sync_patterns]]
