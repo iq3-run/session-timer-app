@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
@@ -54,7 +52,7 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
       ref.read(flashQueueControllerProvider.notifier).advance();
       return;
     }
-    unawaited(_controller.forward(from: progress));
+    _controller.forward(from: progress);
   }
 
   @override
