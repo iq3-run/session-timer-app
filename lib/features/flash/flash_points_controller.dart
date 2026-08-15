@@ -165,7 +165,8 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
     FlashPointConfig Function(FlashPointConfig) update,
   ) {
     return [
-      for (final p in points) p.minutes == minutes ? update(p) : p,
+      for (final p in points)
+        if (p.minutes == minutes) update(p) else p,
     ];
   }
 

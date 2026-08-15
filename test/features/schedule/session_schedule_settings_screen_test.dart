@@ -390,6 +390,45 @@ void main() {
       },
     );
 
+    testWidgets(
+      "tapping a row's date opens a picker pre-selected to its current "
+      'date; confirming updates it',
+      (tester) async {
+        final events = [
+          SessionEvent(
+            id: 'we1',
+            type: SessionEventType.weekend,
+            date: DateTime(2026, 8, 21),
+          ),
+        ];
+        await _pumpScreen(
+          tester,
+          initialValues: {
+            sessionEventsJsonKey: jsonEncode(
+              events.map((e) => e.toJson()).toList(),
+            ),
+          },
+        );
+        expect(find.text('8/21(金)'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('editDate_we1')));
+        await tester.pumpAndSettle();
+
+        final picker = tester.widget<DatePickerDialog>(
+          find.byType(DatePickerDialog),
+        );
+        expect(picker.initialDate, DateTime(2026, 8, 21));
+
+        await tester.tap(find.text('22'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('8/22(土)'), findsOneWidget);
+        expect(find.text('8/21(金)'), findsNothing);
+      },
+    );
+
     testWidgets('OR/CR/CS numbers are not tappable', (tester) async {
       final events = [
         SessionEvent(

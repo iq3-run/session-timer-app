@@ -157,9 +157,10 @@ void main() {
       ];
       final hidden = [
         for (final e in events)
-          e.id == 'wd1'
-              ? _event('wd1', SessionEventType.workday, e.date, visible: false)
-              : e,
+          if (e.id == 'wd1')
+            _event('wd1', SessionEventType.workday, e.date, visible: false)
+          else
+            e,
       ];
 
       final rows = buildScheduleRows(hidden, DateTime(2026));
@@ -176,14 +177,15 @@ void main() {
         );
         final hidden = [
           for (final e in _confirmedChain())
-            e.id == 'wd1'
-                ? _event(
-                    'wd1',
-                    SessionEventType.workday,
-                    e.date,
-                    visible: false,
-                  )
-                : e,
+            if (e.id == 'wd1')
+              _event(
+                'wd1',
+                SessionEventType.workday,
+                e.date,
+                visible: false,
+              )
+            else
+              e,
         ];
 
         final hiddenRows = buildScheduleRows(hidden, DateTime(2026));
@@ -201,9 +203,10 @@ void main() {
     test('the first WE stays visible even when explicitly hidden', () {
       final hidden = [
         for (final e in _confirmedChain())
-          e.id == 'we1'
-              ? _event('we1', SessionEventType.weekend, e.date, visible: false)
-              : e,
+          if (e.id == 'we1')
+            _event('we1', SessionEventType.weekend, e.date, visible: false)
+          else
+            e,
       ];
 
       final rows = buildScheduleRows(hidden, DateTime(2026));
@@ -214,9 +217,10 @@ void main() {
     test('a later WE (not the first) is dropped when hidden', () {
       final hidden = [
         for (final e in _confirmedChain())
-          e.id == 'we2'
-              ? _event('we2', SessionEventType.weekend, e.date, visible: false)
-              : e,
+          if (e.id == 'we2')
+            _event('we2', SessionEventType.weekend, e.date, visible: false)
+          else
+            e,
       ];
 
       final rows = buildScheduleRows(hidden, DateTime(2026));
@@ -268,14 +272,15 @@ void main() {
     test('prefers manualNumber over the auto-assigned number', () {
       final events = [
         for (final e in _confirmedChain())
-          e.id == 'we2'
-              ? _event(
-                  'we2',
-                  SessionEventType.weekend,
-                  e.date,
-                  manualNumber: 9,
-                )
-              : e,
+          if (e.id == 'we2')
+            _event(
+              'we2',
+              SessionEventType.weekend,
+              e.date,
+              manualNumber: 9,
+            )
+          else
+            e,
       ];
       final numbers = assignSequenceNumbers(events);
 
@@ -289,15 +294,16 @@ void main() {
       () {
         final hidden = [
           for (final e in _confirmedChain())
-            e.id == 'we1'
-                ? _event(
-                    'we1',
-                    SessionEventType.weekend,
-                    e.date,
-                    visible: false,
-                    manualNumber: 99,
-                  )
-                : e,
+            if (e.id == 'we1')
+              _event(
+                'we1',
+                SessionEventType.weekend,
+                e.date,
+                visible: false,
+                manualNumber: 99,
+              )
+            else
+              e,
         ];
 
         final rows = buildScheduleRows(hidden, DateTime(2026));
@@ -321,14 +327,15 @@ void main() {
       () {
         final events = [
           for (final e in _confirmedChain())
-            e.id == 'we1'
-                ? _event(
-                    'we1',
-                    SessionEventType.weekend,
-                    e.date,
-                    manualNumber: 42,
-                  )
-                : e,
+            if (e.id == 'we1')
+              _event(
+                'we1',
+                SessionEventType.weekend,
+                e.date,
+                manualNumber: 42,
+              )
+            else
+              e,
         ];
         final numbers = assignSequenceNumbers(events);
 
