@@ -52,10 +52,8 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 
 ## 確認事項（レビュー時に見てほしい点）
 
-- R8有効化によって `home_widget` のRemoteViews/XML描画が壊れていないか。
-- 実機ビルドでの動作確認は本セッションでは行っていない
-  （既存の `Home-widget Android follow-ups` メモにある通り
-  実機/エミュレータでの検証環境が未整備のため）。マージ前に手動確認を推奨。
+- R8有効化によって `home_widget` のRemoteViews/XML描画が壊れていないか
+  → BlueStacks実機確認で問題なし（下記検証結果を参照）。
 
 ## 検証結果
 
@@ -65,6 +63,13 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 - `flutter build apk --release`（R8 minify/shrinkResources有効）:
   成功、`app-release.apk` 53.9MB。
 - `flutter build apk --debug`: ローカルで実行し成功を確認
+- BlueStacks実機（`adb connect 127.0.0.1:5555`）でR8有効なreleaseビルドを
+  インストールし動作確認: アプリ起動・メイン画面（現在時刻/経過時間/
+  タイマー）の描画、設定シート（フラッシュ/通知トグル、NTP同期セクション）
+  の表示、ストップウォッチの開始操作、いずれも正常。`logcat` にも
+  `com.iq3run.session_timer` プロセスのクラッシュ（`FATAL EXCEPTION`）は
+  なし。`HomeWidgetPreferences.xml` へのSharedPreferences書き込みも
+  ログで確認でき、`home_widget` プラグインの初期化・保持も問題なし。
   （CIの `Build Android (debug)` ジョブでも別途成功済み）。
 - Gemini CLIレビューはこの開発環境で継続的にクォータ超過/OOMが発生し
   （過去複数PRで5回以上再現）実質使用不能なため、今回もスキップした
