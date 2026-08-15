@@ -18,10 +18,11 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 ## 調査結果
 
 - 全依存について `grep -rl "import 'package:<name>" lib/` に加え、
-  リポジトリ全体（`android/`, `test/`, `pubspec.yaml` 等）を対象に
+  実装・設定ファイル（`lib/`, `android/`, `test/`, `pubspec.yaml` 等。
+  この計画書自体や `.dart_tool/`, `build/`, `.gradle/` 配下の
+  ビルド生成物は検索対象・除外対象それぞれ別として扱う）を対象に
   `cupertino_icons` / `wakelock_plus` / `Wakelock` を検索。
-  ビルド生成物（`.dart_tool/`, `build/`, `.gradle/` 配下）を除き、
-  リポジトリ全体で参照なし（他の依存は全て使用あり）。
+  実装・設定ファイルに使用箇所なし（他の依存は全て使用あり）。
 - `android/app/build.gradle.kts` の `release` buildType は当初
   `signingConfig` の指定のみで、`minifyEnabled` / `shrinkResources` は
   未設定（デフォルトで無効）。
@@ -63,8 +64,9 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 - `flutter test`: 258件全て成功。
 - `flutter build apk --release`（R8 minify/shrinkResources有効）:
   成功、`app-release.apk` 53.9MB。
-- `flutter build apk --debug` は本セッションでは個別に実行していないが、
-  CIの `Build Android (debug)` ジョブでカバーされている。
+- `flutter build apk --debug`: ローカルで実行し成功を確認
+  （CIの `Build Android (debug)` ジョブでも別途成功済み）。
 - Gemini CLIレビューはこの開発環境で継続的にクォータ超過/OOMが発生し
-  実質使用不能なため、今回もスキップした（PR本文に明記）。
-  `code-reviewer` subagentによるローカルレビューは実施し、指摘を反映済み。
+  （過去複数PRで5回以上再現）実質使用不能なため、今回もスキップした
+  （PR本文に明記）。`code-reviewer` subagentによるローカルレビューは
+  実施し、指摘を反映済み。
