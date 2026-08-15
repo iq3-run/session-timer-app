@@ -10,7 +10,6 @@
 - 状態管理: Riverpod
 - 永続化: shared_preferences
 - ローカル通知: flutter_local_notifications
-- 画面常時点灯: wakelock_plus
 - ホーム画面ウィジェット（Android）: home_widget
 
 採用理由は [plans/chore-bootstrap-project.md](plans/chore-bootstrap-project.md) を参照。
