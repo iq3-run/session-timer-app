@@ -11,7 +11,7 @@ Reviewed 2026-08-15 against the staged diff (not yet pushed as a PR at review ti
 `flutter analyze`, `dart format --set-exit-if-changed`, and `flutter test` on the touched
 files were all run directly and are clean (10/10 new tests pass, 0 analyzer issues).
 
-**Critical, native-only bug — `StopwatchWidgetProvider.kt` hardcodes
+**RESOLVED same PR.** **Critical, native-only bug — `StopwatchWidgetProvider.kt` hardcodes
 `setChronometer(..., started = true)` regardless of pause state.** `RemoteViews.setChronometer`'s
 4th positional arg is `started` (public, stable Android API since API 1): `true` calls
 `Chronometer.start()`, so the widget's Chronometer free-runs (ticks upward) even when
@@ -28,7 +28,7 @@ as `true` — those targets have no "paused" concept, always ticking is right fo
 `countUpBase`/`countDownBase`'s math is otherwise correct by hand-trace — this is purely the
 `started` flag bug, not a base-value bug.
 
-**DRY across the 3 synced `AppWidgetProvider`s (`StopwatchWidgetProvider`,
+**RESOLVED same PR.** **DRY across the 3 synced `AppWidgetProvider`s (`StopwatchWidgetProvider`,
 `NextTargetWidgetProvider`, `CompletionCountdownWidgetProvider`)** — near-identical `onUpdate`
 skeleton (read `ntpOffsetMs`, `forEach widgetId` build `RemoteViews` with the same click-intent +
 chronometer-or-placeholder visibility toggle). Each individual `onUpdate` is also ~40 lines,
@@ -39,15 +39,16 @@ this review (first review of this feature area, so not "recurring" yet — but w
 this codebase's precedent is that unresolved DRY skeletons recur across PRs until explicitly
 extracted, see [[project_stopwatch_pr_patterns]]'s mutation-queue-skeleton history).
 
-**`for`-loop-with-early-return instead of functional iteration — 2nd confirmed instance in this
-repo.** `next_time_target.dart`'s `nextTimeTarget()` uses `for (final target in targets) { if
+**RESOLVED same PR.** **`for`-loop-with-early-return instead of functional iteration — 2nd
+confirmed instance in this repo.** `next_time_target.dart`'s `nextTimeTarget()` uses `for (final target in targets) { if
 (...) return target; }` instead of `firstWhere`/`firstWhereOrNull`. First instance was
 `lib/app.dart`'s `resolveDeviceLocale` (flagged as Warning in
 [[project_session_schedule_patterns]]'s 2026-08-14 entry, issue #52) — that one hasn't been
 converted either. Treat this as an established recurring gap in this repo, not a fresh
 one-off; flag as Warning each time it appears.
 
-**Comment-policy: `AndroidManifest.xml`'s new `<receiver>` block cites `(issue #54)` directly.**
+**RESOLVED same PR.** **Comment-policy: `AndroidManifest.xml`'s new `<receiver>` block cites
+`(issue #54)` directly.**
 Same banned self-reference category tracked extensively in [[project_session_schedule_patterns]]
 and [[project_ntp_sync_patterns]] (previously only ever seen in Dart doc comments) — this is the
 first instance of the pattern appearing in an XML comment rather than a `///` doc comment. The

@@ -148,27 +148,33 @@ class HomeWidgetSyncService {
   final HomeWidgetGateway _gateway;
 
   Future<void> syncStopwatch(StopwatchState s, int ntpOffsetMs) async {
-    await _gateway.saveWidgetData('stopwatch_accumulated_ms', s.accumulatedMs);
+    await _gateway.saveWidgetData(
+      'stopwatch_accumulated_ms',
+      s.accumulatedMs.toString(),
+    );
     await _gateway.saveWidgetData(
       'stopwatch_running_since_epoch_ms',
-      s.runningSinceEpochMs,
+      s.runningSinceEpochMs?.toString(),
     );
-    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs);
+    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs.toString());
     await _gateway.updateWidget(androidName: 'StopwatchWidgetProvider');
   }
 
   Future<void> syncNextTarget(TimeTarget? target, int ntpOffsetMs) async {
-    await _gateway.saveWidgetData('next_target_epoch_ms', target?.epochMs);
-    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs);
+    await _gateway.saveWidgetData(
+      'next_target_epoch_ms',
+      target?.epochMs.toString(),
+    );
+    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs.toString());
     await _gateway.updateWidget(androidName: 'NextTargetWidgetProvider');
   }
 
   Future<void> syncCompletion(DateTime? target, int ntpOffsetMs) async {
     await _gateway.saveWidgetData(
       'completion_target_epoch_ms',
-      target?.millisecondsSinceEpoch,
+      target?.millisecondsSinceEpoch.toString(),
     );
-    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs);
+    await _gateway.saveWidgetData('ntp_offset_ms', ntpOffsetMs.toString());
     await _gateway.updateWidget(androidName: 'CompletionCountdownWidgetProvider');
   }
 }
@@ -177,7 +183,12 @@ class HomeWidgetSyncService {
 （キー名・シグネチャは実装時に確定。3メソッドとも `ntp_offset_ms` を
 毎回書き込むのは冗長だが、各ウィジェットは独立した `AppWidgetProvider`
 プロセスから読まれるため、共有キーを都度書いておく方が「片方だけ古い
-オフセットを参照する」不整合より安全、という判断。）
+オフセットを参照する」不整合より安全、という判断。数値を全て
+`.toString()` で文字列化しているのは、`home_widget` プラグインの
+プラットフォームチャネル越しに送った数値がネイティブ側の型付き
+`SharedPreferences` ゲッターと食い違い `ClassCastException` になるのを
+避けるため — 詳細は実装した `home_widget_sync_service.dart` の
+docコメントを参照。）
 
 ### `home_widget_scheduler.dart`
 
