@@ -11,6 +11,7 @@
 - 永続化: shared_preferences
 - ローカル通知: flutter_local_notifications
 - 画面常時点灯: wakelock_plus
+- ホーム画面ウィジェット（Android）: home_widget
 
 採用理由は [plans/chore-bootstrap-project.md](plans/chore-bootstrap-project.md) を参照。
 
@@ -33,7 +34,7 @@ iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
 ## ディレクトリ構成
 
-機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）。
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）・`home_widget/`（Androidホーム画面ウィジェットへのデータ同期、Android向けのみ）。
 
 ```text
 lib/
@@ -50,8 +51,17 @@ lib/
     notifications/ # フラッシュポイントの端末通知スケジューリング
     settings/    # 設定シート（フラッシュポイント・通知・NTP）
     schedule/    # セッションスケジュール管理（OR/WE/WD/CR/SS/CS・週末間日数計算）
+    home_widget/ # Androidホーム画面ウィジェット（4種）へのデータ同期
 test/            # libと同じfeature構成でミラーリング
+
+android/app/src/main/kotlin/com/iq3run/session_timer/
+  StopwatchWidgetProvider.kt              # 経過時間ウィジェット
+  NextTargetWidgetProvider.kt             # 次の指定時刻までの残り時間ウィジェット
+  CompletionCountdownWidgetProvider.kt    # 完了までのカウントダウンウィジェット
+  CurrentTimeWidgetProvider.kt            # 現在時刻のみのウィジェット（Flutter同期不要）
 ```
+
+4種のAndroidホーム画面ウィジェットはユーザーが個別に追加できる独立したパネル。詳細は [plans/feat-home-widget-android.md](plans/feat-home-widget-android.md) を参照。
 
 ## 開発フロー
 
