@@ -46,8 +46,8 @@
             android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
 
-        <!-- Home screen widgets (issue #54). Each is a separate panel the
-             user can add independently. -->
+        <!-- Home screen widgets. Each is a separate panel the user can add
+             independently. -->
         <receiver
             android:name=".StopwatchWidgetProvider"
             android:exported="true">

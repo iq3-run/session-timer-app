@@ -3,9 +3,6 @@ package com.iq3run.session_timer
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.view.View
-import android.widget.RemoteViews
-import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 class StopwatchWidgetProvider : HomeWidgetProvider() {
@@ -24,32 +21,20 @@ class StopwatchWidgetProvider : HomeWidgetProvider() {
         val ntpOffsetMs =
             widgetData.getString(HomeWidgetKeys.NTP_OFFSET_MS, null)?.toLongOrNull() ?: 0L
 
-        appWidgetIds.forEach { widgetId ->
-            val views =
-                RemoteViews(context.packageName, R.layout.stopwatch_widget_layout).apply {
-                    setOnClickPendingIntent(
-                        R.id.widget_container,
-                        HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java),
-                    )
-                    if (accumulatedMs != null) {
-                        setChronometer(
-                            R.id.chronometer,
-                            HomeWidgetTimeMath.countUpBase(
-                                accumulatedMs,
-                                runningSinceEpochMs,
-                                ntpOffsetMs,
-                            ),
-                            null,
-                            true,
-                        )
-                        setViewVisibility(R.id.chronometer, View.VISIBLE)
-                        setViewVisibility(R.id.placeholder, View.GONE)
-                    } else {
-                        setViewVisibility(R.id.chronometer, View.GONE)
-                        setViewVisibility(R.id.placeholder, View.VISIBLE)
-                    }
-                }
-            appWidgetManager.updateAppWidget(widgetId, views)
-        }
+        HomeWidgetChronometerPanel.update(
+            context,
+            appWidgetManager,
+            appWidgetIds,
+            layoutId = R.layout.stopwatch_widget_layout,
+            base =
+                accumulatedMs?.let {
+                    HomeWidgetTimeMath.countUpBase(it, runningSinceEpochMs, ntpOffsetMs)
+                },
+            countDown = false,
+            // A paused stopwatch (runningSinceEpochMs == null) must not keep
+            // ticking on the widget just because the Chronometer view itself
+            // free-runs once started.
+            started = runningSinceEpochMs != null,
+        )
     }
 }

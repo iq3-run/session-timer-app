@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
@@ -8,10 +9,7 @@ import 'package:session_timer/features/targets/time_targets_controller.dart';
 /// the first entry past `now` is the answer.
 TimeTarget? nextTimeTarget(List<TimeTarget> targets, DateTime now) {
   final nowEpochMs = now.millisecondsSinceEpoch;
-  for (final target in targets) {
-    if (target.epochMs > nowEpochMs) return target;
-  }
-  return null;
+  return targets.firstWhereOrNull((target) => target.epochMs > nowEpochMs);
 }
 
 /// Deliberately doesn't watch a ticking `now` provider — like
