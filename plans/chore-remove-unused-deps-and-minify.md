@@ -17,9 +17,12 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 
 ## 調査結果
 
-- 全依存について `grep -rl "import 'package:<name>" lib/` で使用箇所を確認。
-  `cupertino_icons` と `wakelock_plus` のみ使用箇所0件。他は全て使用あり。
-- `android/app/build.gradle.kts` の `release` buildType は現状
+- 全依存について `grep -rl "import 'package:<name>" lib/` に加え、
+  リポジトリ全体（`android/`, `test/`, `pubspec.yaml` 等）を対象に
+  `cupertino_icons` / `wakelock_plus` / `Wakelock` を検索。
+  ビルド生成物（`.dart_tool/`, `build/`, `.gradle/` 配下）を除き、
+  リポジトリ全体で参照なし（他の依存は全て使用あり）。
+- `android/app/build.gradle.kts` の `release` buildType は当初
   `signingConfig` の指定のみで、`minifyEnabled` / `shrinkResources` は
   未設定（デフォルトで無効）。
 - Dartコード自体はreleaseビルドで自動的にtree-shakingされるため、
@@ -31,21 +34,37 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/57>
 
 1. `flutter pub remove cupertino_icons wakelock_plus`
 2. `android/app/build.gradle.kts` の `release` buildType に
-   `isMinifyEnabled = true` / `isShrinkResources = true` を追加。
-   本プロジェクトはFlutterプラグイン中心でカスタムReflectionは
-   使っていないため、Flutter Gradle Pluginが提供するデフォルトの
-   ProGuardルールで足りる見込み。ただし有効化後に
-   `flutter build apk --release` が成功し、実機/エミュレータで
-   通知・ホームウィジェット同期・NTP同期など主要機能が壊れていないことを
-   確認する。
-3. `flutter build apk --release` を実行し、ビルド成功とAPKサイズの
+   `isMinifyEnabled = true` / `isShrinkResources = true` /
+   `proguardFiles(...)` を追加。
+3. `android/app/proguard-rules.pro` を新規作成。当初
+   `flutter_local_notifications` のGsonモデル向けkeepルールも
+   含めていたが、そのモデルクラスは全て `@Keep`
+   （`androidx.annotation.Keep`）付与済みで、androidxの
+   consumer-proguard-rulesがR8にそれを保持させるため、明示ルールは
+   冗長と判明し削除した（ローカルレビューで指摘）。最終的に残したのは
+   `home_widget`（同梱example由来。consumer-rules.pro非同梱のため
+   xmlpull/kxml2関連のkeep/dontwarnが必要）向けのみ。今後
+   `flutter_local_notifications` を更新する際、モデルクラスから
+   `@Keep` が外れた場合はこのファイルへの追記が必要になる点に注意。
+4. `flutter build apk --release` を実行し、ビルド成功とAPKサイズの
    変化を確認する。
 
 ## 確認事項（レビュー時に見てほしい点）
 
-- R8有効化によって `flutter_local_notifications` や `home_widget` の
-  プラットフォームチャンネル呼び出しが壊れていないか（reflectionベースの
-  処理があると難読化で壊れることがあるため）。
+- R8有効化によって `home_widget` のRemoteViews/XML描画が壊れていないか。
 - 実機ビルドでの動作確認は本セッションでは行っていない
   （既存の `Home-widget Android follow-ups` メモにある通り
   実機/エミュレータでの検証環境が未整備のため）。マージ前に手動確認を推奨。
+
+## 検証結果
+
+- `dart format --set-exit-if-changed lib test`: 変更なし。
+- `flutter analyze`: 指摘なし。
+- `flutter test`: 258件全て成功。
+- `flutter build apk --release`（R8 minify/shrinkResources有効）:
+  成功、`app-release.apk` 53.9MB。
+- `flutter build apk --debug` は本セッションでは個別に実行していないが、
+  CIの `Build Android (debug)` ジョブでカバーされている。
+- Gemini CLIレビューはこの開発環境で継続的にクォータ超過/OOMが発生し
+  実質使用不能なため、今回もスキップした（PR本文に明記）。
+  `code-reviewer` subagentによるローカルレビューは実施し、指摘を反映済み。
