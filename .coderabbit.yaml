@@ -17,6 +17,21 @@ reviews:
     - "!**/*.freezed.dart"
     - "!build/**"
     - "!.dart_tool/**"
+  path_instructions:
+    - path: ".claude/agent-memory/**"
+      instructions: >
+        These are AI coding-agent session records, not human-authored docs.
+        Dates recorded here (e.g. "reviewed 2026-08-17") reflect the actual
+        session date, which is verified via the `date` shell command and can
+        legitimately be the day of or after the PR's commit date. Do not flag
+        such dates as future/incorrect relative to the commit timestamp.
+    - path: "plans/**"
+      instructions: >
+        These are AI-agent-authored implementation plan files, not
+        traditional design docs. Dates recorded here reflect the actual
+        session date (verified via the `date` shell command) and can
+        legitimately be the day of or after the PR's commit date. Do not flag
+        such dates as future/incorrect relative to the commit timestamp.
 
 chat:
   auto_reply: true
