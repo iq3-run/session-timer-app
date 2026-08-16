@@ -37,7 +37,7 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
      「最低保証サイズ」として扱われ、実際のセル配分は
      `targetCellWidth`/`targetCellHeight`が優先されるため、
      `90dp`を維持しても1×2セル化の効果は損なわれない。
-   - `android:description` を追加し（API 12+、Android 12+ ピッカーで
+   - `android:description` を追加し（API 31+、Android 12+ ピッカーで
      表示される説明文）、各ウィジェットの機能を簡潔に説明する文字列
      リソースを新設する。
 2. **`AndroidManifest.xml` の4つの `<receiver>` に `android:label` を
@@ -77,8 +77,9 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
 
 ## テスト・検証方針
 
-- `flutter analyze` / `flutter test`（Dartコード変更なしのため影響なし
-  想定だが、既存テストの回帰がないことを確認）。
+- `dart format --set-exit-if-changed .` / `flutter analyze` / `flutter test`
+  （Dartコード変更なしのため影響なし想定だが、既存テストの回帰がないことを
+  確認）。
 - `flutter build apk --debug`（`targetCellWidth`/`targetCellHeight`
   属性がAAPTでビルドエラーにならないことを確認。`compileSdk`は
   `targetSdk=36`から36以上であることを確認済みなのでAPI31+属性は解決可能）。
