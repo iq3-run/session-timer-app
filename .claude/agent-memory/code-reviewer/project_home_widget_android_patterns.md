@@ -73,4 +73,24 @@ No native Kotlin test infra exists anywhere in this repo (`android/app` has no t
 all) — absence of a `HomeWidgetTimeMathTest` is consistent with zero prior precedent, Suggestion
 only, not a gap introduced by this PR specifically.
 
+**Issue #61 (branch `feat/61-widget-size-label-unify`, reviewed 2026-08-17, resource/manifest-only
+diff, no Dart touched).** Unified all 4 `*_widget_info.xml` to `targetCellWidth="2"`
+`targetCellHeight="1"` (API 31+ cell-size hint) and gave each `<receiver>` in `AndroidManifest.xml`
+a distinct `android:label` + each widget-info XML an `android:description`, via 8 new
+`widget_picker_label_*`/`widget_picker_description_*` strings kept deliberately separate from the
+pre-existing `home_widget_label_*` (in-widget text) — verified every receiver → xml file → label/
+description string mapping is correct (stopwatch/next_target/completion/current_time all line up).
+Deliberately did NOT lower `minWidth`/`minHeight` from the `110dp`/`90dp` set in #55/#58 (rejecting
+the issue's own suggested 1-cell literal `minHeight=40dp`) because unsupported launchers fall back
+to `minHeight` and 90dp is load-bearing for the text-clipping fix from that earlier PR — a
+deliberately-bent-looking value that is actually correct, don't re-flag it. `targetCellWidth`/
+`targetCellHeight` verified as safe additive API 31+ attributes given this repo's
+`compileSdk = flutter.compileSdkVersion` (unpinned, resolves well above 31); older launchers/API
+levels just ignore the attribute and fall back to `minWidth`/`minHeight`. New XML comment in
+`strings.xml` explaining picker-strings vs `home_widget_label_*` is 2 lines but matches this
+project's existing multi-line-XML-comment convention throughout `AndroidManifest.xml`
+(pre-existing, not this PR) — not flagged, unlike the past issue-#-self-reference violations in
+this same file. No README update needed — README's widget section describes the 4-panel behavior,
+not picker-naming/cell-size internals, and isn't stale.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]]

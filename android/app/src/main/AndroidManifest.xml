@@ -56,7 +56,8 @@
              independently. -->
         <receiver
             android:name=".StopwatchWidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_picker_label_stopwatch">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -66,7 +67,8 @@
         </receiver>
         <receiver
             android:name=".NextTargetWidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_picker_label_next_target">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -76,7 +78,8 @@
         </receiver>
         <receiver
             android:name=".CompletionCountdownWidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_picker_label_completion">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -86,7 +89,8 @@
         </receiver>
         <receiver
             android:name=".CurrentTimeWidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_picker_label_current_time">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
