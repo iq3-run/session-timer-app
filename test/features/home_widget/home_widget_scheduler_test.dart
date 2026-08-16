@@ -30,6 +30,9 @@ void main() {
       );
       await container.read(stopwatchControllerProvider.future);
       await container.read(timerControllerProvider.future);
+      final targetEpochMs = DateTime.now()
+          .add(const Duration(minutes: 5))
+          .millisecondsSinceEpoch;
 
       // Written straight to the backing store, bypassing both
       // controllers' `_lastGood` caches — simulates a write that landed
@@ -40,6 +43,11 @@ void main() {
         'flutter.$stopwatchStateJsonKey',
         jsonEncode(const StopwatchState(accumulatedMs: 9191).toJson()),
       );
+      await SharedPreferencesStorePlatform.instance.setValue(
+        'String',
+        'flutter.$timerStateJsonKey',
+        jsonEncode({'targetEpochMs': targetEpochMs, 'mode': 'normal'}),
+      );
 
       tester.binding.handleAppLifecycleStateChanged(
         AppLifecycleState.resumed,
@@ -47,8 +55,12 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      final state = await container.read(stopwatchControllerProvider.future);
-      expect(state.accumulatedMs, 9191);
+      final stopwatch = await container.read(
+        stopwatchControllerProvider.future,
+      );
+      final timer = await container.read(timerControllerProvider.future);
+      expect(stopwatch.accumulatedMs, 9191);
+      expect(timer.targetEpochMs, targetEpochMs);
     },
   );
 }

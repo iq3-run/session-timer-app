@@ -27,7 +27,15 @@ class _FakeHomeWidgetGateway implements HomeWidgetGateway {
   @override
   Future<String?> getWidgetData(String key) async => valueOf(key) as String?;
 
-  Object? valueOf(String key) => saves.lastWhere((s) => s.key == key).value;
+  // Reverse-scan rather than `.lastWhere` so a key that was never saved
+  // returns null (matching `getWidgetData`'s nullable contract) instead of
+  // throwing `StateError`.
+  Object? valueOf(String key) {
+    for (final save in saves.reversed) {
+      if (save.key == key) return save.value;
+    }
+    return null;
+  }
 }
 
 void main() {

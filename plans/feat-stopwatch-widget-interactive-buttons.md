@@ -126,15 +126,19 @@ Future<void> reloadFromDisk() {
 
 Future<void> _reloadNow() async {
   if (!_initialLoad.isCompleted) await _initialLoad.future;
-  final prefs = await ref.read(sharedPreferencesProvider.future);
-  await prefs.reload();
-  final onDisk = _readPersisted(prefs);
-  _lastGood = onDisk;
-  state = AsyncData(onDisk);
+  try {
+    final prefs = await ref.read(sharedPreferencesProvider.future);
+    await prefs.reload();
+    final onDisk = _readPersisted(prefs);
+    _lastGood = onDisk;
+    state = AsyncData(onDisk);
+  } on Exception catch (e) {
+    debugPrint('StopwatchController: reloadFromDisk failed: $e');
+  }
 }
 ```
 
-既存の `_mutate`/`_mutateNow` と同型（直列化キューに乗せる）。既存の `on Exception catch` によるエラーハンドリングは持たせない（`prefs.reload()`/読み込み自体の失敗はまれで、失敗時はcatchErrorでキュー継続のみ担保すれば十分。既存の `_mutateNow` ほど厳密なエラー状態遷移は不要と判断）。
+既存の `_mutate`/`_mutateNow` と同型（直列化キューに乗せる）。ただし失敗時の扱いは `_mutateNow` とは異なり `AsyncError` にはしない（`debugPrint`のみ）。`reloadFromDisk()`は`HomeWidgetScheduler`から`unawaited(...)`で呼ばれるため、`_mutationQueue`側の`catchError`だけでは呼び出し元の未処理例外を防げない（`unawaited`はFutureを未消費のまま切り離すだけで、そのFuture自体が失敗すればuncaughtな非同期エラーとして表面化する）——`code-reviewer`サブエージェントのレビューで指摘され、実装済み。
 
 ### `HomeWidgetScheduler` に `WidgetsBindingObserver` を追加
 
