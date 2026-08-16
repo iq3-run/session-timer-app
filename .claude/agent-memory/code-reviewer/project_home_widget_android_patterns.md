@@ -140,7 +140,16 @@ CodeRabbit's own follow-up pass (after the first commit, before merge) caught tw
 review's first pass missed:
 - `toggle_button`/`reset_button` in `stopwatch_widget_layout.xml` had no `minWidth`/`minHeight`,
   well under Android's 48dp accessibility touch-target minimum, despite the widget having grown
-  to 110dp×110dp specifically to fit them. Fixed by adding explicit 48dp minimums.
+  to 110dp×110dp specifically to fit them. Fixed by adding explicit 48dp minimums — **but this
+  first fix was itself incomplete**: two 48dp-wide buttons + the existing 12dp gap need 108dp
+  alone, which combined with the container's own padding (16dp) and margin (8dp) needs ~132dp,
+  exceeding the 110dp `minWidth` the widget still declared. CodeRabbit's own auto-tracking marked
+  its comment "✅ Addressed in commit d46cec2" purely because the diff touched the flagged lines
+  (added `minWidth`/`minHeight`) — it did not re-verify the arithmetic, and a manual check caught
+  the real overflow. Actually fixed by widening `stopwatch_widget_info.xml` to `minWidth="150dp"`
+  / `targetCellWidth="3"` (a 3rd commit). **Lesson: don't trust CodeRabbit's own "Addressed"
+  auto-tag as proof a fix is complete — it can fire on a pattern match (the flagged attribute now
+  exists) without checking whether the fix actually solves the underlying constraint.**
 - `test/features/home_widget/home_widget_sync_service_test.dart`'s `_FakeHomeWidgetGateway.valueOf`
   used `.lastWhere(...)` with no `orElse`, throwing `StateError` instead of returning `null` for
   an unsaved key — violating `getWidgetData`'s nullable contract. Latent (no test in that file

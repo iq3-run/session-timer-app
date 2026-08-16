@@ -55,7 +55,9 @@ Issue: #62（親: #1）
 
 ### `stopwatch_widget_layout.xml`
 
-既存の1×2セル（110dp×90dp）にボタン2つを追加で収めるのは窮屈なため、このウィジェットのみ `stopwatch_widget_info.xml` の `minHeight`/`targetCellHeight` を2×2セル相当（110dp×110dp）に広げる（issueのScopeで「必要ならウィジェット自体のサイズ変更も含めて再検討」と合意済み）。他の3ウィジェットは1×2のまま変更しない。現状の縦積み（ラベル→Chronometer→placeholder）はそのまま維持しつつ、下部に横並びの2ボタンを追加する:
+既存の1×2セル（110dp×90dp）にボタン2つを追加で収めるのは窮屈なため、このウィジェットのみ `stopwatch_widget_info.xml` のサイズを広げる（issueのScopeで「必要ならウィジェット自体のサイズ変更も含めて再検討」と合意済み）。他の3ウィジェットは1×2のまま変更しない。現状の縦積み（ラベル→Chronometer→placeholder）はそのまま維持しつつ、下部に横並びの2ボタンを追加する:
+
+（CodeRabbitレビューで、当初の110dp×110dp（2×2セル）だと48dp四方のボタン2つ＋12dp間隔＋コンテナのpadding/marginが幅方向で収まらない（108dp+padding16dp+margin8dp=132dp＞110dp）という指摘を受け、`minWidth`/`targetCellWidth`を150dp/3セルに広げて修正済み。`minHeight`/`targetCellHeight`は110dp/2セルのまま。）
 
 ```text
 [経過時間ラベル]
