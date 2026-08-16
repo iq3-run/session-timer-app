@@ -8,5 +8,7 @@
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/stopwatch_widget_layout"
     android:resizeMode="horizontal|vertical"
+    android:minResizeWidth="150dp"
+    android:minResizeHeight="110dp"
     android:widgetCategory="home_screen">
 </appwidget-provider>
