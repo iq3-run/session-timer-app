@@ -17,6 +17,30 @@ reviews:
     - "!**/*.freezed.dart"
     - "!build/**"
     - "!.dart_tool/**"
+  path_instructions:
+    - path: ".claude/agent-memory/**"
+      instructions: >
+        These are AI coding-agent session records, not human-authored docs.
+        Dates recorded here reflect the actual session date, verified via the
+        `date` shell command. This project's development happens in JST
+        (UTC+9); a commit's displayed/API timestamp is UTC, so a commit made
+        e.g. 02:39 JST on the 17th shows as ~17:39 UTC on the 16th — the
+        session date legitimately runs a calendar day ahead of the commit's
+        UTC date for roughly 15:00-23:59 UTC each day. Do not flag a date
+        here as future/incorrect just because it's one day past the commit's
+        UTC-displayed date; convert to JST before judging plausibility.
+    - path: "plans/**"
+      instructions: >
+        These are AI-agent-authored implementation plan files, not
+        traditional design docs. Dates recorded here reflect the actual
+        session date, verified via the `date` shell command. This project's
+        development happens in JST (UTC+9); a commit's displayed/API
+        timestamp is UTC, so a commit made e.g. 02:39 JST on the 17th shows
+        as ~17:39 UTC on the 16th — the session date legitimately runs a
+        calendar day ahead of the commit's UTC date for roughly 15:00-23:59
+        UTC each day. Do not flag a date here as future/incorrect just
+        because it's one day past the commit's UTC-displayed date; convert
+        to JST before judging plausibility.
 
 chat:
   auto_reply: true
