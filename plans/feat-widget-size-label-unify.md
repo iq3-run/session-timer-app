@@ -81,8 +81,11 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
   （Dartコード変更なしのため影響なし想定だが、既存テストの回帰がないことを
   確認）。
 - `flutter build apk --debug`（`targetCellWidth`/`targetCellHeight`
-  属性がAAPTでビルドエラーにならないことを確認。`compileSdk`は
-  `targetSdk=36`から36以上であることを確認済みなのでAPI31+属性は解決可能）。
+  属性がAAPTでビルドエラーにならないことを確認。`compileSdk`の解決値は
+  `targetSdk`からの逆算ではなく、ビルド済みAPKを
+  `aapt dump badging app-debug.apk` で直接確認し、
+  `compileSdkVersion='36'` であることを実測済み。API31+属性の解決可能性は
+  この実測値で担保している）。
 - 実機（BlueStacks + Nova Launcher）で以下を確認：
   - ウィジェットピッカー上で4つが機能別の名称・説明文で表示されること
   - 横画面ホームで4つを配置し、レイアウト崩れがないこと（既存動作の
