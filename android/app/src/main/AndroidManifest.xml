@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- android/app/src/debug/AndroidManifest.xml and .../src/profile/AndroidManifest.xml
+         already declare this (merged in only for those build variants) — that's why NTP
+         sync worked in debug/profile despite src/main never declaring it. Release only
+         merges src/main, so it must be declared here too or the NTP sync socket (and any
+         other networking) is denied at the OS level in release builds. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- Requested at runtime (NotificationService.requestPermissions) so

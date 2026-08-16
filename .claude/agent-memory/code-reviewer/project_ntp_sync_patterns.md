@@ -146,4 +146,29 @@ plan-file self-references) keeps slipping past the agent that writes the
 code, not just past review — worth flagging clearly enough in review comments
 that it gets fixed before commit rather than caught after.
 
+**Issue #59 fix (`fix/59-ntp-release-internet-permission`, reviewed
+2026-08-16, uncommitted): missing `INTERNET` permission broke NTP sync in
+release APKs only.** Root cause confirmed real (not just plan-file
+claim): `android/app/src/main/AndroidManifest.xml` never declared
+`android.permission.INTERNET`, while `android/app/src/debug/AndroidManifest.xml`
+and `android/app/src/profile/AndroidManifest.xml` both already declare it
+(standard Flutter-template boilerplate, own comment: "required for
+development... hot reload"). Those two variant-specific manifests merge
+in only for debug/profile builds; release only merges `src/main`, so it
+alone needed the explicit declaration. Fix (single line, first
+`uses-permission` entry, plus a WHY comment) is correct and minimal;
+nothing else in the repo (tests, lint config, proguard, README/docs)
+assumes `INTERNET` is absent, and no connectivity-check plugin
+(`connectivity_plus` etc.) is in use, so no second permission was needed.
+**Doc-comment content rule stayed clean this time** — the new comment
+does not self-reference "issue #59" or the plan file, unlike the pattern
+above; worth noting as the fix sticking, not just a one-off pass.
+**New, non-recurring finding**: the comment's causal claim — "Flutter's
+tooling auto-grants this in debug/profile builds" — is imprecise. It's
+not a runtime/ADB auto-grant; it's manifest merging from the sibling
+`src/debug`/`src/profile` AndroidManifest.xml fragments (confirmed by
+reading them), which is a materially different mechanism for a future
+maintainer to know about if a similar release-only gap shows up for a
+different permission. Flag the wording, not the fix itself.
+
 Related: [[project_stopwatch_pr_patterns]], [[project_flash_point_toggle_patterns]]
