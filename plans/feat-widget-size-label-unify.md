@@ -21,6 +21,15 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
   実機で再現・確認済み）。文字の見切れやクラッシュは発生しない。
 - 一方、横画面ホームでは現状の90dpで2行表示（ラベル+値）が問題なく収まる
   ことを確認済み。
+- **重要**：この実機確認に使用したBlueStacksのゲストOSは Android 9
+  （API 28、`adb shell getprop ro.build.version.sdk` で確認）であり、
+  `targetCellWidth`/`targetCellHeight`（API 31+で追加）を解釈しない
+  環境である。そのため上記の間延びは、Nova Launcherが本属性に
+  対応していないかどうかとは無関係に、**`minWidth`/`minHeight`
+  フォールバック経路そのものの挙動**である。API 31+ホストでの
+  `targetCellWidth`/`targetCellHeight`経路（対応ホストではこちらが
+  デフォルトサイズを決定する）は本PRでは実機未確認 —
+  テスト・検証方針の節に追記する。
 
 ## 実装方針
 
@@ -28,15 +37,18 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
    `android:targetCellHeight="1"` を追加する（API 31+）。**
    - `minWidth`/`minHeight` は現行値（`110dp`/`90dp`）を**維持**する。
      issue本文の提案例（`minHeight=40dp`、1セル分の標準式
-     `70dp*1-30dp`）は採用しない — `90dp`は PR #55/#58 のレビューで
-     見切れ問題を修正した結果の値であり、`targetCellHeight`未対応の
-     ランチャー（API31未満、または本属性を無視する実装）では
-     `minHeight`がそのまま使われるため、`40dp`に下げると見切れが
-     再発するリスクがある。`targetCellWidth`/`targetCellHeight`を
-     解釈できるランチャーでは、`minWidth`/`minHeight`はあくまで
-     「最低保証サイズ」として扱われ、実際のセル配分は
+     `70dp*1-30dp`）は採用しない。公式ドキュメント通りの役割分担は
+     次の通り：`targetCellWidth`/`targetCellHeight`対応ホスト
+     （API 31+）ではこれらがデフォルトサイズを**決定**し、
+     Android 11（API 30）以下または非対応ホストでは`minWidth`/
+     `minHeight`が**そのままデフォルトサイズとして使われる**
+     （フォールバックではなく、それが唯一の経路）。`90dp`は
+     PR #55/#58 のレビューで見切れ問題を修正した結果の値であり、
+     API30以下・非対応ホストでは`40dp`に下げると見切れが再発する
+     リスクがあるため、`90dp`を維持する。API31+対応ホストでは
      `targetCellWidth`/`targetCellHeight`が優先されるため、
-     `90dp`を維持しても1×2セル化の効果は損なわれない。
+     `minHeight`の値自体は影響しない（`90dp`を維持しても1×2セル化の
+     効果は損なわれない）。
    - `android:description` を追加し（API 31+、Android 12+ ピッカーで
      表示される説明文）、各ウィジェットの機能を簡潔に説明する文字列
      リソースを新設する。
@@ -72,8 +84,8 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
   ない。上記の`layout-land/`案（RemoteViewsレイアウトの出し分け）の方が
   実用上信頼できるため、こちらを優先候補としつつ、`xml-land/`側も
   将来issueの選択肢として記録しておく。
-- 縦画面ホームでの間延び自体の解消（`targetCellHeight`未対応ランチャーでの
-  挙動改善を含む）。
+- 縦画面ホームでの間延び自体の解消（API 30以下・`targetCellHeight`
+  非対応ホストでの挙動改善を含む）。
 
 ## テスト・検証方針
 
@@ -86,11 +98,18 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/61>
   `aapt dump badging app-debug.apk` で直接確認し、
   `compileSdkVersion='36'` であることを実測済み。API31+属性の解決可能性は
   この実測値で担保している）。
-- 実機（BlueStacks + Nova Launcher）で以下を確認：
+- 実機（BlueStacks + Nova Launcher、ゲストOS Android 9 / API 28）で
+  以下を確認：
   - ウィジェットピッカー上で4つが機能別の名称・説明文で表示されること
   - 横画面ホームで4つを配置し、レイアウト崩れがないこと（既存動作の
     回帰確認）
   - 可能であれば縦画面（`adb shell wm size` オーバーライド）でも
-    間延びの程度に変化がないか参考確認（`targetCellHeight`を解釈する
-    ランチャーであれば改善が期待できるが、Nova Launcherが対応している
-    保証はないため「悪化していないこと」の確認に留める）
+    間延びの程度に変化がないか参考確認（「悪化していないこと」の
+    確認に留める）
+  - **このテスト環境はAPI 28のため、`minWidth`/`minHeight`
+    フォールバック経路（Android 11/API 30以下・非対応ホストが使う経路）
+    の確認に該当する。** `targetCellWidth`/`targetCellHeight`が実際に
+    優先される API 31+ 対応ホストでの実機確認（例：Android 12+ の
+    実機・エミュレータ）は本PRでは未実施 — 将来、API 31+ の実機/
+    エミュレータ環境が確保できた際に確認する（テスト環境の制約による
+    既知の未検証事項として記録）。
