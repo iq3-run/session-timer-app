@@ -55,7 +55,7 @@ Issue: #62（親: #1）
 
 ### `stopwatch_widget_layout.xml`
 
-1×2セル（110dp×90dp）に収める。現状の縦積み（ラベル→Chronometer→placeholder）はそのまま維持しつつ、下部に横並びの2ボタンを追加する:
+既存の1×2セル（110dp×90dp）にボタン2つを追加で収めるのは窮屈なため、このウィジェットのみ `stopwatch_widget_info.xml` の `minHeight`/`targetCellHeight` を2×2セル相当（110dp×110dp）に広げる（issueのScopeで「必要ならウィジェット自体のサイズ変更も含めて再検討」と合意済み）。他の3ウィジェットは1×2のまま変更しない。現状の縦積み（ラベル→Chronometer→placeholder）はそのまま維持しつつ、下部に横並びの2ボタンを追加する:
 
 ```
 [経過時間ラベル]
@@ -87,7 +87,9 @@ Future<void> stopwatchWidgetBackgroundCallback(Uri? uri) async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   try {
-    switch (uri?.host) {
+    // "homewidget://stopwatch/toggle" の "toggle" は uri.host ではなく
+    // 最初のpathセグメント（uri.host は "stopwatch" 固定）。
+    switch (uri?.pathSegments.firstOrNull) {
       case 'toggle':
         await container.read(stopwatchControllerProvider.notifier).toggle();
       case 'reset':

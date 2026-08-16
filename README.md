@@ -54,13 +54,13 @@ lib/
 test/            # libと同じfeature構成でミラーリング
 
 android/app/src/main/kotlin/com/iq3run/session_timer/
-  StopwatchWidgetProvider.kt              # 経過時間ウィジェット
+  StopwatchWidgetProvider.kt              # 経過時間ウィジェット（開始/一時停止・リセットボタン付き）
   NextTargetWidgetProvider.kt             # 次の指定時刻までの残り時間ウィジェット
   CompletionCountdownWidgetProvider.kt    # 完了までのカウントダウンウィジェット
   CurrentTimeWidgetProvider.kt            # 現在時刻のみのウィジェット（Flutter同期不要）
 ```
 
-4種のAndroidホーム画面ウィジェットはユーザーが個別に追加できる独立したパネル。詳細は [plans/feat-home-widget-android.md](plans/feat-home-widget-android.md) を参照。
+4種のAndroidホーム画面ウィジェットはユーザーが個別に追加できる独立したパネル。詳細は [plans/feat-home-widget-android.md](plans/feat-home-widget-android.md) を参照。ストップウォッチウィジェットのみ開始/一時停止・リセットボタンを持ち、アプリを開かずに操作できる（詳細は [plans/feat-stopwatch-widget-interactive-buttons.md](plans/feat-stopwatch-widget-interactive-buttons.md)）。
 
 ## 開発フロー
 

@@ -65,6 +65,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/stopwatch_widget_info" />
         </receiver>
+        <!-- Receives the toggle/reset button taps from the stopwatch widget and hands them off
+             to home_widget's background Dart isolate (see
+             lib/features/home_widget/stopwatch_widget_callback.dart). Not exported: it's only
+             ever triggered by a PendingIntent this app creates for its own widget's buttons. -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".NextTargetWidgetProvider"
             android:exported="true"

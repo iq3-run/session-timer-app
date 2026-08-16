@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
@@ -98,6 +99,32 @@ class TimerController extends AsyncNotifier<TimerState> {
 
   Future<void> _autoStartStopwatchIfNeeded() {
     return ref.read(stopwatchControllerProvider.notifier).ensureRunning();
+  }
+
+  /// See `StopwatchController.reloadFromDisk` — same rationale (a
+  /// widget-driven `reset()` cascades into this controller too, from a
+  /// separate isolate this app's foreground instance can't observe until it
+  /// reloads).
+  Future<void> reloadFromDisk() {
+    final previous = _mutationQueue;
+    final result = previous.then((_) => _reloadNow());
+    _mutationQueue = result.catchError((_) {});
+    return result;
+  }
+
+  // See StopwatchController._reloadNow for why this needs its own
+  // try/catch, unlike _mutateNow.
+  Future<void> _reloadNow() async {
+    if (!_initialLoad.isCompleted) await _initialLoad.future;
+    try {
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      await prefs.reload();
+      final onDisk = _readPersisted(prefs);
+      _lastGood = onDisk;
+      state = AsyncData(onDisk);
+    } on Exception catch (e) {
+      debugPrint('TimerController: reloadFromDisk failed: $e');
+    }
   }
 
   Future<void> _mutate(TimerState Function(TimerState) update) {

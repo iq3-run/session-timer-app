@@ -9,6 +9,7 @@ import 'package:home_widget/home_widget.dart';
 abstract class HomeWidgetGateway {
   Future<void> saveWidgetData(String key, Object? value);
   Future<void> updateWidget({required String androidName});
+  Future<String?> getWidgetData(String key);
 }
 
 class HomeWidgetPluginGateway implements HomeWidgetGateway {
@@ -20,6 +21,11 @@ class HomeWidgetPluginGateway implements HomeWidgetGateway {
   @override
   Future<void> updateWidget({required String androidName}) async {
     await HomeWidget.updateWidget(androidName: androidName);
+  }
+
+  @override
+  Future<String?> getWidgetData(String key) {
+    return HomeWidget.getWidgetData<String>(key);
   }
 }
 

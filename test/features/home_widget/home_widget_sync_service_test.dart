@@ -24,6 +24,9 @@ class _FakeHomeWidgetGateway implements HomeWidgetGateway {
     updatedAndroidNames.add(androidName);
   }
 
+  @override
+  Future<String?> getWidgetData(String key) async => valueOf(key) as String?;
+
   Object? valueOf(String key) => saves.lastWhere((s) => s.key == key).value;
 }
 

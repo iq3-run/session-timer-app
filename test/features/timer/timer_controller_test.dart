@@ -6,6 +6,7 @@ import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 void main() {
   group('TimerController', () {
@@ -268,6 +269,33 @@ void main() {
 
         expect(state.isRunning, isTrue);
         expect(state.targetEpochMs, pastEpochMs);
+      },
+    );
+
+    test(
+      'reloadFromDisk picks up a state change written by another isolate '
+      '(a widget-triggered stopwatch reset cascading into the timer), not '
+      "just this controller's own mutations",
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timerControllerProvider.future);
+        final notifier = container.read(timerControllerProvider.notifier);
+        final targetEpochMs = DateTime.now()
+            .add(const Duration(minutes: 5))
+            .millisecondsSinceEpoch;
+
+        await SharedPreferencesStorePlatform.instance.setValue(
+          'String',
+          'flutter.$timerStateJsonKey',
+          jsonEncode({'targetEpochMs': targetEpochMs, 'mode': 'normal'}),
+        );
+
+        await notifier.reloadFromDisk();
+        final state = await container.read(timerControllerProvider.future);
+
+        expect(state.targetEpochMs, targetEpochMs);
       },
     );
   });

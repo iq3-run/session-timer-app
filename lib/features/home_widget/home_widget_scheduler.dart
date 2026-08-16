@@ -9,6 +9,7 @@ import 'package:session_timer/features/home_widget/next_time_target.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
+import 'package:session_timer/features/timer/timer_controller.dart';
 
 /// Mounted once at the app root, alongside `NotificationScheduler`. Pushes
 /// stopwatch/next-target/completion state to the Android home screen
@@ -17,6 +18,11 @@ import 'package:session_timer/features/targets/time_target.dart';
 /// mounts. Kept as a widget rather than a `Notifier` for the same reason as
 /// `NotificationScheduler`: the sync work is async and shouldn't run inside
 /// a provider's synchronous `build()`.
+///
+/// Also handles the reverse direction: on app resume, reloads the
+/// stopwatch/timer controllers from disk in case the stopwatch widget's
+/// toggle/reset buttons mutated them while this app was backgrounded (see
+/// `stopwatch_widget_callback.dart` and `StopwatchController.reloadFromDisk`).
 class HomeWidgetScheduler extends ConsumerStatefulWidget {
   const HomeWidgetScheduler({required this.child, super.key});
 
@@ -27,11 +33,26 @@ class HomeWidgetScheduler extends ConsumerStatefulWidget {
       _HomeWidgetSchedulerState();
 }
 
-class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler> {
+class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_syncAll(ref.read(ntpOffsetMsProvider)));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(ref.read(stopwatchControllerProvider.notifier).reloadFromDisk());
+    unawaited(ref.read(timerControllerProvider.notifier).reloadFromDisk());
   }
 
   @override

@@ -93,4 +93,61 @@ project's existing multi-line-XML-comment convention throughout `AndroidManifest
 this same file. No README update needed — README's widget section describes the 4-panel behavior,
 not picker-naming/cell-size internals, and isn't stale.
 
+**Issue #62 (branch `feat/62-stopwatch-widget-buttons`, reviewed 2026-08-17, uncommitted working
+tree, not yet pushed).** Interactive start/pause + reset buttons on the stopwatch widget only,
+via `HomeWidgetBackgroundReceiver` + `HomeWidgetBackgroundIntent.getBroadcast` two-URI scheme
+(`homewidget://stopwatch/toggle` / `/reset`). Design verified sound: `Uri.pathSegments.first` vs
+`Uri.host` semantics hand-verified with a real `dart run` (host is the URI *authority*
+`"stopwatch"`, action is the first path segment — the code and its comment are both correct);
+RemoteViews child-view `setOnClickPendingIntent` correctly overriding the parent
+`widget_container`'s "open app" intent only within the child's bounds is standard, documented
+Android behavior, not a novel risk. `flutter analyze`/`flutter test`/`dart format
+--set-exit-if-changed` all independently re-run clean on every touched file.
+
+Findings, none yet fixed as of this review (working tree still uncommitted):
+- `StopwatchWidgetProvider.buildViews` (44 lines) is over the 20-line mandate — same shape as
+  the `onUpdate` length finding from issue #54, just moved into a new extracted method rather
+  than resolved. Needs splitting (e.g. separate toggle-button-state vs click-intent-wiring
+  helpers), not yet done.
+- `android.os.Build` import in `StopwatchWidgetProvider.kt` is dead (no `Build.VERSION_CODES`
+  usage left in this file after the `HomeWidgetChronometerPanel` share was dropped) — Kotlin
+  doesn't hard-error on unused imports, so this survives `flutter build apk --debug` silently.
+  Repo has no ktlint/detekt gate that would catch it.
+- Issue-#-self-reference recurred 2 more times in source comments (not plan docs, which are
+  fine): `StopwatchWidgetProvider.kt`'s class doc comment ("issue #62") and
+  `stopwatch_widget_layout.xml`'s new button-row comment ("see issue #62") — same banned category
+  tracked since issue #54 (1st XML instance), now a 2nd XML instance plus a new Kotlin-doc-comment
+  instance.
+- New sub-pattern, worth watching: several long WHY comments in this PR name a *specific related
+  file* inline (`stopwatch_widget_callback.dart:8` "(see `StopwatchWidgetProvider.kt`...)",
+  `home_widget_scheduler.dart:24` "(see `stopwatch_widget_callback.dart` and
+  `StopwatchController.reloadFromDisk`)", `stopwatch_controller.dart:100` "(see
+  `stopwatch_widget_callback.dart`)", `AndroidManifest.xml:69` "(see
+  lib/features/home_widget/stopwatch_widget_callback.dart)"). This is the same *content* class
+  CLAUDE.md bans ("never reference... a caller... in comments") that was explicitly fixed once
+  before in `ensureRunning()` (see [[project_stopwatch_pr_patterns]]: "don't let the length
+  exemption imply a content exemption too") — but these read more as "see also" cross-file
+  pointers explaining a genuine multi-file mechanism than as leaked task/caller context. Flagged
+  as Warning this review; if this exact "(see `other_file.dart`)" shape keeps appearing across
+  future PRs, treat it as confirmed-recurring rather than re-litigating the ambiguity each time.
+- `reloadFromDisk()`/`_reloadNow()` added to both `StopwatchController` and `TimerController`
+  are byte-for-byte identical (11 lines each) — the plan file (`plans/feat-stopwatch-widget-
+  interactive-buttons.md`) explicitly discusses and re-defers the `MutationQueueNotifier<T>`
+  extraction, citing the same prior deferral tracked in `.claude/agent-memory` (task_d15ba35c,
+  see [[project_session-schedule-followups]] in user auto-memory). Deliberate, documented,
+  consistent with precedent — still worth flagging per this repo's "extraction is now a Warning"
+  threshold (already crossed at 4 instances back at issue #26), but not a fresh oversight.
+- Real gap, not yet adjudicated anywhere: `_reloadNow()` has **no try/catch** around
+  `prefs.reload()`/`_readPersisted`, unlike every other fallible platform-channel call in this
+  same PR's own `home_widget_scheduler.dart` (`_syncStopwatch`/`_syncNextTarget`/
+  `_syncCompletion` all wrap in `try { ... } on Exception catch (e) { debugPrint(...) }`) and
+  unlike the sibling `_mutateNow` in the very same file (`on Exception catch (e, st) { state =
+  AsyncError(e, st); }`). Both call sites (`didChangeAppLifecycleState`'s two
+  `unawaited(...reloadFromDisk())` calls) mean an exception here becomes a genuinely unhandled
+  Future error, not just a swallowed one — the plan's own reasoning ("既存の `on Exception catch`
+  によるエラーハンドリングは持たせない...失敗時はcatchErrorでキュー継続のみ担保すれば十分") only
+  covers keeping the `_mutationQueue` chain alive, not the `unawaited` caller's own unhandled
+  rejection. This is a real asymmetry introduced by this PR, not a pre-existing pattern being
+  reapplied — flag directly, don't treat the plan's discussion as having already settled it.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]]

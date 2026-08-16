@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
+import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -413,6 +414,53 @@ void main() {
 
         expect(after.isRunning, isTrue);
         expect(after.targetEpochMs, before.targetEpochMs);
+      },
+    );
+
+    test(
+      'reloadFromDisk picks up a state change written by another isolate '
+      "(the widget background callback), not just this controller's own "
+      'mutations',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(stopwatchControllerProvider.notifier);
+
+        // Written straight to the backing store, bypassing this
+        // controller's `_lastGood` cache — simulates a write that landed
+        // on disk from a separate isolate/process, which this controller
+        // has no other way of noticing.
+        await SharedPreferencesStorePlatform.instance.setValue(
+          'String',
+          'flutter.$stopwatchStateJsonKey',
+          jsonEncode(const StopwatchState(accumulatedMs: 4242).toJson()),
+        );
+
+        await notifier.reloadFromDisk();
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.accumulatedMs, 4242);
+      },
+    );
+
+    test(
+      'reloadFromDisk queued behind an in-flight toggle() does not '
+      'clobber it with a stale pre-toggle disk read',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        final notifier = container.read(stopwatchControllerProvider.notifier);
+
+        final toggleFuture = notifier.toggle();
+        final reloadFuture = notifier.reloadFromDisk();
+        await Future.wait([toggleFuture, reloadFuture]);
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.isRunning, isTrue);
       },
     );
   });

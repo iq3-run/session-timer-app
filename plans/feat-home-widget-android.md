@@ -18,6 +18,9 @@ Issue: <https://github.com/iq3-run/session-timer-app/issues/54>
 - iOS（App Group / WidgetKit）対応。
 - ウィジェット上でのインタラクティブ操作（スタート/ストップボタン等）。タップは
   アプリを開くだけの単純な導線とする。
+  （ストップウォッチウィジェットについては issue #62 /
+  `plans/feat-stopwatch-widget-interactive-buttons.md` で対応済み。他の3
+  ウィジェットは引き続きタップで開くのみ。）
 - アプリ内設定画面からのウィジェット外観カスタマイズ。
 - ウィジェットサイズ・配置の複数バリエーション（今回は各ウィジェット固定サイズ
   1種類のみ）。
