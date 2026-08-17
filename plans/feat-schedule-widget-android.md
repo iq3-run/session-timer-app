@@ -182,3 +182,67 @@ final scheduleWidgetRowsProvider = Provider<List<ScheduleRow>>((ref) {
   - 縦画面・横画面の両方でレイアウト崩れがないか確認
   - BlueStacksでの検証には注意（`docs/*dev-environment-notes*`参照。
     対応していない場合は実機での確認が必須である旨PRで明示する）
+
+## Follow-up: issue #74（週末間/今日からを横並び表示に）
+
+PR #73マージ後、ユーザーから「アプリのセッションスケジュール画面のように
+横並びで週末間、今日からの日数を出せますか」との要望。マージ済みPR #73では
+`ScheduleRemoteViewsFactory.applyGapLine`が両方の値を
+「週末間 X日(YW)　今日から X日(YW)」という1つの結合文字列にして単一の
+`TextView`（`item_gap`）に表示していた。
+
+- **対応**: `item_gap`を`item_chain_gap`/`item_today_gap`の2つの
+  `TextView`に分割し、`item_gap_row`という横並び（`orientation="horizontal"`）
+  の親`LinearLayout`に配置。各`TextView`は値がある時だけ`VISIBLE`（ない時は
+  `GONE`）、`item_gap_row`自体は両方とも値がない時だけ`GONE`にする —
+  画面のDataTableが空セルでも列を保持するのとは異なり、ウィジェットには
+  ヘッダー行がなく列固定の意味が薄いため、値がない列は幅を取らせず詰める
+  設計を維持（PR #73の一行結合表示から変わらない判断）。
+- **4列（種別・日付・週末間・今日から）を1行にまとめる案は採らなかった**:
+  画面のDataTableと違いウィジェットにはヘッダー行がなく、かつ幅が狭い
+  （`targetCellWidth=3`/`minWidth=180dp`）ため、4項目を1行に詰めると
+  実機でクリップ/消失するリスクが高い（過去のストップウォッチウィジェット
+  で実際に発生した「幅が狭いとRemoteViewsのビューが描画ツリーから
+  丸ごと消える」バグ、220dp幅騒動を参照）。ラベル＋日付の行はそのまま
+  維持し、週末間/今日からのみを2列目の行として横並びにすることで、
+  既存の表示幅（PR #73で実機確認済みの幅）を変えずに対応した。
+
+## Follow-up 2（同issue #74）: 種別・日付・週末間・今日からを1行4列に
+
+上記の「2行1列（週末間/今日からのみ横並び）」実装をユーザーに確認したところ
+（プレビュー提示のうえ選択）、「セッションスケジュール画面と同様のフォーマット」
+＝画面のDataTable同様、種別・日付・週末間・今日からの4項目すべてを1行に
+横並び表示する形が望まれていることが判明。上記「4列を1行にまとめる案は
+採らなかった」という直前の判断を覆し、以下の対応に変更した。
+
+- **ヘッダー行を新設**: `schedule_widget_layout.xml`の`widget_header`
+  （「セッションスケジュール」タイトル）の下に、画面のDataTableヘッダーを
+  模した「　日付　週末間　今日から」の列見出し行を追加（種別列はヘッダー
+  なし、画面と同じ）。
+- **`schedule_widget_list_item.xml`を1行4列に再構成**: `item_label`/
+  `item_date`/`item_chain_gap`/`item_today_gap`を横並びの1つの
+  `LinearLayout`にまとめた。`item_chain_gap`/`item_today_gap`は値がない
+  時も`GONE`にせず**常に`VISIBLE`のまま空文字列**にする方針へ変更 — 画面の
+  DataTableが空セルでも列自体は保持するのと同じ挙動にするため。これにより
+  PR #73/Follow-up 1で必要だった「値がある時だけ表示・スペーサーで
+  マージン調整」というGONE/VISIBLE切り替えロジックが丸ごと不要になった
+  （常に表示・空文字列なので、列の位置がずれる問題がそもそも起きない）。
+- **ウィジェット幅を拡張**: `schedule_widget_info.xml`を
+  `targetCellWidth=3`/`minWidth=180dp` → `targetCellWidth=4`/
+  `minWidth=300dp`に変更。4列分のコンテンツ幅（label 44dp＋date 60dp＋
+  chainGap 56dp＋todayGap 56dp＋列間マージン24dp＝240dp）に、
+  `schedule_widget_layout.xml`の外側`padding`（8dp×2）と
+  `layout_margin`（4dp×2）を加えた実質必要幅は約264dp。
+  当初270dpとしたが、code-reviewerサブエージェントの指摘で
+  「余裕を持たせた」という記載に反し実バッファが約6dp（2%）しかないことが
+  判明（この機能領域で過去に実際発生した「一見安全そうな狭い幅が実機で
+  ビューごと消える」バグ、ストップウォッチウィジェットの
+  110dp→150dp→220dpの経緯を踏まえると不十分）→ `minWidth=300dp`
+  （実質バッファ約36dp）に修正。実機での新規配置（削除→再配置）で
+  クリップ/消失がないことを確認済み（Verification参照）。
+- 各列の幅は`wrap_content`＋`minWidth`のまま（固定幅にはしない）—
+  RemoteViewsは各行を独立にインフレートするため、Flutter DataTableのように
+  全行の最大幅から動的に列幅を揃えることはできない。固定幅にすると
+  長いラベル（"次回CR"等）がクリップするリスクがあるため、`minWidth`で
+  一般的なケースの見た目の揃いを確保しつつ、長い内容は自然にはみ出させる
+  設計を維持。

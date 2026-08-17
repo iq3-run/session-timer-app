@@ -1,7 +1,6 @@
 package com.iq3run.session_timer
 
 import android.content.Context
-import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
@@ -53,25 +52,11 @@ class ScheduleRemoteViewsFactory(private val context: Context) :
             val color = ContextCompat.getColor(context, colorRes)
             setTextColor(R.id.item_label, color)
             setTextColor(R.id.item_date, color)
-            applyGapLine(row)
-        }
-    }
-
-    // 週末間/今日から mirror the read-only スケジュール screen's two gap columns, which are
-    // blank for most rows (only chain rows with a previous entry, and the single nearest-past/
-    // nearest-future/CS rows, ever carry one) — combined onto one optional line rather than two
-    // always-present columns, since this widget's narrow width can't fit a 4-column table.
-    private fun RemoteViews.applyGapLine(row: ScheduleRowData) {
-        val parts =
-            buildList {
-                if (row.chainGap.isNotEmpty()) add("週末間 ${row.chainGap}")
-                if (row.todayGap.isNotEmpty()) add("今日から ${row.todayGap}")
-            }
-        if (parts.isEmpty()) {
-            setViewVisibility(R.id.item_gap, View.GONE)
-        } else {
-            setTextViewText(R.id.item_gap, parts.joinToString("　"))
-            setViewVisibility(R.id.item_gap, View.VISIBLE)
+            // 週末間/今日から stay VISIBLE with an empty string when a row has none — matching
+            // the read-only スケジュール画面's DataTable, which keeps every column's cell (even
+            // blank ones) rather than collapsing it, so column position never shifts row to row.
+            setTextViewText(R.id.item_chain_gap, row.chainGap)
+            setTextViewText(R.id.item_today_gap, row.todayGap)
         }
     }
 

@@ -314,4 +314,103 @@ check is on `null`, not falsiness. `flutter analyze`/`flutter test` (287/287)/`d
 build all independently reported clean by the user, plus on-device (BlueStacks) confirmed widget
 and in-app table render identical gap text for a real event.
 
+**Issue #74 (branch `feat/74-schedule-widget-column-layout`, reviewed 2026-08-17, uncommitted
+working tree, not yet pushed).** Follow-up to the #64 gap-column addition: split the single
+combined `item_gap` TextView ("週末間 X日(YW)　今日から X日(YW)") into two side-by-side TextViews
+(`item_chain_gap`/`item_today_gap`) in a horizontal `item_gap_row` LinearLayout, at the user's
+request to match the in-app schedule screen's side-by-side columns. `applyGapRow` (replacing
+`applyGapLine`) verified correct on the specific question this review was asked to check —
+whether the 3 independent `setViewVisibility` calls (row + 2 children) can end up inconsistent:
+they can't, because `getViewAt` builds a brand-new `RemoteViews(context.packageName, ...)` per
+row (no shared/recycled RemoteViews object carries state between rows), and all 3 visibility
+calls are unconditional (only the `setTextViewText` calls are branch-conditional) — so a
+GONE child never keeps stale-but-visible text from a previous row's data, avoiding the classic
+RemoteViewsFactory-recycling stale-content bug class. No comment-policy violations (Kotlin doc
+comment + XML comments both WHY-only, no issue-#/plan-file self-reference) — extends the clean
+streak in this feature area first achieved at #64. Plan file's stated rationale for rejecting a
+4-column single-row layout (narrow `minWidth=180dp`/`targetCellWidth=3`, citing the #62
+220dp "views vanish from the RemoteViews tree" incident) verified accurate against the actual
+`schedule_widget_info.xml` values. Gap in the described on-device (BlueStacks) verification:
+only "todayGap-only" and "both present" rows were exercised; the "neither gap present" case
+(row collapses to zero height — actually the *majority* case for real schedule data, per the
+row's own WHY comment: "most rows carry at most one of the two") and the symmetric
+"chainGap-only" case were not. Given this feature area's repeated history of RemoteViews-tree
+bugs invisible to `flutter build`/`flutter analyze`/code review and only found by dumping the
+real inflated view hierarchy on-device (#62's 150dp→220dp saga, tracked above), recommended
+checking the "neither gap" collapse case on-device before merge — logic review alone can't rule
+out a device-specific inflation quirk the way it did for #62 twice.
+
+**Issue #74 follow-up (same branch, reviewed again 2026-08-17 — after the "neither gap" on-device
+check above).** Gemini CLI's independent pass on that same earlier diff caught a real bug this
+review's first pass missed: `item_today_gap`'s `layout_marginStart="12dp"` was applied relative to
+the row's start, not to `item_chain_gap`'s true edge — standard, documented `LinearLayout` layout-
+pass behavior (a GONE child contributes zero space and is skipped in the position-advancement loop,
+but a VISIBLE sibling's own margin is still applied at wherever the cursor currently sits). Net
+effect: chainGap-absent/todayGap-only rows rendered indented 12dp instead of flush, inconsistent
+with chainGap-only rows (flush, no margin) and the label/date row above. Gemini's proposed fix — a
+spacer `<View>` toggled VISIBLE only when both gaps are present — was implemented first and crashed
+the widget host on-device (`InflateException: Error inflating class android.view.View`, confirmed
+via `logcat`): **`RemoteViews` only inflates a fixed whitelist of widget classes in the widget
+host's own (separate) process, and plain `android.view.View`/`Space` are not on that whitelist** —
+this is a real, confirmed-on-device Android platform restriction (RemoteViews supports
+AnalogClock/Button/Chronometer/ImageButton/ImageView/ProgressBar/TextClock/TextView/ViewFlipper/
+ListView/GridView/StackView/AdapterViewFlipper/ViewStub for widgets, plus FrameLayout/LinearLayout/
+RelativeLayout/GridLayout containers — no bare View). Fixed by swapping the spacer to a `TextView`
+(same id `item_gap_spacer`, no text ever set, fixed `12dp` width, `wrap_content` height) — TextView
+is already proven to inflate correctly in RemoteViews throughout this file. Verified the final
+`applyGapRow` visibility logic by hand for all 4 `(hasChainGap, hasTodayGap)` combinations: `(F,F)`
+row GONE; `(T,F)` chain VISIBLE flush (no margin on chain itself), spacer/today GONE; `(F,T)` chain/
+spacer GONE, today VISIBLE and now flush (this is the fix — previously indented); `(T,T)` all three
+VISIBLE, spacer provides the 12dp gap — internally consistent, no combination leaves stale spacing.
+Re-confirmed on-device (BlueStacks) after the TextView swap: todayGap-only flush, both-present gap
+correct, neither-present row still collapses to zero height, no crash/inflate error in logcat.
+Suggestion only, not flagged as a fix: the spacer TextView has no explicit `textSize`, so its
+default-theme line height could differ slightly from the sibling 11sp TextViews, meaning a
+both-gaps-present row could measure a hair taller than a single-gap row — visually verified as a
+non-issue on-device, so not worth the extra attribute. Comment-policy clean: the new XML comment
+(marginStart-relative-to-cursor explanation + the View-whitelist crash) and the Kotlin
+"(see the layout's own comment)" cross-reference are both WHY-only /architectural-pointer, not
+task/caller self-references — extends this feature area's clean streak (first achieved at #64).
+
+**Issue #74 Follow-up 2 (same branch, reviewed again 2026-08-17 — user asked for a bigger redesign
+after the two prior rounds shipped: label/date/chainGap/todayGap all in one 4-column row, matching
+`SessionScheduleScreen`'s DataTable exactly, replacing the "2-line" layout entirely).** Verified the
+specific question this review was asked: the GONE-sibling-`layout_marginStart` bug class fixed in
+the immediately-prior round (Gemini's `<View>`-spacer / today-gap-indent finding, above) cannot
+recur here, because the new `item_chain_gap`/`item_today_gap` are never set `GONE` at all —
+`setViewVisibility` and the `android.view.View` import were removed from `ScheduleRemoteViewsFactory.kt`
+entirely; both cells stay `VISIBLE` with an empty string when a row has no gap, matching the
+in-app DataTable's own blank-cell-keeps-its-column behavior. No dangling `item_gap_row`/
+`item_gap_spacer`/`applyGapRow` references anywhere (grepped repo-wide; only hits are historical
+prose in the plan file and this memory file). Header row (`schedule_widget_layout.xml`, blank/日付/
+週末間/今日から) verified byte-for-byte matching `SessionScheduleScreen`'s `DataColumn` list by
+reading the screen directly. Comment-policy clean, function lengths fine — extends this feature
+area's clean streak since #64.
+- **Warning, open (documentation-accuracy, not a live bug):** the plan file's Follow-up 2 section
+  claims `minWidth="270dp"` was chosen with "余裕を持たせた" margin, but its own stated content-width
+  arithmetic (240dp: 44+60+56+56+24dp column margins) omits the outer container's
+  `layout_margin="4dp"`×2 + `padding="8dp"`×2 (24dp) from `schedule_widget_layout.xml`, so the real
+  content width is 264dp against a declared 270dp — only ~6dp (2%) of actual headroom, not a
+  generous buffer. Notable because this is the *exact* feature area where a naively-calculated,
+  seemingly-safe width (the stopwatch widget's 150dp) still silently dropped views from the inflated
+  RemoteViews tree and needed a ~47% jump to 220dp to actually work (see the #62 saga above) — so a
+  270dp value with 2% headroom is riskier than the plan's own framing suggests, even though a fresh
+  on-device placement this round did render all three sample rows correctly with no clipping. Not
+  blocking (real device evidence exists for at least one config), but flag if a future width tweak in
+  this file trusts the plan's "generous margin" framing at face value.
+- Suggestion, not flagged as a fix: column widths (44/60/56/56dp) are literal-duplicated across
+  `schedule_widget_layout.xml`'s header row and `schedule_widget_list_item.xml`'s data row, kept in
+  sync only by a comment, not a mechanism — consistent with this repo having zero `dimens.xml`
+  anywhere (confirmed by search), so not a new deviation, just an opportunity if this drifts later.
+
+**This is the 2nd confirmed instance in this feature area of an AI-suggested fix that looked
+syntactically correct but was wrong about a RemoteViews-specific constraint, only caught by
+actually running it on-device** — 1st was CodeRabbit's 150dp stopwatch-widget width "fix" (issue
+#62, views silently absent from the inflated tree, not just clipped); this one is Gemini's `<View>`
+spacer (crash, not silent absence) — both are instances of "generic Android/layout advice being
+correct in an Activity context but wrong for RemoteViews' restricted view whitelist / layout-pass
+quirks specifically." Neither was catchable by `flutter analyze`/`flutter build`/code review alone.
+Treat any future AI-suggested RemoteViews layout change (new view class, new attribute) as needing
+on-device inflation verification before merge, not just a logic read of the XML/Kotlin diff.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]], [[project_timer_widget_display_patterns]]
