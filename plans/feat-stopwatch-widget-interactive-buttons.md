@@ -210,6 +210,7 @@ CI/CodeRabbitレビューが完了しマージ可能な状態になった後、�
 **発見した実バグ2（Minor・修正せず、既知の制約として記録）**: `home_widget`プラグイン0.9.3の`HomeWidgetBackgroundWorker.kt`が`WorkManager.enqueueUniqueWork`を`ExistingWorkPolicy.APPEND`で呼んでいるため、**アプリを一度も起動していない状態でウィジェットのボタンを最初にタップすると（＝`HomeWidget.registerInteractivityCallback`がまだ登録されていない状態）、その1回目のWork失敗が以降すべてのボタンタップを永続的にブロックする**（アプリを後から起動してコールバック登録が完了しても直らない。`enqueueUniqueWork`のAPPENDチェーンが失敗したまま以降のWorkを一切実行しなくなるため）。実際のユーザーフロー（アプリを最低1回起動してからウィジェットを操作する、または最低1回起動した後に配置する）ではこの問題は再現しない（起動後に配置→即操作した場合はWorker成功を確認済み）。`home_widget`側のバグであり本PRのスコープ外と判断し、修正はしない。issue化するかはユーザーと相談。
 
 確認した項目：
+
 1. `dart format` / `flutter analyze` / `flutter test` — 全てクリーン
 2. デバッグビルドをBlueStacksにインストールし、ホーム画面にストップウォッチウィジェットを追加 → ✅ ウィジェットピッカーで正しく「4x2」と表示され、配置後ボタン2つ・ラベル・時刻表示すべて正常にレンダリングされることを確認
 3. アプリを閉じた状態で「開始/一時停止」ボタンをタップ → ✅ Chronometerが動き出し、グリフが▶→⏸に切り替わることを確認（アプリを一度起動済みの状態）
