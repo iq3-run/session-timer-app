@@ -25,6 +25,7 @@ buildTypes {
 ## スコープ
 
 含む:
+
 - upload keystore の生成（リポジトリにはコミットしない。ローカル環境にのみ保存）
 - `android/key.properties`（gitignore済み・既存の `.gitignore` に元々エントリあり）
   に鍵情報を置く運用への変更
@@ -33,14 +34,14 @@ buildTypes {
 - README への「リリース署名のローカルセットアップ」手順の追記
 
 含まない（スコープ外）:
+
 - Play Console でのアプリ登録・クローズドテストのトラック設定（Googleアカウントでの
   手動作業のため対象外。ユーザー自身が実施）
 - 課金による機能開放の実装（将来検討事項として別issue）
 
 ## 実装方針
 
-Flutter公式の recommended パターン（
-https://docs.flutter.dev/deployment/android#configure-signing-in-gradle ）に従う:
+Flutter公式の recommended パターン（<https://docs.flutter.dev/deployment/android#configure-signing-in-gradle>）に従う:
 
 1. `android/app/build.gradle.kts` の先頭で `key.properties` を読み込む
    （存在しない場合は空の `Properties()` のまま進める）

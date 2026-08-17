@@ -31,6 +31,31 @@ flutter build apk --debug
 
 iOSビルドはmacOS環境（またはCI）でのみ確認可能。
 
+### リリース署名（Android）
+
+Play Storeへの配布に使う release ビルドは、専用の upload keystore で署名する。
+`android/key.properties`（gitignore対象・リポジトリにはコミットしない）が
+存在しない場合は自動的に debug 署名にフォールバックするため、keystoreを
+持たない開発者も通常の開発・CIには影響しない。
+
+セットアップ手順:
+
+1. リポジトリ外の安全な場所に upload keystore を生成する
+
+   ```bash
+   keytool -genkeypair -v -keystore /path/to/upload-keystore.jks \
+     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+
+2. `android/key.properties.example` を参考に `android/key.properties` を作成し、
+   生成したkeystoreのパスワード・エイリアス・パスを記入する
+3. パスワードは直ちにパスワードマネージャー等の安全な場所に保管する
+4. `flutter build apk --release` / `flutter build appbundle --release` で
+   署名済みビルドを生成できる
+
+Play App Signing を利用する前提のため、upload keyを紛失してもPlay Console側で
+リセット申請が可能（実際の配布用署名鍵はGoogle側で別管理される）。
+
 ## ディレクトリ構成
 
 機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）・`home_widget/`（Androidホーム画面ウィジェットへのデータ同期、Android向けのみ）。
