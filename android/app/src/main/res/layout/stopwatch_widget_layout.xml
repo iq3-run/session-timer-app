@@ -7,7 +7,7 @@
     android:orientation="vertical"
     android:gravity="center"
     android:background="@drawable/home_widget_background"
-    android:padding="12dp">
+    android:padding="8dp">
 
     <TextView
         android:layout_width="wrap_content"
@@ -23,7 +23,7 @@
         android:layout_height="wrap_content"
         android:visibility="gone"
         android:textColor="@color/home_widget_amber"
-        android:textSize="28sp"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
     <TextView
@@ -32,6 +32,54 @@
         android:layout_height="wrap_content"
         android:text="@string/home_widget_placeholder"
         android:textColor="@color/home_widget_amber"
-        android:textSize="28sp"
+        android:textSize="20sp"
         android:textStyle="bold" />
+
+    <!-- RemoteViews can't detect a long press or double tap, so start/pause and reset are two
+         separate buttons rather than the app's own long-press/double-tap gestures. Each has its
+         own setOnClickPendingIntent in StopwatchWidgetProvider, which takes priority over
+         widget_container's own "open the app" PendingIntent within its bounds.
+
+         Tried putting this row alongside the time in a single weighted horizontal row first, but
+         on-device (BlueStacks, API 28) a `Chronometer` sharing a weighted LinearLayout row with
+         plain TextViews didn't inflate as coded — the accessibility tree showed the time text
+         escaping to its own line regardless. This stacked structure is what actually renders, so
+         it's what's coded; verified on-device that both buttons render, are 48dp-minimum, and are
+         tappable at `stopwatch_widget_info.xml`'s widened minWidth (previously-narrower widths
+         left the buttons entirely absent from the inflated view tree, not just visually clipped).
+    -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/toggle_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/home_widget_stopwatch_toggle_start_glyph"
+            android:contentDescription="@string/home_widget_stopwatch_toggle_start_description"
+            android:textColor="@color/home_widget_cyan"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/reset_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/home_widget_stopwatch_reset_glyph"
+            android:contentDescription="@string/home_widget_stopwatch_reset_description"
+            android:textColor="@color/home_widget_label"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </LinearLayout>

@@ -93,4 +93,86 @@ project's existing multi-line-XML-comment convention throughout `AndroidManifest
 this same file. No README update needed — README's widget section describes the 4-panel behavior,
 not picker-naming/cell-size internals, and isn't stale.
 
+**Issue #62 (branch `feat/62-stopwatch-widget-buttons`, reviewed 2026-08-17, uncommitted working
+tree, not yet pushed).** Interactive start/pause + reset buttons on the stopwatch widget only,
+via `HomeWidgetBackgroundReceiver` + `HomeWidgetBackgroundIntent.getBroadcast` two-URI scheme
+(`homewidget://stopwatch/toggle` / `/reset`). Design verified sound: `Uri.pathSegments.first` vs
+`Uri.host` semantics hand-verified with a real `dart run` (host is the URI *authority*
+`"stopwatch"`, action is the first path segment — the code and its comment are both correct);
+RemoteViews child-view `setOnClickPendingIntent` correctly overriding the parent
+`widget_container`'s "open app" intent only within the child's bounds is standard, documented
+Android behavior, not a novel risk. `flutter analyze`/`flutter test`/`dart format
+--set-exit-if-changed` all independently re-run clean on every touched file.
+
+Findings from the first review pass (working tree, pre-commit) — all fixed same PR before the
+first commit landed, in response to that pass:
+- `StopwatchWidgetProvider.buildViews` (was 44 lines) — split into `applyOpenAppIntent`/
+  `applyChronometerOrPlaceholder`/`applyToggleButton`/`applyResetButton`, each under 20 lines.
+  RESOLVED.
+- `android.os.Build` dead import in `StopwatchWidgetProvider.kt` — removed. RESOLVED.
+- Issue-#-self-reference in `StopwatchWidgetProvider.kt`'s class doc comment ("issue #62") and
+  `stopwatch_widget_layout.xml`'s button-row comment ("see issue #62") — both removed. Same
+  banned category tracked since issue #54 (1st XML instance); this PR added a 2nd XML instance
+  and a new Kotlin-doc-comment instance, both now fixed. RESOLVED.
+- `_reloadNow()` in both `StopwatchController`/`TimerController` had no try/catch around
+  `prefs.reload()`/`_readPersisted`, unlike the sibling `_mutateNow` and unlike
+  `home_widget_scheduler.dart`'s own `_syncStopwatch`/etc. — both `unawaited(...reloadFromDisk())`
+  call sites meant a failure would surface as a genuinely unhandled Future error. Both now wrap
+  in `try { ... } on Exception catch (e) { debugPrint(...) }`. RESOLVED.
+
+Adjudicated, left as-is:
+- New sub-pattern from this PR: several WHY comments name a *specific related file* inline (e.g.
+  `stopwatch_widget_callback.dart:8` "(see `StopwatchWidgetProvider.kt`...)",
+  `AndroidManifest.xml:69` "(see lib/features/home_widget/stopwatch_widget_callback.dart)").
+  Judged OK, not a CLAUDE.md violation: this matches the repo's own pre-existing convention
+  (`stopwatch_controller.dart`'s "See TimeTargetsController (path) for why mutations are
+  serialized..." predates this PR) of pointing to a *collaborating* file for architectural
+  context, which is different in kind from referencing *the current task/fix/caller* (the thing
+  CLAUDE.md actually bans, per the `ensureRunning()` precedent in
+  [[project_stopwatch_pr_patterns]]). Not flagged as a fix; noting the distinction so a future
+  review doesn't re-litigate it from scratch.
+- `reloadFromDisk()`/`_reloadNow()` added to both `StopwatchController` and `TimerController` are
+  byte-for-byte identical (11 lines each) — the plan file explicitly discusses and re-defers the
+  `MutationQueueNotifier<T>` extraction, citing the same prior deferral tracked in
+  `.claude/agent-memory` (task_d15ba35c). Deliberate, documented, consistent with precedent.
+
+CodeRabbit's own follow-up pass (after the first commit, before merge) caught two things this
+review's first pass missed:
+- `toggle_button`/`reset_button` in `stopwatch_widget_layout.xml` had no `minWidth`/`minHeight`,
+  well under Android's 48dp accessibility touch-target minimum, despite the widget having grown
+  to 110dp×110dp specifically to fit them. Fixed by adding explicit 48dp minimums — **but this
+  first fix was itself incomplete**: two 48dp-wide buttons + the existing 12dp gap need 108dp
+  alone, which combined with the container's own padding (16dp) and margin (8dp) needs ~132dp,
+  exceeding the 110dp `minWidth` the widget still declared. CodeRabbit's own auto-tracking marked
+  its comment "✅ Addressed in commit d46cec2" purely because the diff touched the flagged lines
+  (added `minWidth`/`minHeight`) — it did not re-verify the arithmetic, and a manual check caught
+  the real overflow. Actually fixed by widening `stopwatch_widget_info.xml` to `minWidth="150dp"`
+  / `targetCellWidth="3"` (a 3rd commit). **Lesson: don't trust CodeRabbit's own "Addressed"
+  auto-tag as proof a fix is complete — it can fire on a pattern match (the flagged attribute now
+  exists) without checking whether the fix actually solves the underlying constraint.**
+- `test/features/home_widget/home_widget_sync_service_test.dart`'s `_FakeHomeWidgetGateway.valueOf`
+  used `.lastWhere(...)` with no `orElse`, throwing `StateError` instead of returning `null` for
+  an unsaved key — violating `getWidgetData`'s nullable contract. Latent (no test in that file
+  actually hit the throw path) but a real footgun for future tests. Fixed with `.lastOrNull`.
+
+**Post-merge-ready, on-device (BlueStacks) verification found the 150dp width fix above was STILL
+wrong** — not a clipping/arithmetic issue this time, a much stranger one: at `minWidth=150dp` the
+toggle/reset buttons were entirely absent from the inflated view tree (confirmed via
+`uiautomator dump` — not present at all, not just visually clipped), reproducibly, across a full
+uninstall/rebuild/reinstall cycle. Widening to `minWidth="220dp"`/`targetCellWidth="4"` fixed it;
+root cause not fully isolated (a `Chronometer` sharing a weighted nested `LinearLayout` row with
+plain `TextView`s was also tried and didn't inflate as coded — the accessibility tree showed the
+time text escaping to its own line regardless of the weight — so the shipped layout reverted to
+the original 3-stacked-children structure, just at the wider size). **Lesson: this class of bug
+(views silently missing from the inflated RemoteViews tree, not merely mis-sized) is invisible to
+`flutter build apk --debug`, `flutter analyze`, and code review — it only surfaces by actually
+placing the widget on a device/emulator and dumping the real view hierarchy.** Also found (separate,
+unfixed, documented as a known limitation in the plan file): `home_widget` 0.9.3's
+`HomeWidgetBackgroundWorker.kt` uses `WorkManager.enqueueUniqueWork(..., ExistingWorkPolicy.APPEND)`
+— if a button is tapped before `HomeWidget.registerInteractivityCallback` has ever run (app never
+launched once), that first Worker failure permanently blocks all later button taps via the same
+APPEND chain, even after the app is later opened and registers the callback. Doesn't affect the
+normal flow (open app at least once before/while using the widget) so left as a documented
+limitation rather than fixed — it's an upstream plugin bug, not something fixable app-side.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]]

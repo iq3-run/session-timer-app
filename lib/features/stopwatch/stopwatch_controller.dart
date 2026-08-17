@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
@@ -94,6 +95,37 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     final timer = await ref.read(timerControllerProvider.future);
     if (timer.isOverdueAt(now)) {
       await ref.read(timerControllerProvider.notifier).reset();
+    }
+  }
+
+  /// Resyncs from disk on app resume. A widget button tap (see
+  /// `stopwatch_widget_callback.dart`) runs in a separate isolate with its
+  /// own `SharedPreferences` cache — this app's own foreground instance
+  /// doesn't see that write until it explicitly reloads. Queued through the
+  /// same serialization as [_mutate] so it can't race a mutation already in
+  /// flight; unconditionally overwrites `_lastGood`/`state` since
+  /// [StopwatchState] has no `==` to compare against cheaply.
+  Future<void> reloadFromDisk() {
+    final previous = _mutationQueue;
+    final result = previous.then((_) => _reloadNow());
+    _mutationQueue = result.catchError((_) {});
+    return result;
+  }
+
+  // Unlike `_mutateNow`, a failure here isn't turned into `AsyncError` state
+  // — `HomeWidgetScheduler` calls `reloadFromDisk()` via `unawaited(...)`,
+  // so an unhandled failure would surface as a genuine uncaught async
+  // exception rather than a caller-visible error.
+  Future<void> _reloadNow() async {
+    if (!_initialLoad.isCompleted) await _initialLoad.future;
+    try {
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      await prefs.reload();
+      final onDisk = _readPersisted(prefs);
+      _lastGood = onDisk;
+      state = AsyncData(onDisk);
+    } on Exception catch (e) {
+      debugPrint('StopwatchController: reloadFromDisk failed: $e');
     }
   }
 
