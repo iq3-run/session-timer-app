@@ -155,4 +155,24 @@ review's first pass missed:
   an unsaved key — violating `getWidgetData`'s nullable contract. Latent (no test in that file
   actually hit the throw path) but a real footgun for future tests. Fixed with `.lastOrNull`.
 
+**Post-merge-ready, on-device (BlueStacks) verification found the 150dp width fix above was STILL
+wrong** — not a clipping/arithmetic issue this time, a much stranger one: at `minWidth=150dp` the
+toggle/reset buttons were entirely absent from the inflated view tree (confirmed via
+`uiautomator dump` — not present at all, not just visually clipped), reproducibly, across a full
+uninstall/rebuild/reinstall cycle. Widening to `minWidth="220dp"`/`targetCellWidth="4"` fixed it;
+root cause not fully isolated (a `Chronometer` sharing a weighted nested `LinearLayout` row with
+plain `TextView`s was also tried and didn't inflate as coded — the accessibility tree showed the
+time text escaping to its own line regardless of the weight — so the shipped layout reverted to
+the original 3-stacked-children structure, just at the wider size). **Lesson: this class of bug
+(views silently missing from the inflated RemoteViews tree, not merely mis-sized) is invisible to
+`flutter build apk --debug`, `flutter analyze`, and code review — it only surfaces by actually
+placing the widget on a device/emulator and dumping the real view hierarchy.** Also found (separate,
+unfixed, documented as a known limitation in the plan file): `home_widget` 0.9.3's
+`HomeWidgetBackgroundWorker.kt` uses `WorkManager.enqueueUniqueWork(..., ExistingWorkPolicy.APPEND)`
+— if a button is tapped before `HomeWidget.registerInteractivityCallback` has ever run (app never
+launched once), that first Worker failure permanently blocks all later button taps via the same
+APPEND chain, even after the app is later opened and registers the callback. Doesn't affect the
+normal flow (open app at least once before/while using the widget) so left as a documented
+limitation rather than fixed — it's an upstream plugin bug, not something fixable app-side.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]]

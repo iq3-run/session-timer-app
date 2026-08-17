@@ -57,13 +57,17 @@ Issue: #62（親: #1）
 
 既存の1×2セル（110dp×90dp）にボタン2つを追加で収めるのは窮屈なため、このウィジェットのみ `stopwatch_widget_info.xml` のサイズを広げる（issueのScopeで「必要ならウィジェット自体のサイズ変更も含めて再検討」と合意済み）。他の3ウィジェットは1×2のまま変更しない。現状の縦積み（ラベル→Chronometer→placeholder）はそのまま維持しつつ、下部に横並びの2ボタンを追加する:
 
-（CodeRabbitレビューで、当初の110dp×110dp（2×2セル）だと48dp四方のボタン2つ＋12dp間隔＋コンテナのpadding/marginが幅方向で収まらない（108dp+padding16dp+margin8dp=132dp＞110dp）という指摘を受け、`minWidth`/`targetCellWidth`を150dp/3セルに広げて修正済み。`minHeight`/`targetCellHeight`は110dp/2セルのまま。さらに`resizeMode="horizontal|vertical"`でユーザーが再縮小できてしまう点も指摘を受け、`minResizeWidth`/`minResizeHeight`を`minWidth`/`minHeight`と同じ150dp/110dpに設定し、ボタンが収まる最小サイズより縮小できないようにした。）
+（CodeRabbitレビューで、当初の110dp×110dp（2×2セル）だと48dp四方のボタン2つ＋12dp間隔＋コンテナのpadding/marginが幅方向で収まらない（108dp+padding16dp+margin8dp=132dp＞110dp）という指摘を受け、`minWidth`/`targetCellWidth`を150dp/3セルに広げて修正。さらに`resizeMode="horizontal|vertical"`でユーザーが再縮小できてしまう点も指摘を受け、`minResizeWidth`/`minResizeHeight`を`minWidth`/`minHeight`と同じ値に設定し、ボタンが収まる最小サイズより縮小できないようにした。
+
+その後BlueStacks実機確認で、150dp幅でもボタン2つ（合計48+48=96dpの中身、実測では周辺の余白を含めさらに広い領域）が実際には**ボタンごと丸ごとview階層から消える**という、単なる見切れではない不具合を確認した（詳細は「動作確認（BlueStacks実機確認）」節）。最終的に `minWidth`/`minResizeWidth` を220dp、`targetCellWidth` を4に広げて解決。`minHeight`/`minResizeHeight`/`targetCellHeight` は110dp/2セルのまま変更なし。)
 
 ```text
 [経過時間ラベル]
-[Chronometer/placeholder]  ← フォントサイズを28sp→22sp程度に縮小して余白確保
+[Chronometer/placeholder]  ← フォントサイズを28sp→20sp程度に縮小して余白確保
 [▶/⏸ ボタン] [⟲ ボタン]
 ```
+
+（Chronometer/placeholderとボタン行を1つの横並びLinearLayout（`layout_weight`で時刻を可変幅、ボタンを固定幅）にまとめる案も試したが、BlueStacks実機ではChronometerが weight 付きの入れ子LinearLayout内で意図通り展開されず、結局placeholderが単独行にはみ出す挙動になった。実際にレンダリングされる構造に合わせ、素直に3段の縦積み（ラベル／時刻／ボタン行）のまま確定した。）
 
 - ボタンは `TextView`（`android:clickable` は不要、`setOnClickPendingIntent` で十分）または `Button` の軽量版。既存の文字ベースの見た目に合わせ、装飾は最小限（背景は透明かうっすら、フォントサイズは16sp程度）。
 - コンテナ全体の `widget_container` に既存どおり「アプリを開く」の `PendingIntent` を設定したまま、2つのボタンには個別に `setOnClickPendingIntent` を設定する。RemoteViewsは子ビュー自身のクリックリスナーが親のものより優先されるため、ボタン領域だけタップ時の挙動が上書きされる（他の3ウィジェットと同じ「タップで開く」動線は温存）。
@@ -197,16 +201,24 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
 - `test/features/home_widget/home_widget_scheduler_test.dart`（既存があれば）に、`AppLifecycleState.resumed` で両コントローラの `reloadFromDisk()` が呼ばれることを確認するテストを追加。
 - Kotlin側は既存プロジェクトにユニットテストの仕組みがないため自動テストは追加せず、BlueStacks（Android 9/API 28）での手動確認に委ねる。
 
-## 動作確認方法
+## 動作確認（BlueStacks実機確認、2026-08-17）
 
-1. `dart format` / `flutter analyze` / `flutter test`
-2. デバッグビルドをBlueStacksにインストールし、ホーム画面にストップウォッチウィジェットを追加。
-3. アプリを閉じた状態で「開始/一時停止」ボタンをタップ → Chronometerが動き出すこと。
-4. アプリを閉じたまま「リセット」ボタンをタップ → 表示が0に戻り、連動してタイマーもリセットされること（アプリを開いて確認）。
-5. アプリをフォアグラウンドで開いたまま（別ウィンドウ/ホームに一瞬戻すなど）ウィジェットのボタンを操作し、アプリに戻った際に最新状態が反映されること（`reloadFromDisk()` の確認）。
-6. ウィジェット全体のうちボタン以外の領域をタップした場合は従来どおりアプリが開くこと。
+CI/CodeRabbitレビューが完了しマージ可能な状態になった後、ユーザーの依頼でBlueStacks（emulator-5554、Android 9/API 28、Nova Launcher）上での実機確認を実施。`adb shell input draganddrop`でウィジェットピッカーからホーム画面へドラッグ配置し、`adb shell input swipe <x> <y> <x> <y> <duration>`（同一点への短時間swipe＝タップ代替。プレーンな`input tap`はこの環境で不安定なため）でボタン操作、`uiautomator dump`で実際のview階層・bounds・content-descriptionを確認、`logcat`で`HomeWidgetBackgroundWorker`のWorkManagerログを追跡する形で検証した。
+
+**発見した実バグ1（Critical・修正済み）**: 当初のminWidth=150dp設定で実機配置すると、ラベルとプレースホルダー（`--:--`）は表示されるが、**開始/一時停止・リセットボタンが丸ごとview階層から消える**（`uiautomator dump`のaccessibility treeにも一切現れない。単なる見切れ/クリッピングではない）。`flutter build apk --debug`のようなビルド時チェックでは検出できない、実機レンダリング時のみ再現する不具合だった。`minWidth`/`minResizeWidth`を220dp、`targetCellWidth`を4に広げたところ解消。原因（幅とボタン消失の直接的な因果関係）は完全には特定できていないが、複数回の再現実験で「150dp幅→消える／220dp幅→表示される」という結果は一貫して再現した。
+
+**発見した実バグ2（Minor・修正せず、既知の制約として記録）**: `home_widget`プラグイン0.9.3の`HomeWidgetBackgroundWorker.kt`が`WorkManager.enqueueUniqueWork`を`ExistingWorkPolicy.APPEND`で呼んでいるため、**アプリを一度も起動していない状態でウィジェットのボタンを最初にタップすると（＝`HomeWidget.registerInteractivityCallback`がまだ登録されていない状態）、その1回目のWork失敗が以降すべてのボタンタップを永続的にブロックする**（アプリを後から起動してコールバック登録が完了しても直らない。`enqueueUniqueWork`のAPPENDチェーンが失敗したまま以降のWorkを一切実行しなくなるため）。実際のユーザーフロー（アプリを最低1回起動してからウィジェットを操作する、または最低1回起動した後に配置する）ではこの問題は再現しない（起動後に配置→即操作した場合はWorker成功を確認済み）。`home_widget`側のバグであり本PRのスコープ外と判断し、修正はしない。issue化するかはユーザーと相談。
+
+確認した項目：
+1. `dart format` / `flutter analyze` / `flutter test` — 全てクリーン
+2. デバッグビルドをBlueStacksにインストールし、ホーム画面にストップウォッチウィジェットを追加 → ✅ ウィジェットピッカーで正しく「4x2」と表示され、配置後ボタン2つ・ラベル・時刻表示すべて正常にレンダリングされることを確認
+3. アプリを閉じた状態で「開始/一時停止」ボタンをタップ → ✅ Chronometerが動き出し、グリフが▶→⏸に切り替わることを確認（アプリを一度起動済みの状態）
+4. アプリを閉じたまま「リセット」ボタンをタップ → ✅ 表示が00:00に戻り、グリフが⏸→▶に戻ることを確認
+5. ウィジェット経由で開始した状態のままアプリを開く（`am start`で既存タスクをforeground化＝resume相当）→ ✅ アプリ内の経過時間表示が「計測中」として widget 側の running 状態を正しく引き継いで表示（`reloadFromDisk()`の動作を確認）
+6. ウィジェット全体のうちボタン以外の領域（ラベル部分）をタップした場合、従来どおりアプリが開くことを確認
 
 ## リスク・既知の制約
 
-- BlueStacksはAndroid 9（API 28）のため、実機の新しいAndroidバージョンでのPendingIntent/RemoteViews挙動の差異は検証できない（既存の `project_home-widget-android-followups.md` の制約を踏襲）。
+- BlueStacksはAndroid 9（API 28）のため、実機の新しいAndroidバージョンでのPendingIntent/RemoteViews挙動の差異は検証できない（既存の `project_home-widget-android-followups.md` の制約を踏襲）。`targetCellWidth`/`targetCellHeight`はAPI 31+でのみ`minWidth`/`minHeight`より優先されるため、この環境ではその挙動も未検証。
 - `reloadFromDisk()` はresumeのたびに `SharedPreferences.reload()`（ディスクI/O）を伴う。頻繁なアプリ切り替えでの体感コストは軽微と想定するが、実測はしない。
+- 上記「発見した実バグ2」（`home_widget`のWorkManager APPENDチェーン問題）は既知の制約として残す。
