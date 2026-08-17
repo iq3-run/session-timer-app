@@ -23,6 +23,7 @@ const completionWidgetAndroidName = 'CompletionCountdownWidgetProvider';
 
 const timerTargetEpochMsKey = 'timer_target_epoch_ms';
 const timerWidgetAndroidName = 'TimerWidgetProvider';
+const timerControlWidgetAndroidName = 'TimerControlWidgetProvider';
 
 /// Pushes app state to the Android home screen widgets' own data store
 /// (a `SharedPreferences` file separate from the app's own, owned by the
@@ -85,7 +86,11 @@ class HomeWidgetSyncService {
       state?.targetEpochMs?.toString(),
     );
     await _gateway.saveWidgetData(ntpOffsetMsKey, ntpOffsetMs.toString());
+    // Two separate AppWidgetProviders (a display-only widget and an operable
+    // one) both read this same targetEpochMs, so both need their own
+    // updateWidget call to redraw.
     await _gateway.updateWidget(androidName: timerWidgetAndroidName);
+    await _gateway.updateWidget(androidName: timerControlWidgetAndroidName);
   }
 }
 

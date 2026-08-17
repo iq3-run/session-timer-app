@@ -3,9 +3,9 @@ package com.iq3run.session_timer
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
+import com.iq3run.session_timer.TimerWidgetCountdown.applyChronometerOrPlaceholder
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 
 /**
@@ -34,14 +34,11 @@ object TimerWidgetSync {
             widgetData.getString(HomeWidgetKeys.NTP_OFFSET_MS, null)?.toLongOrNull() ?: 0L
         val flashing =
             TimerWidgetFlashPoints.isFlashing(targetEpochMs, ntpOffsetMs, System.currentTimeMillis())
-        // Unlike Completion/NextTarget, TimerState.targetEpochMs is built from
-        // raw DateTime.now() and the in-app countdown compares it against raw
-        // DateTime.now() too (timer_section.dart's _TimerBody), not the
-        // NTP-corrected nowProvider — so the Chronometer base must not apply
-        // ntpOffsetMs here, even though the flash windows above correctly do
-        // (they mirror FlashQueueController, which compares this same raw
-        // target against NTP-corrected "now").
-        val base = targetEpochMs?.let { HomeWidgetTimeMath.countDownBase(it, ntpOffsetMs = 0L) }
+        // The flash windows above correctly apply ntpOffsetMs (they mirror
+        // FlashQueueController, which compares this same raw target against
+        // NTP-corrected "now") — see TimerWidgetCountdown.base for why the
+        // Chronometer base itself must not.
+        val base = TimerWidgetCountdown.base(targetEpochMs)
 
         appWidgetIds.forEach { widgetId ->
             appWidgetManager.updateAppWidget(widgetId, buildViews(context, base, flashing))
@@ -76,22 +73,5 @@ object TimerWidgetSync {
         }
         setViewVisibility(R.id.label, View.VISIBLE)
         applyChronometerOrPlaceholder(base)
-    }
-
-    // setChronometerCountDown is API 24+; on an older OS a count-down base
-    // falls back to the static placeholder rather than a Chronometer that
-    // would (wrongly) count up instead of down — matches
-    // HomeWidgetChronometerPanel.effectiveBase.
-    private fun RemoteViews.applyChronometerOrPlaceholder(base: Long?) {
-        val effectiveBase = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) null else base
-        if (effectiveBase != null) {
-            setChronometer(R.id.chronometer, effectiveBase, null, true)
-            setChronometerCountDown(R.id.chronometer, true)
-            setViewVisibility(R.id.chronometer, View.VISIBLE)
-            setViewVisibility(R.id.placeholder, View.GONE)
-        } else {
-            setViewVisibility(R.id.chronometer, View.GONE)
-            setViewVisibility(R.id.placeholder, View.VISIBLE)
-        }
     }
 }

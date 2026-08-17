@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
+import 'package:session_timer/features/timer/timer_controller.dart';
 
 /// Called by `home_widget`'s background Dart isolate when the stopwatch
 /// widget's toggle/reset button is tapped (see `StopwatchWidgetProvider.kt`
@@ -52,12 +53,20 @@ Future<void> _applyAction(ProviderContainer container, Uri? uri) async {
 /// starts every fresh isolate at an unsynced `offsetMs: 0` and deliberately
 /// never fetches over the network on `build()`, so reading it here would
 /// silently drop whatever offset the foreground app last resolved.
+///
+/// Also pushes the timer's state: `reset()` cascades into
+/// `TimerController.reset()` too (see `StopwatchController.reset`'s own
+/// doc comment), so a timer widget left stale by that cascade needs
+/// redrawing here as well, not just this stopwatch widget.
 Future<void> _pushUpdatedStateToWidget(ProviderContainer container) async {
-  final state = await container.read(stopwatchControllerProvider.future);
+  final stopwatchState = await container.read(
+    stopwatchControllerProvider.future,
+  );
+  final timerState = await container.read(timerControllerProvider.future);
   final gateway = container.read(homeWidgetGatewayProvider);
   final rawOffsetMs = await gateway.getWidgetData(ntpOffsetMsKey);
   final ntpOffsetMs = int.tryParse(rawOffsetMs ?? '') ?? 0;
-  await container
-      .read(homeWidgetSyncServiceProvider)
-      .syncStopwatch(state, ntpOffsetMs);
+  final syncService = container.read(homeWidgetSyncServiceProvider);
+  await syncService.syncStopwatch(stopwatchState, ntpOffsetMs);
+  await syncService.syncTimer(timerState, ntpOffsetMs);
 }
