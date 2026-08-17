@@ -207,7 +207,7 @@ CI/CodeRabbitレビューが完了しマージ可能な状態になった後、�
 
 **発見した実バグ1（Critical・修正済み）**: 当初のminWidth=150dp設定で実機配置すると、ラベルとプレースホルダー（`--:--`）は表示されるが、**開始/一時停止・リセットボタンが丸ごとview階層から消える**（`uiautomator dump`のaccessibility treeにも一切現れない。単なる見切れ/クリッピングではない）。`flutter build apk --debug`のようなビルド時チェックでは検出できない、実機レンダリング時のみ再現する不具合だった。`minWidth`/`minResizeWidth`を220dp、`targetCellWidth`を4に広げたところ解消。原因（幅とボタン消失の直接的な因果関係）は完全には特定できていないが、複数回の再現実験で「150dp幅→消える／220dp幅→表示される」という結果は一貫して再現した。
 
-**発見した実バグ2（Minor・修正せず、既知の制約として記録）**: `home_widget`プラグイン0.9.3の`HomeWidgetBackgroundWorker.kt`が`WorkManager.enqueueUniqueWork`を`ExistingWorkPolicy.APPEND`で呼んでいるため、**アプリを一度も起動していない状態でウィジェットのボタンを最初にタップすると（＝`HomeWidget.registerInteractivityCallback`がまだ登録されていない状態）、その1回目のWork失敗が以降すべてのボタンタップを永続的にブロックする**（アプリを後から起動してコールバック登録が完了しても直らない。`enqueueUniqueWork`のAPPENDチェーンが失敗したまま以降のWorkを一切実行しなくなるため）。実際のユーザーフロー（アプリを最低1回起動してからウィジェットを操作する、または最低1回起動した後に配置する）ではこの問題は再現しない（起動後に配置→即操作した場合はWorker成功を確認済み）。`home_widget`側のバグであり本PRのスコープ外と判断し、修正はしない。issue化するかはユーザーと相談。
+**発見した実バグ2（Minor・修正せず、既知の制約として記録）**: `home_widget`プラグイン0.9.3の`HomeWidgetBackgroundWorker.kt`が`WorkManager.enqueueUniqueWork`を`ExistingWorkPolicy.APPEND`で呼んでいるため、**アプリを一度も起動していない状態でウィジェットのボタンを最初にタップすると（＝`HomeWidget.registerInteractivityCallback`がまだ登録されていない状態）、その1回目のWork失敗が以降すべてのボタンタップを永続的にブロックする**（アプリを後から起動してコールバック登録が完了しても直らない。`enqueueUniqueWork`のAPPENDチェーンが失敗したまま以降のWorkを一切実行しなくなるため）。実際のユーザーフロー（アプリを最低1回起動してからウィジェットを操作する、または最低1回起動した後に配置する）ではこの問題は再現しない（起動後に配置→即操作した場合はWorker成功を確認済み）。`home_widget`側のバグであり本PRのスコープ外と判断し、修正はしない。issue #68として追跡する。
 
 確認した項目：
 
@@ -222,4 +222,4 @@ CI/CodeRabbitレビューが完了しマージ可能な状態になった後、�
 
 - BlueStacksはAndroid 9（API 28）のため、実機の新しいAndroidバージョンでのPendingIntent/RemoteViews挙動の差異は検証できない（既存の `project_home-widget-android-followups.md` の制約を踏襲）。`targetCellWidth`/`targetCellHeight`はAPI 31+でのみ`minWidth`/`minHeight`より優先されるため、この環境ではその挙動も未検証。
 - `reloadFromDisk()` はresumeのたびに `SharedPreferences.reload()`（ディスクI/O）を伴う。頻繁なアプリ切り替えでの体感コストは軽微と想定するが、実測はしない。
-- 上記「発見した実バグ2」（`home_widget`のWorkManager APPENDチェーン問題）は既知の制約として残す。
+- 上記「発見した実バグ2」（`home_widget`のWorkManager APPENDチェーン問題）は既知の制約として残す（issue #68で追跡）。
