@@ -10,9 +10,10 @@ import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
+import 'package:session_timer/features/timer/timer_state.dart';
 
 /// Mounted once at the app root, alongside `NotificationScheduler`. Pushes
-/// stopwatch/next-target/completion state to the Android home screen
+/// stopwatch/next-target/completion/timer state to the Android home screen
 /// widgets whenever it changes, plus once at startup so a widget already on
 /// the home screen reflects whatever state exists by the time this widget
 /// mounts. Kept as a widget rather than a `Notifier` for the same reason as
@@ -75,10 +76,15 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
         _syncCompletion(next.value?.targetTime, ref.read(ntpOffsetMsProvider)),
       );
     });
+    ref.listen(timerControllerProvider, (previous, next) {
+      final value = next.value;
+      if (value == null) return;
+      unawaited(_syncTimer(value, ref.read(ntpOffsetMsProvider)));
+    });
     // The NTP offset itself changing (a resync) means every already-synced
     // widget's Chronometer base is now stale relative to the app's
     // corrected clock, even though the underlying epoch values didn't
-    // change — re-push all three rather than waiting for their own state to
+    // change — re-push all four rather than waiting for their own state to
     // change again.
     ref.listen(ntpOffsetMsProvider, (previous, next) {
       unawaited(_syncAll(next));
@@ -92,6 +98,7 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
       ref.read(completionTimeControllerProvider).value?.targetTime,
       ntpOffsetMs,
     ),
+    _syncTimer(ref.read(timerControllerProvider).value, ntpOffsetMs),
   ]);
 
   /// A sync failure (e.g. the platform channel not ready yet) is a
@@ -128,6 +135,17 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
           .syncCompletion(target, ntpOffsetMs);
     } on Exception catch (e) {
       debugPrint('HomeWidgetScheduler: failed to sync completion: $e');
+    }
+  }
+
+  Future<void> _syncTimer(TimerState? value, int ntpOffsetMs) async {
+    if (value == null) return;
+    try {
+      await ref
+          .read(homeWidgetSyncServiceProvider)
+          .syncTimer(value, ntpOffsetMs);
+    } on Exception catch (e) {
+      debugPrint('HomeWidgetScheduler: failed to sync timer: $e');
     }
   }
 }
