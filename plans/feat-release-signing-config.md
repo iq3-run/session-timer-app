@@ -61,8 +61,10 @@ Flutter公式の recommended パターン（<https://docs.flutter.dev/deployment
 
 - upload keystore ファイル（`.jks`）と `key.properties` はこの PR には含めない
   （`.gitignore` に既存エントリ `key.properties` / `**/*.keystore` / `**/*.jks` あり）
-- keystore のパスワードはこの実装作業中にツールで生成し、チャット上で一度提示する。
-  ユーザーは提示された値を直ちにパスワードマネージャー等の安全な場所に保存すること
+- keystore のパスワードは、生成した値をユーザー自身のパスワードマネージャー等に
+  保存してもらうため、この実装作業中に一度だけチャット上で提示する
+  （他に安全に伝達する手段がないための一回限りの措置であり、継続的な運用として
+  今後も繰り返す手順ではない）。提示後はユーザー側で直ちに保管すること
 - keystore ファイル自体もリポジトリ外の安全な場所（ホームディレクトリ配下等）に
   保管する
 - Play App Signing を利用する前提のため、upload key を万が一紛失しても
@@ -74,5 +76,7 @@ Flutter公式の recommended パターン（<https://docs.flutter.dev/deployment
 - `key.properties` を実際に作成した状態で `flutter build apk --release` が
   成功し、生成された APK が debug 署名ではなく新しい release 鍵で
   署名されていることを `apksigner` 等で確認
-- `key.properties` が存在しない状態（未生成のユーザーを想定）でも
-  `flutter build apk --debug` が引き続き成功することを確認
+- `key.properties` を一時的に退避した状態（未生成のユーザーを想定）でも
+  `flutter build apk --release` が成功し、フォールバック先の debug 署名で
+  出力されることを確認（変更対象は `buildTypes.release` のため、
+  `--debug` ビルドの成功確認だけでは検証できない）

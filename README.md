@@ -48,7 +48,8 @@ Play Storeへの配布に使う release ビルドは、専用の upload keystore
    ```
 
 2. `android/key.properties.example` を参考に `android/key.properties` を作成し、
-   生成したkeystoreのパスワード・エイリアス・パスを記入する
+   `storePassword`・`keyPassword`・`keyAlias`・`storeFile`の4項目を記入する
+   （いずれか不足・不一致があるとrelease buildが失敗する）
 3. パスワードは直ちにパスワードマネージャー等の安全な場所に保管する
 4. `flutter build apk --release` / `flutter build appbundle --release` で
    署名済みビルドを生成できる
