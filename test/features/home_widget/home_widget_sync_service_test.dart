@@ -3,6 +3,7 @@ import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
+import 'package:session_timer/features/timer/timer_state.dart';
 
 class _RecordedSave {
   _RecordedSave(this.key, this.value);
@@ -104,6 +105,33 @@ void main() {
       await service.syncCompletion(null, 0);
 
       expect(gateway.valueOf(completionTargetEpochMsKey), isNull);
+    });
+  });
+
+  group('HomeWidgetSyncService.syncTimer', () {
+    test(
+      'sends the target epoch as a string and updates the timer widget',
+      () async {
+        const state = TimerState(targetEpochMs: 1700000000000);
+
+        await service.syncTimer(state, 3);
+
+        expect(gateway.valueOf(timerTargetEpochMsKey), '1700000000000');
+        expect(gateway.valueOf(ntpOffsetMsKey), '3');
+        expect(gateway.updatedAndroidNames, [timerWidgetAndroidName]);
+      },
+    );
+
+    test('sends null when the timer is unset', () async {
+      await service.syncTimer(const TimerState(), 0);
+
+      expect(gateway.valueOf(timerTargetEpochMsKey), isNull);
+    });
+
+    test('sends null when there is no timer state at all', () async {
+      await service.syncTimer(null, 0);
+
+      expect(gateway.valueOf(timerTargetEpochMsKey), isNull);
     });
   });
 }

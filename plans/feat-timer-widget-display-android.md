@@ -36,16 +36,24 @@ Issue: #63（親: #1）のうち「表示専用版」のみ。操作可能版（
 上、既存の exact alarm 通知基盤（#39, `SCHEDULE_EXACT_ALARM` 権限は宣言済み）を流用した「ポイントごと
 に1回、開始・終了の2回だけアラームを起動して背景色を切り替える」方式を採用する。
 
-### 時刻計算：NTPオフセットの扱い
+### 時刻計算：NTPオフセットの扱い（カウントダウン表示とフラッシュ判定で非対称）
 
-`TimerState.targetEpochMs` はアプリ内で `DateTime.now()`（端末生時刻、NTP未補正）を起点に計算・永続
-化される一方、`HomeWidgetTimeMath`（他3ウィジェット共通）は表示用の「補正後now」を
-`System.currentTimeMillis() + ntpOffsetMs` として扱う——これは既存3ウィジェットが既に踏襲している変換
-であり、本ウィジェットもそれに合わせる。
+`TimerState.targetEpochMs` はアプリ内で `DateTime.now()`（端末生時刻、NTP未補正）を起点に計算・永続化
+される。ここでローカルレビューにより、他3ウィジェットとは異なりカウントダウンの**数値表示**に
+`ntpOffsetMs` 補正を適用してはいけないことが判明した：
+`CompletionCountdownWidgetProvider`/`NextTargetWidgetProvider` に対応する完了時刻・指定時刻の在アプリ
+表示（`completion_countdown_section.dart`/`time_targets_section.dart`）は残り時間の計算に補正後の
+`watchNow(ref)`（`nowProvider`）を使うのに対し、タイマーの在アプリ表示（`timer_section.dart` の
+`_TimerBody`）は素の `DateTime.now()` を使っている。したがって `TimerWidgetSync` はカウントダウンの
+`Chronometer` base を計算する際 `HomeWidgetTimeMath.countDownBase(targetEpochMs, ntpOffsetMs = 0L)`
+と、補正なしで呼ぶ（他3ウィジェットと違う扱いだが、在アプリ表示と一致させるため意図的）。
 
-`AlarmManager.RTC_WAKEUP` のトリガー時刻は端末の生時刻（`System.currentTimeMillis()` 基準）である必要
-があるため、「補正後の瞬間」`instant`（`targetEpochMs - minutesBefore*60000`）を端末生時刻に変換するに
-は `instant - ntpOffsetMs` を使う（`correctedNow = deviceNow + ntpOffsetMs` の逆算）。
+一方、フラッシュ発火の**タイミング判定**（`FlashQueueController.build()`）は補正後の `nowProvider` を
+素の `targetEpochMs` と比較しており、こちらはNTP補正ありが正しい。`AlarmManager.RTC_WAKEUP` のトリ
+ガー時刻は端末の生時刻（`System.currentTimeMillis()` 基準）である必要があるため、「補正後の瞬間」
+`instant`（`targetEpochMs - minutesBefore*60000`）を端末生時刻に変換するには `instant - ntpOffsetMs`
+を使う（`correctedNow = deviceNow + ntpOffsetMs` の逆算）——`TimerWidgetFlashPoints.deviceWindows`
+はこちらの補正ありのままでよい。
 
 ### 新規ファイル（Android native）
 
@@ -97,10 +105,11 @@ Issue: #63（親: #1）のうち「表示専用版」のみ。操作可能版（
 
 - `test/features/home_widget/home_widget_sync_service_test.dart`: `syncTimer` のグループを追加
   （targetEpochMsのstring化・null送信・updateWidget呼び出しを既存3グループと同じ形で検証）。
-- `test/features/home_widget/home_widget_scheduler_test.dart`: 既存の resume 系テストに影響しないこと
-  を確認しつつ、`timerControllerProvider` の状態変化で `syncTimer` 相当の呼び出しが発生することを
-  検証するテストを追加（既存の stopwatch/next-target/completion 用テストがあれば同じ形に合わせる。
-  なければ新規追加）。
+- `test/features/home_widget/home_widget_scheduler_test.dart`: 既存の resume 系テストは1件のみで
+  stopwatch/next-target/completionそれぞれの同期呼び出しを個別に検証するテストはなかった。タイマーに
+  ついては `timerControllerProvider` の状態変化が `syncTimer`（`TimerWidgetProvider` への
+  `updateWidget` 呼び出し）を発生させることを検証する新規テストを1件追加（`homeWidgetGatewayProvider`
+  を記録用フェイクで上書き）。
 - Android nativeコード（Kotlin）はこのリポジトリに既存のユニットテストがなく、本PRでも追加しない
   （既存3ウィジェット・ストップウォッチウィジェットも同様）。BlueStacks実機で目視確認する
   （Android 9/API 28のため `targetCellWidth`/`targetCellHeight` のランチャー挙動自体は検証できない

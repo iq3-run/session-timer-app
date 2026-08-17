@@ -2,8 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
+import 'package:session_timer/features/timer/timer_state.dart';
 
-// Shared across all three synced widgets: each `AppWidgetProvider` reads
+// Shared across all four synced widgets: each `AppWidgetProvider` reads
 // this independently in its own `onUpdate`, so it's written alongside every
 // sync call rather than once — a stale value on just one widget (from a
 // missed write) would let that widget's Chronometer base drift out of sync
@@ -19,6 +20,9 @@ const nextTargetWidgetAndroidName = 'NextTargetWidgetProvider';
 
 const completionTargetEpochMsKey = 'completion_target_epoch_ms';
 const completionWidgetAndroidName = 'CompletionCountdownWidgetProvider';
+
+const timerTargetEpochMsKey = 'timer_target_epoch_ms';
+const timerWidgetAndroidName = 'TimerWidgetProvider';
 
 /// Pushes app state to the Android home screen widgets' own data store
 /// (a `SharedPreferences` file separate from the app's own, owned by the
@@ -73,6 +77,15 @@ class HomeWidgetSyncService {
     );
     await _gateway.saveWidgetData(ntpOffsetMsKey, ntpOffsetMs.toString());
     await _gateway.updateWidget(androidName: completionWidgetAndroidName);
+  }
+
+  Future<void> syncTimer(TimerState? state, int ntpOffsetMs) async {
+    await _gateway.saveWidgetData(
+      timerTargetEpochMsKey,
+      state?.targetEpochMs?.toString(),
+    );
+    await _gateway.saveWidgetData(ntpOffsetMsKey, ntpOffsetMs.toString());
+    await _gateway.updateWidget(androidName: timerWidgetAndroidName);
   }
 }
 
