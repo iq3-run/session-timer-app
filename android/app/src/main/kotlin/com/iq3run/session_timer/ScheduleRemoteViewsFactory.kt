@@ -53,26 +53,25 @@ class ScheduleRemoteViewsFactory(private val context: Context) :
             val color = ContextCompat.getColor(context, colorRes)
             setTextColor(R.id.item_label, color)
             setTextColor(R.id.item_date, color)
-            applyGapLine(row)
+            applyGapRow(row)
         }
     }
 
-    // 週末間/今日から mirror the read-only スケジュール screen's two gap columns, which are
-    // blank for most rows (only chain rows with a previous entry, and the single nearest-past/
-    // nearest-future/CS rows, ever carry one) — combined onto one optional line rather than two
-    // always-present columns, since this widget's narrow width can't fit a 4-column table.
-    private fun RemoteViews.applyGapLine(row: ScheduleRowData) {
-        val parts =
-            buildList {
-                if (row.chainGap.isNotEmpty()) add("週末間 ${row.chainGap}")
-                if (row.todayGap.isNotEmpty()) add("今日から ${row.todayGap}")
-            }
-        if (parts.isEmpty()) {
-            setViewVisibility(R.id.item_gap, View.GONE)
-        } else {
-            setTextViewText(R.id.item_gap, parts.joinToString("　"))
-            setViewVisibility(R.id.item_gap, View.VISIBLE)
-        }
+    // 週末間/今日から mirror the read-only スケジュール screen's two adjacent gap columns —
+    // most rows carry at most one of the two (only chain rows with a previous entry, and the
+    // single nearest-past/nearest-future/CS rows, ever get one), so each TextView toggles
+    // independently, and the whole row collapses when neither applies.
+    private fun RemoteViews.applyGapRow(row: ScheduleRowData) {
+        val hasChainGap = row.chainGap.isNotEmpty()
+        val hasTodayGap = row.todayGap.isNotEmpty()
+        setViewVisibility(R.id.item_gap_row, if (hasChainGap || hasTodayGap) View.VISIBLE else View.GONE)
+        setViewVisibility(R.id.item_chain_gap, if (hasChainGap) View.VISIBLE else View.GONE)
+        // Only visible when both gaps show — see the layout's own comment on why a fixed
+        // marginStart on item_today_gap can't do this job by itself.
+        setViewVisibility(R.id.item_gap_spacer, if (hasChainGap && hasTodayGap) View.VISIBLE else View.GONE)
+        setViewVisibility(R.id.item_today_gap, if (hasTodayGap) View.VISIBLE else View.GONE)
+        if (hasChainGap) setTextViewText(R.id.item_chain_gap, "週末間 ${row.chainGap}")
+        if (hasTodayGap) setTextViewText(R.id.item_today_gap, "今日から ${row.todayGap}")
     }
 
     override fun getLoadingView(): RemoteViews? = null

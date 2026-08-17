@@ -182,3 +182,27 @@ final scheduleWidgetRowsProvider = Provider<List<ScheduleRow>>((ref) {
   - 縦画面・横画面の両方でレイアウト崩れがないか確認
   - BlueStacksでの検証には注意（`docs/*dev-environment-notes*`参照。
     対応していない場合は実機での確認が必須である旨PRで明示する）
+
+## Follow-up: issue #74（週末間/今日からを横並び表示に）
+
+PR #73マージ後、ユーザーから「アプリのセッションスケジュール画面のように
+横並びで週末間、今日からの日数を出せますか」との要望。マージ済みPR #73では
+`ScheduleRemoteViewsFactory.applyGapLine`が両方の値を
+「週末間 X日(YW)　今日から X日(YW)」という1つの結合文字列にして単一の
+`TextView`（`item_gap`）に表示していた。
+
+- **対応**: `item_gap`を`item_chain_gap`/`item_today_gap`の2つの
+  `TextView`に分割し、`item_gap_row`という横並び（`orientation="horizontal"`）
+  の親`LinearLayout`に配置。各`TextView`は値がある時だけ`VISIBLE`（ない時は
+  `GONE`）、`item_gap_row`自体は両方とも値がない時だけ`GONE`にする —
+  画面のDataTableが空セルでも列を保持するのとは異なり、ウィジェットには
+  ヘッダー行がなく列固定の意味が薄いため、値がない列は幅を取らせず詰める
+  設計を維持（PR #73の一行結合表示から変わらない判断）。
+- **4列（種別・日付・週末間・今日から）を1行にまとめる案は採らなかった**:
+  画面のDataTableと違いウィジェットにはヘッダー行がなく、かつ幅が狭い
+  （`targetCellWidth=3`/`minWidth=180dp`）ため、4項目を1行に詰めると
+  実機でクリップ/消失するリスクが高い（過去のストップウォッチウィジェット
+  で実際に発生した「幅が狭いとRemoteViewsのビューが描画ツリーから
+  丸ごと消える」バグ、220dp幅騒動を参照）。ラベル＋日付の行はそのまま
+  維持し、週末間/今日からのみを2列目の行として横並びにすることで、
+  既存の表示幅（PR #73で実機確認済みの幅）を変えずに対応した。
