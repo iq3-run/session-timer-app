@@ -121,9 +121,9 @@ independent of whether the missing test would have caught a real bug.
   `reschedule` always cancels-then-rebuilds (same shape as `NotificationService.rescheduleAll`),
   `onDisabled` (last instance removed) cancels everything, no per-`onDeleted` action needed since
   scheduling is app-wide, not per-widget-id.
-- Magic number: `minutes * 60_000L` in `TimerWidgetFlashPoints.deviceWindows` has no named constant
-  (unlike the adjacent `FLASH_WINDOW_MS`) — flagged as a minor Warning (MUST-level "no magic
-  numbers" rule), low severity.
+- Magic-number warning (`minutes * 60_000L` with no named constant, unlike the adjacent
+  `FLASH_WINDOW_MS`) — RESOLVED same PR: `TimerWidgetFlashPoints` now defines `MILLIS_PER_MINUTE`
+  and uses it in `deviceWindows`.
 
 Related: [[project_home_widget_android_patterns]], [[project_ntp_sync_patterns]],
 [[project_notification_scheduler_patterns]]
