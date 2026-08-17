@@ -27,11 +27,15 @@ object TimerWidgetFlashPoints {
         }
     }
 
-    /** Whether [nowDeviceMs] falls inside any of this timer's flash windows. */
+    /**
+     * Whether [nowDeviceMs] falls inside any of this timer's flash windows.
+     * Half-open at the end so the moment a window's end alarm actually fires
+     * doesn't still read as flashing.
+     */
     fun isFlashing(targetEpochMs: Long?, ntpOffsetMs: Long, nowDeviceMs: Long): Boolean {
         if (targetEpochMs == null) return false
         return deviceWindows(targetEpochMs, ntpOffsetMs).any { (start, end) ->
-            nowDeviceMs in start..end
+            nowDeviceMs >= start && nowDeviceMs < end
         }
     }
 }

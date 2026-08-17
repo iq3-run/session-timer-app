@@ -10,8 +10,8 @@ metadata:
 Reviewed 2026-08-17, uncommitted working tree (not yet pushed as a PR). `flutter analyze`/
 `flutter test`/`dart format --set-exit-if-changed` all clean.
 
-## Critical, real finding: `TimerState.targetEpochMs` is raw-device-clock, not NTP-corrected —
-unlike the 3 pre-existing synced widgets' targets
+## RESOLVED (same PR, before merge): `TimerState.targetEpochMs` is raw-device-clock, not
+NTP-corrected — unlike the 3 pre-existing synced widgets' targets
 
 This is a genuinely subtle distinction worth remembering for **any future feature that does
 clock-offset math against `TimerController`**, not just this widget:
@@ -27,16 +27,15 @@ clock-offset math against `TimerController`**, not just this widget:
   display (`_TimerBody.build()`) also compares against raw `DateTime.now()` — both ends are
   self-consistent on the *uncorrected* device clock, by design (a countdown timer is a duration
   from press, not an absolute future instant).
-- `TimerWidgetSync.apply` calls `HomeWidgetTimeMath.countDownBase(targetEpochMs, ntpOffsetMs)` —
-  same call shape as `CompletionCountdownWidgetProvider`/`NextTargetWidgetProvider` — which
-  **applies the NTP correction to a value that was never NTP-corrected in the first place**. Net
-  effect: the widget's displayed remaining time differs from `timer_section.dart`'s displayed
-  remaining time by exactly `ntpOffsetMs`, for the entire lifetime of every timer session whenever
-  the device clock is non-trivially off true time — precisely the scenario the whole NTP-sync
-  feature exists to correct for. The plan file (`plans/feat-timer-widget-display-android.md`,
-  "時刻計算：NTPオフセットの扱い" section) explicitly reasons "matches what the other 3 widgets
-  already do" — that reasoning doesn't hold here because it assumes `targetEpochMs` means the same
-  thing across all 4 widgets, and it doesn't.
+- `TimerWidgetSync.apply` originally called `HomeWidgetTimeMath.countDownBase(targetEpochMs,
+  ntpOffsetMs)` — same call shape as `CompletionCountdownWidgetProvider`/`NextTargetWidgetProvider`
+  — which **applied the NTP correction to a value that was never NTP-corrected in the first
+  place**. Net effect would have been: the widget's displayed remaining time differs from
+  `timer_section.dart`'s displayed remaining time by exactly `ntpOffsetMs`, for the entire lifetime
+  of every timer session whenever the device clock is non-trivially off true time — precisely the
+  scenario the whole NTP-sync feature exists to correct for. **Fixed**: `TimerWidgetSync.apply` now
+  calls `HomeWidgetTimeMath.countDownBase(it, ntpOffsetMs = 0L)`, with a comment explaining why
+  Timer's `targetEpochMs` doesn't get the same treatment as Completion/NextTarget's.
 
 **Important nuance, don't over-correct on a second read**: the **flash-window scheduling**
 (`TimerWidgetFlashPoints.deviceWindows`/`TimerWidgetFlashScheduler`) applying the same
@@ -47,10 +46,8 @@ clock-offset math against `TimerController`**, not just this widget:
 device-clock instant at which the in-app flash actually starts is
 `instant - flashWindowMs - ntpOffsetMs` — exactly what `TimerWidgetFlashScheduler` schedules via
 `AlarmManager`. So the *flash timing* correctly mirrors the app's real behavior; only the
-*Chronometer countdown number* is wrong. Minimal fix: stop passing `ntpOffsetMs` to
-`HomeWidgetTimeMath.countDownBase` for the Timer widget specifically (pass `0L`, with a comment
-explaining why — Timer's `targetEpochMs` is raw-device, unlike Completion/NextTarget's), while
-leaving `TimerWidgetFlashPoints`'s correction as-is.
+*Chronometer countdown number* needed the fix above. `TimerWidgetFlashPoints`'s correction was left
+as-is, correctly.
 
 If a future PR touches `TimerController`/`timer_section.dart` to make timer targets NTP-corrected
 (closing the underlying inconsistency at the source, which also exists between
@@ -58,27 +55,52 @@ If a future PR touches `TimerController`/`timer_section.dart` to make timer targ
 admission check for the *same* timer state — a second, separate pre-existing inconsistency, out of
 scope for this PR), re-check whether the widget-side correction should then be re-added.
 
-## Recurring comment-policy violation, again
+## RESOLVED: recurring comment-policy violation, again
 
-`TimerWidgetFlashPoints.kt`'s doc comment cites
-`plans/feat-timer-widget-display-android.md` directly ("see the ... note in
-plans/feat-timer-widget-display-android.md"). Same banned self-reference category tracked
-extensively in [[project_ntp_sync_patterns]] (4+ occurrences) and
-[[project_notification_scheduler_patterns]] (plan-file citations specifically). Keep flagging this
-immediately — it keeps slipping past the agent that writes the code.
+`TimerWidgetFlashPoints.kt`'s doc comment originally cited `plans/feat-timer-widget-display-android.md`
+directly ("see the ... note in plans/feat-timer-widget-display-android.md"). Same banned
+self-reference category tracked extensively in [[project_ntp_sync_patterns]] (4+ occurrences) and
+[[project_notification_scheduler_patterns]] (plan-file citations specifically). **Fixed** (before
+CodeRabbit even ran) by replacing the citation with the plain technical WHY inline. Keep flagging
+this immediately in future PRs — it keeps slipping past the agent that writes the code.
 
-## Plan-promised test not delivered
+## RESOLVED: plan-promised test not delivered
 
 `plans/feat-timer-widget-display-android.md`'s テスト section explicitly commits to adding a test
 in `test/features/home_widget/home_widget_scheduler_test.dart` proving a `timerControllerProvider`
 state change triggers a `syncTimer`-equivalent call ("なければ新規追加" — add new if no sibling
-test exists). No such test exists for *any* of the 4 synced widgets in that file (it only has one
+test exists). No such test existed for *any* of the 4 synced widgets in that file (it only had one
 pre-existing app-resume test) — so the plan's own "add new if none exist" branch should have fired
-and didn't. The new `ref.listen(timerControllerProvider, ...)` wiring in
-`home_widget_scheduler.dart` is therefore untested at the scheduler level; only the underlying
-`HomeWidgetSyncService.syncTimer` unit is covered. Watch whether this recurs — if a future PR's
-plan file promises a test and the diff doesn't deliver it, that's worth escalating as a process gap
+and initially didn't. **Fixed** (before CodeRabbit ran) by adding
+`'a timer state change syncs the timer widget'` to `home_widget_scheduler_test.dart`, overriding
+`homeWidgetGatewayProvider` with a recording fake. Watch whether the "plan promises a test, diff
+doesn't deliver it" pattern recurs in a future PR — that's worth escalating as a process gap
 independent of whether the missing test would have caught a real bug.
+
+## CodeRabbit follow-up (post-push)
+
+- **Valid, applied**: `TimerWidgetFlashPoints.isFlashing`'s `nowDeviceMs in start..end` was a
+  closed interval at both ends; made half-open (`>= start && < end`) so the exact millisecond a
+  window's end alarm fires doesn't still read as flashing. Low-risk, easy correctness improvement,
+  independent of the window-direction question below.
+- **False positive, rejected**: CodeRabbit's "Major/Functional Correctness" comment argued the
+  window should run `[instant, instant + FLASH_WINDOW_MS)` (flash starts at the 5/3/1/0-minute
+  mark and lasts 3s *after* it) instead of `[instant - FLASH_WINDOW_MS, instant)` (flash ends *at*
+  the mark, starting 3s before). Verified against `lib/features/flash/flash_event.dart`'s explicit
+  contract: `FlashEvent.instant` is documented as "the wall-clock moment the flash animation must
+  *end*", and `windowStart => instant.subtract(flashAnimationDuration)`. CodeRabbit's suggested
+  direction directly contradicts this — the in-app `FlashOverlay` already ends its strobe exactly
+  at `instant`, and this widget deliberately mirrors that. Rejected with the citation above rather
+  than applying the suggested diff. Another instance of "don't blindly apply — verify against the
+  actual codebase" (CLAUDE.md, PR Bot Review Handling) paying off on a *Major*-severity, seemingly
+  concrete/confident finding with a ready-made diff — severity and confidence aren't a substitute
+  for checking.
+- **Valid, applied**: this memory file and `MEMORY.md#L11` themselves were stale — written by the
+  first-pass review before the fixes above were applied, then committed describing resolved issues
+  as still-open Critical findings. CodeRabbit caught it correctly. Lesson: when a review's fixes
+  get applied *after* its memory write-up, go back and update the memory write-up too before
+  committing — don't let "the finding is now fixed" and "the memory file describing the finding"
+  drift out of sync.
 
 ## Verified clean, no findings
 
