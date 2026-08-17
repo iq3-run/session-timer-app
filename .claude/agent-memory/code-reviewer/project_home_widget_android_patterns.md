@@ -175,4 +175,45 @@ APPEND chain, even after the app is later opened and registers the callback. Doe
 normal flow (open app at least once before/while using the widget) so left as a documented
 limitation rather than fixed — it's an upstream plugin bug, not something fixable app-side.
 
-Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]]
+**Issue #70 (branch `feat/70-timer-widget-interactive-android`, reviewed 2026-08-17, staged diff,
+not yet pushed).** Operable timer widget (`TimerControlWidgetProvider`, start/+30s/+1min/reset)
+alongside display-only `TimerWidgetProvider` (#69), reusing #62's interactive-button pattern.
+Introduced `homeWidgetBackgroundCallback` (`home_widget_background_callback.dart`) as a single
+`uri.host`-dispatching entry point, confirming via the plugin's own pub-cache source that
+`registerInteractivityCallback` can only hold one native callback handle — real constraint, not
+speculative. Findings, all RESOLVED same PR (fixed in response to code-reviewer's own first pass,
+before pushing):
+- Warning, DRY: `TimerControlWidgetProvider.kt`'s `applyChronometerOrPlaceholder` (lines 62-73) was
+  byte-for-byte identical to `TimerWidgetSync.kt`'s (lines 85-96), and the `base` computation +
+  its explanatory "why ntpOffsetMs=0" comment was duplicated too. Fixed by extracting a new shared
+  `TimerWidgetCountdown` object (`base()` + the `applyChronometerOrPlaceholder` extension function)
+  used by both `TimerWidgetSync.kt` and `TimerControlWidgetProvider.kt`. This closes the same class
+  of DRY-across-AppWidgetProviders gap first flagged in issue #54 (still unextracted as of #61) —
+  first time it's actually been fixed rather than deferred in this feature area.
+- Warning, test DRY: `_FakeHomeWidgetChannel` (a ~30-line fake `home_widget` method-channel) had
+  gone from 1 copy (pre-existing in `stopwatch_widget_callback_test.dart`, from #62) to 3
+  byte-for-byte duplicates. Fixed by extracting to a new shared
+  `test/features/home_widget/fake_home_widget_channel.dart` (exported as `FakeHomeWidgetChannel`,
+  public since it's now cross-file), imported by all 3 test files. First shared test-helpers file in
+  this repo.
+- Warning, recurring comment-policy violation: 4 `#69`/`#70` issue-self-references in doc comments
+  (`TimerControlWidgetProvider.kt`, `home_widget_sync_service.dart`, `stopwatch_widget_callback.dart`,
+  `timer_widget_callback.dart`) — same banned category tracked since issue #54 — all removed,
+  keeping only the WHY.
+- Verified clean: no issue-#-self-reference in the new XML files this time (`timer_control_widget_layout.xml`
+  has zero `issue #` occurrences) — the XML-comment instance of this violation (from #54/#62) did
+  NOT recur here, unlike the Dart/Kotlin doc-comment instances above.
+- Verified correct: `timer_control_widget_info.xml` ships `minWidth="220dp"`/`targetCellWidth="4"`
+  from the start (not the too-narrow 110dp/150dp that #62's stopwatch widget had to be walked up to
+  after an on-device inflation failure) — the lesson from that earlier bug was applied proactively
+  this time. `updatePeriodMillis="1800000"` matches the other 4 synced widgets' existing convention,
+  not a fresh magic number. Button semantics (`quickStart(Duration(minutes: 5))`/`addTime`/`reset`),
+  the reverse-cascade bug fix (`stopwatch_widget_callback.dart` now also syncs timer state on
+  `reset()`'s cascade; `timer_widget_callback.dart` symmetrically syncs stopwatch state since
+  `quickStart`/fresh-`addTime` can auto-start it), and `HomeWidgetSyncService.syncTimer` now calling
+  `updateWidget` for both `timerWidgetAndroidName`/`timerControlWidgetAndroidName` were all hand-
+  verified against `timer_controller.dart`'s actual `quickStart`/`addTime`/`reset`/
+  `_autoStartStopwatchIfNeeded` implementations — all accurate, no drift between comment claims and
+  code.
+
+Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]], [[project_timer_widget_display_patterns]]

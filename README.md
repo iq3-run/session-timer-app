@@ -50,7 +50,7 @@ lib/
     notifications/ # フラッシュポイントの端末通知スケジューリング
     settings/    # 設定シート（フラッシュポイント・通知・NTP）
     schedule/    # セッションスケジュール管理（OR/WE/WD/CR/SS/CS・週末間日数計算）
-    home_widget/ # Androidホーム画面ウィジェット（5種）へのデータ同期
+    home_widget/ # Androidホーム画面ウィジェット（6種）へのデータ同期
 test/            # libと同じfeature構成でミラーリング
 
 android/app/src/main/kotlin/com/iq3run/session_timer/
@@ -59,9 +59,10 @@ android/app/src/main/kotlin/com/iq3run/session_timer/
   CompletionCountdownWidgetProvider.kt    # 完了までのカウントダウンウィジェット
   CurrentTimeWidgetProvider.kt            # 現在時刻のみのウィジェット（Flutter同期不要）
   TimerWidgetProvider.kt                  # タイマー残り時間ウィジェット（終了間際に背景が単発点灯）
+  TimerControlWidgetProvider.kt           # タイマー操作ウィジェット（開始/+30秒/+1分/リセットボタン付き）
 ```
 
-5種のAndroidホーム画面ウィジェットはユーザーが個別に追加できる独立したパネル。詳細は [plans/feat-home-widget-android.md](plans/feat-home-widget-android.md) を参照。ストップウォッチウィジェットのみ開始/一時停止・リセットボタンを持ち、アプリを開かずに操作できる（詳細は [plans/feat-stopwatch-widget-interactive-buttons.md](plans/feat-stopwatch-widget-interactive-buttons.md)）。タイマーウィジェットは残り5/3/1/0分のタイミングで背景を単発（3秒間）琥珀色に切り替える——本体アプリの`FlashOverlay`のストローブ演出をネイティブAlarmManagerで近似したもの（詳細は [plans/feat-timer-widget-display-android.md](plans/feat-timer-widget-display-android.md)）。
+6種のAndroidホーム画面ウィジェットはユーザーが個別に追加できる独立したパネル。詳細は [plans/feat-home-widget-android.md](plans/feat-home-widget-android.md) を参照。ストップウォッチウィジェットは開始/一時停止・リセットボタンを持ち、アプリを開かずに操作できる（詳細は [plans/feat-stopwatch-widget-interactive-buttons.md](plans/feat-stopwatch-widget-interactive-buttons.md)）。タイマーウィジェット（表示専用）は残り5/3/1/0分のタイミングで背景を単発（3秒間）琥珀色に切り替える——本体アプリの`FlashOverlay`のストローブ演出をネイティブAlarmManagerで近似したもの（詳細は [plans/feat-timer-widget-display-android.md](plans/feat-timer-widget-display-android.md)）。タイマー操作ウィジェットは開始/+30秒/+1分/リセットの4ボタンでアプリを開かずにタイマーを操作できる（背景の点滅演出は持たない、詳細は [plans/feat-timer-widget-interactive-android.md](plans/feat-timer-widget-interactive-android.md)）。
 
 ## 開発フロー
 

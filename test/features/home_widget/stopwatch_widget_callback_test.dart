@@ -1,53 +1,18 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/home_widget/stopwatch_widget_callback.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Fakes the `home_widget` plugin's own method channel (rather than
-/// `HomeWidgetGateway`, which `stopwatchWidgetBackgroundCallback` has no way
-/// to inject — it builds its own throwaway `ProviderContainer` with the
-/// real provider tree, matching what actually runs in the background
-/// isolate) so `saveWidgetData`/`getWidgetData`/`updateWidget` calls can be
-/// observed without a real platform channel.
-class _FakeHomeWidgetChannel {
-  final saved = <String, Object?>{};
-  final updatedAndroidNames = <String>[];
-
-  void install() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('home_widget'), (
-          call,
-        ) async {
-          final args = (call.arguments as Map).cast<String, dynamic>();
-          switch (call.method) {
-            case 'saveWidgetData':
-              saved[args['id'] as String] = args['data'];
-              return true;
-            case 'getWidgetData':
-              return saved[args['id'] as String] ?? args['defaultValue'];
-            case 'updateWidget':
-              updatedAndroidNames.add(args['android'] as String);
-              return true;
-          }
-          return null;
-        });
-  }
-
-  void uninstall() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('home_widget'), null);
-  }
-}
+import 'fake_home_widget_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late _FakeHomeWidgetChannel channel;
+  late FakeHomeWidgetChannel channel;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    channel = _FakeHomeWidgetChannel()..install();
+    channel = FakeHomeWidgetChannel()..install();
   });
 
   tearDown(() => channel.uninstall());
@@ -61,22 +26,38 @@ void main() {
       );
 
       expect(channel.saved[stopwatchRunningSinceEpochMsKey], isNotNull);
-      expect(channel.updatedAndroidNames, [stopwatchWidgetAndroidName]);
+      expect(channel.updatedAndroidNames, [
+        stopwatchWidgetAndroidName,
+        timerWidgetAndroidName,
+        timerControlWidgetAndroidName,
+      ]);
     },
   );
 
-  test('a reset URI resets the stopwatch back to zero', () async {
-    await stopwatchWidgetBackgroundCallback(
-      Uri.parse('homewidget://stopwatch/toggle'),
-    );
+  test(
+    'a reset URI resets the stopwatch back to zero and also pushes the '
+    'linked timer reset to both timer widgets',
+    () async {
+      await stopwatchWidgetBackgroundCallback(
+        Uri.parse('homewidget://stopwatch/toggle'),
+      );
 
-    await stopwatchWidgetBackgroundCallback(
-      Uri.parse('homewidget://stopwatch/reset'),
-    );
+      await stopwatchWidgetBackgroundCallback(
+        Uri.parse('homewidget://stopwatch/reset'),
+      );
 
-    expect(channel.saved[stopwatchAccumulatedMsKey], '0');
-    expect(channel.saved[stopwatchRunningSinceEpochMsKey], isNull);
-  });
+      expect(channel.saved[stopwatchAccumulatedMsKey], '0');
+      expect(channel.saved[stopwatchRunningSinceEpochMsKey], isNull);
+      expect(channel.updatedAndroidNames, [
+        stopwatchWidgetAndroidName,
+        timerWidgetAndroidName,
+        timerControlWidgetAndroidName,
+        stopwatchWidgetAndroidName,
+        timerWidgetAndroidName,
+        timerControlWidgetAndroidName,
+      ]);
+    },
+  );
 
   test(
     "pushes the current ntpOffsetMs already stored in the widget's own "
@@ -100,7 +81,11 @@ void main() {
       );
 
       expect(channel.saved[stopwatchRunningSinceEpochMsKey], isNull);
-      expect(channel.updatedAndroidNames, [stopwatchWidgetAndroidName]);
+      expect(channel.updatedAndroidNames, [
+        stopwatchWidgetAndroidName,
+        timerWidgetAndroidName,
+        timerControlWidgetAndroidName,
+      ]);
     },
   );
 
@@ -108,6 +93,10 @@ void main() {
     await stopwatchWidgetBackgroundCallback(null);
 
     expect(channel.saved[stopwatchRunningSinceEpochMsKey], isNull);
-    expect(channel.updatedAndroidNames, [stopwatchWidgetAndroidName]);
+    expect(channel.updatedAndroidNames, [
+      stopwatchWidgetAndroidName,
+      timerWidgetAndroidName,
+      timerControlWidgetAndroidName,
+    ]);
   });
 }

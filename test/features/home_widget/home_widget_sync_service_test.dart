@@ -118,7 +118,10 @@ void main() {
 
         expect(gateway.valueOf(timerTargetEpochMsKey), '1700000000000');
         expect(gateway.valueOf(ntpOffsetMsKey), '3');
-        expect(gateway.updatedAndroidNames, [timerWidgetAndroidName]);
+        expect(gateway.updatedAndroidNames, [
+          timerWidgetAndroidName,
+          timerControlWidgetAndroidName,
+        ]);
       },
     );
 

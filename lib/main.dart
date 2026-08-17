@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:session_timer/app.dart';
 import 'package:session_timer/core/clock/ntp_sync_controller.dart';
-import 'package:session_timer/features/home_widget/stopwatch_widget_callback.dart';
+import 'package:session_timer/features/home_widget/home_widget_background_callback.dart';
 
 void main() {
   // runApp() normally calls WidgetsFlutterBinding.ensureInitialized() as its
@@ -14,7 +14,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   unawaited(_autoSyncNtpAtStartup(container));
-  unawaited(_registerStopwatchWidgetCallback());
+  unawaited(_registerHomeWidgetBackgroundCallback());
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -24,21 +24,23 @@ void main() {
 }
 
 /// Tells the `home_widget` plugin which Dart function to invoke from its
-/// background isolate when the stopwatch widget's toggle/reset button is
-/// tapped. Must run at every app launch — the native side only remembers
-/// the callback handle, not the callback itself, and that handle can change
-/// across app updates/reinstalls.
+/// background isolate when a widget's interactive button is tapped (see
+/// `StopwatchWidgetProvider.kt`/`TimerControlWidgetProvider.kt` and
+/// `home_widget_background_callback.dart`, which dispatches by widget type
+/// to the right per-widget handler). Must run at every app launch — the
+/// native side only remembers the callback handle, not the callback itself,
+/// and that handle can change across app updates/reinstalls.
 ///
-/// Best-effort like the NTP sync below: this app doesn't support the
-/// stopwatch widget on iOS, so a platform-channel failure here is expected
-/// there and must not block startup.
-Future<void> _registerStopwatchWidgetCallback() async {
+/// Best-effort like the NTP sync below: this app doesn't support these
+/// widgets on iOS, so a platform-channel failure here is expected there and
+/// must not block startup.
+Future<void> _registerHomeWidgetBackgroundCallback() async {
   try {
     await HomeWidget.registerInteractivityCallback(
-      stopwatchWidgetBackgroundCallback,
+      homeWidgetBackgroundCallback,
     );
   } on Exception {
-    // Fall through silently — the widget's buttons simply won't do
+    // Fall through silently — the widgets' buttons simply won't do
     // anything until the next successful registration.
   }
 }
