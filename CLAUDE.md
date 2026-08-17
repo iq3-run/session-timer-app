@@ -34,6 +34,12 @@ Do not reorder steps 3 and 5 — local review must finish before the PR is
 pushed, not be treated as an optional afterthought once CI/CodeRabbit are
 already clean.
 
+## 実機・エミュレータでの動作確認
+
+実機/エミュレータ（BlueStacks等）でUIの見た目を確認する際は、縦画面・横画面の両方で確認する。
+どちらかで要素が見切れる場合は、その場で修正せず、まずユーザーに報告して対応方針（レイアウト
+調整の要否・優先度など）を確認してから対応する。
+
 ## Reviewers configured for this project
 
 - **CodeRabbit** — runs automatically on every push, configured via
