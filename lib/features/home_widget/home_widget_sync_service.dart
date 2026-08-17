@@ -103,8 +103,12 @@ class HomeWidgetSyncService {
   /// Unlike the other four syncs, this one carries fully-formatted display
   /// strings rather than raw epoch values — the widget has no `Chronometer`
   /// to drive natively, so there's nothing for the native side to compute
-  /// from a number, and reusing `formatScheduleDate` here avoids
-  /// reimplementing its weekday-label lookup in Kotlin.
+  /// from a number, and reusing `formatScheduleDate`/`formatGap` here avoids
+  /// reimplementing their weekday-label lookup and gap-string format in
+  /// Kotlin. `chainGap`/`todayGap` are sent as `''` (not omitted) when a row
+  /// has none — same "always blank, not absent" contract the read-only
+  /// schedule table's own `DataCell`s use — so the native side can treat a
+  /// missing/malformed key the same as any other JSON parse failure.
   Future<void> syncSchedule(List<ScheduleRow> rows) async {
     final json = jsonEncode([
       for (final row in rows)
@@ -112,6 +116,8 @@ class HomeWidgetSyncService {
           'label': row.label,
           'date': formatScheduleDate(row.date),
           'isToday': row.isToday,
+          'chainGap': formatGap(row.chainGap),
+          'todayGap': formatGap(row.todayGap),
         },
     ]);
     await _gateway.saveWidgetData(scheduleEventsJsonKey, json);

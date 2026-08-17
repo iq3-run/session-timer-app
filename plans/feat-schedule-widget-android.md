@@ -67,11 +67,17 @@ HomeWidgetPlugin.PREFERENCES`）に書き込み、`RemoteViewsFactory`が
 3. **`hasStableIds()`は`false`。** 「今日」の合成行（`SessionEvent`を
    持たない）や日付変更に伴う行の増減があるため、位置ベースの安定IDを
    前提にできない。
-4. **行の表示内容は`label`＋`date`のみ。** `chainGap`/`todayGap`
-   （週末間／今日から日数）はウィジェットには含めない — issue本文の
-   候補「種別・番号・日付」に合わせ、既存の`session_schedule_formatting.
-   dart`の`formatScheduleDate`をそのままDart側で適用した文字列を
-   ネイティブへ渡す（ネイティブ側で曜日ラベル配列を再実装しない）。
+4. **行の表示内容は`label`＋`date`に加え、`chainGap`/`todayGap`
+   （週末間／今日から日数）も含める**（PRレビュー中にユーザーから追加
+   要望があり、当初案の「issue本文の候補どおりlabel＋dateのみ」から変更）。
+   既存の`session_schedule_formatting.dart`の`formatScheduleDate`／新規
+   公開した`formatGap`（元々`session_schedule_screen.dart`にprivateだった
+   ものを、画面とウィジェットの両方から再利用できるよう同ファイルへ移動）
+   をそのままDart側で適用した文字列をネイティブへ渡す（ネイティブ側で
+   曜日ラベル配列やgap文字列フォーマットを再実装しない）。ウィジェット幅
+   が狭く4列テーブルを再現できないため、ネイティブ側では
+   「週末間 X日(YW)　今日から X日(YW)」のように1行にまとめ、両方とも
+   空文字列の行ではその行自体を`GONE`にする。
 5. **NTPオフセットは同期しない。** 本ウィジェットは静的テキストのみで
    `Chronometer`を使わないため、既存グループAの`ntpOffsetMs`同期は不要
    （`nowProvider`が既にNTP補正込みの値を返すため、`scheduleWidgetToday

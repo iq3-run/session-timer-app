@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
+import 'package:session_timer/features/schedule/session_gap_calculation.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -143,12 +144,22 @@ void main() {
 
   group('HomeWidgetSyncService.syncSchedule', () {
     test(
-      'sends label/date/isToday for each row as JSON and updates the '
-      'schedule widget',
+      'sends label/date/isToday/chainGap/todayGap for each row as JSON and '
+      'updates the schedule widget',
       () async {
         final rows = [
-          ScheduleRow(label: 'OR', date: DateTime(2026, 8, 10), isToday: false),
-          ScheduleRow(label: '今日', date: DateTime(2026, 8, 17), isToday: true),
+          ScheduleRow(
+            label: 'OR',
+            date: DateTime(2026, 8, 10),
+            isToday: false,
+            chainGap: const GapResult(days: 3, weeks: 1),
+          ),
+          ScheduleRow(
+            label: '今日',
+            date: DateTime(2026, 8, 17),
+            isToday: true,
+            todayGap: const GapResult(days: 0, weeks: 0),
+          ),
         ];
 
         await service.syncSchedule(rows);
@@ -157,8 +168,20 @@ void main() {
             jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
                 as List<dynamic>;
         expect(decoded, [
-          {'label': 'OR', 'date': '8/10(月)', 'isToday': false},
-          {'label': '今日', 'date': '8/17(月)', 'isToday': true},
+          {
+            'label': 'OR',
+            'date': '8/10(月)',
+            'isToday': false,
+            'chainGap': '3日(1W)',
+            'todayGap': '',
+          },
+          {
+            'label': '今日',
+            'date': '8/17(月)',
+            'isToday': true,
+            'chainGap': '',
+            'todayGap': '0日(0W)',
+          },
         ]);
         expect(gateway.updatedAndroidNames, [scheduleWidgetAndroidName]);
       },

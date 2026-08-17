@@ -1,6 +1,7 @@
 package com.iq3run.session_timer
 
 import android.content.Context
+import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
@@ -8,7 +9,13 @@ import es.antonborri.home_widget.HomeWidgetPlugin
 import org.json.JSONArray
 import org.json.JSONException
 
-private data class ScheduleRowData(val label: String, val date: String, val isToday: Boolean)
+private data class ScheduleRowData(
+    val label: String,
+    val date: String,
+    val isToday: Boolean,
+    val chainGap: String,
+    val todayGap: String,
+)
 
 /**
  * Reads the same `home_widget` SharedPreferences store the other widgets use
@@ -46,6 +53,25 @@ class ScheduleRemoteViewsFactory(private val context: Context) :
             val color = ContextCompat.getColor(context, colorRes)
             setTextColor(R.id.item_label, color)
             setTextColor(R.id.item_date, color)
+            applyGapLine(row)
+        }
+    }
+
+    // 週末間/今日から mirror the read-only スケジュール screen's two gap columns, which are
+    // blank for most rows (only chain rows with a previous entry, and the single nearest-past/
+    // nearest-future/CS rows, ever carry one) — combined onto one optional line rather than two
+    // always-present columns, since this widget's narrow width can't fit a 4-column table.
+    private fun RemoteViews.applyGapLine(row: ScheduleRowData) {
+        val parts =
+            buildList {
+                if (row.chainGap.isNotEmpty()) add("週末間 ${row.chainGap}")
+                if (row.todayGap.isNotEmpty()) add("今日から ${row.todayGap}")
+            }
+        if (parts.isEmpty()) {
+            setViewVisibility(R.id.item_gap, View.GONE)
+        } else {
+            setTextViewText(R.id.item_gap, parts.joinToString("　"))
+            setViewVisibility(R.id.item_gap, View.VISIBLE)
         }
     }
 
@@ -71,6 +97,12 @@ class ScheduleRemoteViewsFactory(private val context: Context) :
                     label = obj.getString("label"),
                     date = obj.getString("date"),
                     isToday = obj.getBoolean("isToday"),
+                    // optString, not getString: a JSON payload written by an app version before
+                    // these two keys existed would otherwise fail this row's entire parse (and
+                    // therefore the whole list, via the outer try/catch) during the brief window
+                    // before the app's next sync, instead of just rendering without a gap line.
+                    chainGap = obj.optString("chainGap", ""),
+                    todayGap = obj.optString("todayGap", ""),
                 )
             }
         } catch (e: JSONException) {

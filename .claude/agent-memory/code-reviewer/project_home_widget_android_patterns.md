@@ -285,4 +285,33 @@ exactly (same `watchNow` fallback-to-`DateTime.now()` semantics).
   CodeRabbit-follow-up note) described — correcting that detail here; behaviorally equivalent
   (returns `null` for an unsaved key) so not a regression, just a stale memory citation.
 
+**Issue #64 follow-up (same branch, reviewed again 2026-08-17 — chainGap/todayGap columns added
+to the widget after PR #73 was already open with CI green, at the user's request).** `formatGap`
+moved from `session_schedule_screen.dart` (private) to `session_schedule_formatting.dart` (public)
+verified byte-identical logic, pure refactor — no behavior change, no edge case in `DataCell`
+usage. New `ScheduleRowData.chainGap`/`todayGap` fields parsed via `obj.getString(...)` (throwing,
+not `optString`) — checked this against the pre-existing `label`/`date`/`isToday` fields in the
+same class (`git show HEAD:...`) and confirmed throwing `getString`/`getBoolean` was *already* the
+established pattern for all required fields before this diff; the new fields just extend the same
+convention rather than deviating from it. This means a pre-upgrade JSON payload (missing the two
+new keys) fails the whole-array parse via the existing `parseRowsSafely` try/catch and falls back
+to an empty list until the app's next sync — confirmed by hand-testing on a real device, not just
+theorized. Consistent with precedent, not flagged as a Warning; `optString("chainGap", "")` would
+be marginally more resilient during the update transition but that's a Suggestion at most, not a
+correctness bug. `getViewTypeCount()=1`/`hasStableIds()=false` don't need to change for the new
+optional 3rd line — same layout resource for every row, just a child `TextView`'s visibility
+toggled per-row via `setViewVisibility(..., GONE/VISIBLE)`, which is the same established pattern
+as `applyChronometerOrPlaceholder` elsewhere in this feature area; variable-height items within one
+view type is a standard, correct Android ListView/RemoteViews pattern, not a footgun. Gemini CLI's
+independent pass converged on the exact same `optString` suggestion — two independent reviewers
+agreeing is stronger signal than either alone, so this one was applied after all (RESOLVED same
+PR), unlike a typical Suggestion-tier single-reviewer note. Zero new
+comment-policy violations (no issue-#/plan-file self-reference in the new Kotlin/XML/Dart comments)
+— this feature area's clean streak on that specific rule (first achieved in the original #64 pass)
+held through this follow-up too. Test coverage good: the sync-service test's two rows exercise both
+`formatGap` branches including a `GapResult(days: 0, weeks: 0)` case, confirming the empty-string
+check is on `null`, not falsiness. `flutter analyze`/`flutter test` (287/287)/`dart format`/debug
+build all independently reported clean by the user, plus on-device (BlueStacks) confirmed widget
+and in-app table render identical gap text for a real event.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]], [[project_timer_widget_display_patterns]]

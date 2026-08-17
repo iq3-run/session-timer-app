@@ -5,12 +5,8 @@ import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';
-import 'package:session_timer/features/schedule/session_gap_calculation.dart';
 import 'package:session_timer/features/schedule/session_schedule_formatting.dart';
 import 'package:session_timer/features/schedule/session_schedule_settings_screen.dart';
-
-String _formatGap(GapResult? gap) =>
-    gap == null ? '' : '${gap.days}日(${gap.weeks}W)';
 
 /// Read-only screen showing the derived 週末間/今日から day-count table.
 /// Adding, deleting, and the show/hide-on-this-screen toggle all live in
@@ -108,8 +104,8 @@ class _ScheduleTable extends StatelessWidget {
       DataCell(
         _TodayMarkedText(formatScheduleDate(row.date), isToday: row.isToday),
       ),
-      DataCell(Text(_formatGap(row.chainGap))),
-      DataCell(Text(_formatGap(row.todayGap))),
+      DataCell(Text(formatGap(row.chainGap))),
+      DataCell(Text(formatGap(row.todayGap))),
     ];
   }
 }
