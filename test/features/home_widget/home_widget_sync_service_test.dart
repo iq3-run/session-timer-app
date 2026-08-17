@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
+import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -135,6 +138,36 @@ void main() {
       await service.syncTimer(null, 0);
 
       expect(gateway.valueOf(timerTargetEpochMsKey), isNull);
+    });
+  });
+
+  group('HomeWidgetSyncService.syncSchedule', () {
+    test(
+      'sends label/date/isToday for each row as JSON and updates the '
+      'schedule widget',
+      () async {
+        final rows = [
+          ScheduleRow(label: 'OR', date: DateTime(2026, 8, 10), isToday: false),
+          ScheduleRow(label: '今日', date: DateTime(2026, 8, 17), isToday: true),
+        ];
+
+        await service.syncSchedule(rows);
+
+        final decoded =
+            jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
+                as List<dynamic>;
+        expect(decoded, [
+          {'label': 'OR', 'date': '8/10(月)', 'isToday': false},
+          {'label': '今日', 'date': '8/17(月)', 'isToday': true},
+        ]);
+        expect(gateway.updatedAndroidNames, [scheduleWidgetAndroidName]);
+      },
+    );
+
+    test('sends an empty list as an empty JSON array', () async {
+      await service.syncSchedule(const []);
+
+      expect(gateway.valueOf(scheduleEventsJsonKey), '[]');
     });
   });
 }

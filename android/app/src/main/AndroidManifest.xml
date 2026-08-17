@@ -137,6 +137,24 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/timer_control_widget_info" />
         </receiver>
+        <receiver
+            android:name=".ScheduleWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_picker_label_schedule">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/schedule_widget_info" />
+        </receiver>
+        <!-- Hosts ScheduleRemoteViewsFactory, the RemoteViewsService the schedule widget's
+             ListView pulls its row data from. BIND_REMOTEVIEWS is required by the OS for any
+             service a RemoteViewsFactory-backed widget binds to. -->
+        <service
+            android:name=".ScheduleWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

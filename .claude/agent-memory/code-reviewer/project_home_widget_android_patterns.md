@@ -216,4 +216,73 @@ before pushing):
   `_autoStartStopwatchIfNeeded` implementations — all accurate, no drift between comment claims and
   code.
 
+**Issue #64 (branch `feat/64-schedule-widget-android`, reviewed 2026-08-17, uncommitted working
+tree, not yet pushed).** First `RemoteViewsService`/`RemoteViewsFactory`-backed widget in this repo
+(a scrollable `ListView` for the unbounded-length session schedule, vs. the prior 6 widgets' either
+self-driving `Chronometer`/`TextClock` or static single-value `RemoteViews`). `ScheduleWidgetProvider`
+(`AppWidgetProvider`, wires `setRemoteAdapter`+`setEmptyView`+`notifyAppWidgetViewDataChanged`),
+`ScheduleWidgetService` (trivial `RemoteViewsService`), `ScheduleRemoteViewsFactory` (reads
+`schedule_events_json` via `HomeWidgetPlugin.getData(context)` directly in `onDataSetChanged`, since
+a `RemoteViewsFactory` runs in the widget host's own process and can't share in-memory state with
+the provider). Dart side reuses `buildScheduleRows`/`ScheduleRow` from `session_chain.dart` verbatim
+via a new `scheduleWidgetRowsProvider`, plus a day-only `scheduleWidgetTodayProvider`
+(`nowProvider.select`) so the widget re-syncs once a day instead of every second — verified by
+hand-trace to match `SessionScheduleScreen`'s own `today = DateTime(now.year, now.month, now.day)`
+exactly (same `watchNow` fallback-to-`DateTime.now()` semantics).
+- Warning, no findings from prior instances of this feature area recurred: zero issue-#/plan-file
+  self-references in any new file (Kotlin, XML, *and* Dart doc comments) — first time this comment-
+  policy violation didn't need fixing at all in this feature area since #54. README's per-file Kotlin
+  listing convention confirmed to be one-line-per-`*WidgetProvider.kt` only (support files like
+  `HomeWidgetKeys.kt`/`TimerWidgetCountdown.kt` were never listed either) — omitting
+  `ScheduleWidgetService.kt`/`ScheduleRemoteViewsFactory.kt` from that list is consistent, not a gap.
+- Warning, RESOLVED same PR: `ScheduleRemoteViewsFactory.onDataSetChanged`/`parseRows` had no
+  try/catch around `JSONArray(json)` — first native JSON-parsing point in this repo (all prior
+  native code used typed `SharedPreferences` getters, no parsing). Gemini CLI's independent review
+  flagged the same gap. Fixed by wrapping in `try`/`catch (e: JSONException) { emptyList() }`
+  (renamed to `parseRowsSafely`), with a WHY comment explaining the widget-host-process/app-process
+  boundary rather than a bare catch.
+- Warning, RESOLVED same PR: the plan file's promised `scheduleWidgetTodayProvider` day-only-
+  recompute test was missing from the first pass. Added as a `testWidgets` test in
+  `schedule_widget_rows_test.dart` driving a `StreamController<DateTime>` override of `nowProvider`
+  through `tester.pump()` (a bare `test()` with `Future.delayed(Duration.zero)` between stream
+  `add()` calls proved unreliable — one emission was consistently dropped before the final `expect`,
+  even though the async chain conceptually should have settled; switching to `tester.pump()` fixed
+  it deterministically). Lesson for future `nowProvider`-driven timing tests in this repo: prefer
+  `testWidgets`+`tester.pump()` over bare `test()`+`Future.delayed(Duration.zero)` when asserting on
+  more than one stream emission.
+- Suggestion, RESOLVED same PR: `schedule_widget_list_item.xml`'s `item_label` TextView had a fixed
+  `layout_width="48dp"` (not `wrap_content`); labels can reach 4 chars (`"12WE"` — sequence numbers
+  grow unboundedly since past events are kept forever) or full-width `"次回CR"`/`"今日"`. Changed to
+  `wrap_content` + `minWidth="40dp"`. **On-device (BlueStacks) verification confirmed the fix**: added
+  a real `12WE` event (via the settings screen's `番号` override field) and a future `CR` (rendering
+  as `次回CR`), placed the widget via `adb shell input draganddrop` (a bare long-press-then-`swipe`
+  gesture did NOT register as a drag in Nova Launcher's widget picker — `draganddrop` was needed),
+  and confirmed both labels render fully with the `isToday` amber highlight correct and no clipping —
+  this milder risk category (TextView wrapping/clipping vs. #62's "views entirely absent from the
+  inflated tree") did not recur here. Also verified the header tap opens `MainActivity`
+  (`dumpsys window` showed `mFocusedApp` switch) and the widget picker correctly reports the
+  `3x4`/`セッションタイマー：スケジュール` label. Home-screen widget layout is governed by the
+  launcher's grid, not the app, so this project's portrait/landscape screen-rotation check doesn't
+  meaningfully apply here (and Nova Launcher's home screen didn't rotate on this BlueStacks setup
+  regardless of the `user_rotation` setting — a launcher limitation, not something in this PR's
+  scope) — noted rather than blocked on.
+- Also verified: `ContextCompat.getColor` (Gemini CLI's suggestion) replaced a manual
+  `Build.VERSION.SDK_INT >= M` branch for the row text color — simplification with no behavior
+  change, `androidx.core` already implied available via `android.useAndroidX=true`.
+- Verified correct, no findings: `setRemoteAdapter(int viewId, Intent intent)` 2-arg overload (the
+  *non*-deprecated one — the 3-arg `appWidgetId`-bundling overload is the deprecated one, easy to get
+  backwards) with a per-widgetId-unique `data` URI on the service `Intent` (standard, avoids the OS
+  treating every widget instance's factory as interchangeable); `notifyAppWidgetViewDataChanged` is
+  what actually triggers `onDataSetChanged` on an already-bound instance (`setRemoteAdapter` alone
+  doesn't reload data); `resolveColor`'s `Build.VERSION_CODES.M` gate for `getColor`/deprecated
+  `resources.getColor` fallback is real (matches the already-verified pattern that this codebase's
+  `minSdk = flutter.minSdkVersion` genuinely goes below API 23); `hasStableIds()=false` justified by
+  the synthetic "今日" row + date-rollover row churn (per the plan's own design-decision #3);
+  `HomeWidgetPlugin.getData(context)` matches the exact accessor already verified real in
+  `TimerWidgetFlashReceiver.kt` (#63). `test/features/home_widget/home_widget_sync_service_test.dart`'s
+  `_FakeHomeWidgetGateway.valueOf` (pre-existing, untouched by this diff) is actually a manual
+  reverse-scan `for` loop with a comment, not `.lastOrNull` as an earlier memory entry (#62's
+  CodeRabbit-follow-up note) described — correcting that detail here; behaviorally equivalent
+  (returns `null` for an unsaved key) so not a regression, just a stale memory citation.
+
 Related: [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]], [[project_stopwatch_pr_patterns]], [[project_timer_widget_display_patterns]]

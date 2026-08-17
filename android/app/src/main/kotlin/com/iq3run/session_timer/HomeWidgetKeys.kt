@@ -8,4 +8,5 @@ object HomeWidgetKeys {
     const val NEXT_TARGET_EPOCH_MS = "next_target_epoch_ms"
     const val COMPLETION_TARGET_EPOCH_MS = "completion_target_epoch_ms"
     const val TIMER_TARGET_EPOCH_MS = "timer_target_epoch_ms"
+    const val SCHEDULE_EVENTS_JSON = "schedule_events_json"
 }

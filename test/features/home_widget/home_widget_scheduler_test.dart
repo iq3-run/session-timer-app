@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_scheduler.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
+import 'package:session_timer/features/schedule/session_event.dart';
+import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
@@ -109,6 +111,36 @@ void main() {
       await tester.pump();
 
       expect(gateway.updatedAndroidNames, contains(timerWidgetAndroidName));
+    },
+  );
+
+  testWidgets(
+    'a session schedule change syncs the schedule widget',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final gateway = _RecordingHomeWidgetGateway();
+      final container = ProviderContainer(
+        overrides: [homeWidgetGatewayProvider.overrideWithValue(gateway)],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: HomeWidgetScheduler(child: SizedBox()),
+          ),
+        ),
+      );
+      await container.read(sessionEventControllerProvider.future);
+      gateway.updatedAndroidNames.clear();
+
+      await container
+          .read(sessionEventControllerProvider.notifier)
+          .addEvent(SessionEventType.orientation, DateTime(2026, 8, 10));
+      await tester.pump();
+
+      expect(gateway.updatedAndroidNames, contains(scheduleWidgetAndroidName));
     },
   );
 }

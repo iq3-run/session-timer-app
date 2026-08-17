@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
+import 'package:session_timer/features/schedule/session_chain.dart';
+import 'package:session_timer/features/schedule/session_schedule_formatting.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -24,6 +28,9 @@ const completionWidgetAndroidName = 'CompletionCountdownWidgetProvider';
 const timerTargetEpochMsKey = 'timer_target_epoch_ms';
 const timerWidgetAndroidName = 'TimerWidgetProvider';
 const timerControlWidgetAndroidName = 'TimerControlWidgetProvider';
+
+const scheduleEventsJsonKey = 'schedule_events_json';
+const scheduleWidgetAndroidName = 'ScheduleWidgetProvider';
 
 /// Pushes app state to the Android home screen widgets' own data store
 /// (a `SharedPreferences` file separate from the app's own, owned by the
@@ -91,6 +98,24 @@ class HomeWidgetSyncService {
     // updateWidget call to redraw.
     await _gateway.updateWidget(androidName: timerWidgetAndroidName);
     await _gateway.updateWidget(androidName: timerControlWidgetAndroidName);
+  }
+
+  /// Unlike the other four syncs, this one carries fully-formatted display
+  /// strings rather than raw epoch values — the widget has no `Chronometer`
+  /// to drive natively, so there's nothing for the native side to compute
+  /// from a number, and reusing `formatScheduleDate` here avoids
+  /// reimplementing its weekday-label lookup in Kotlin.
+  Future<void> syncSchedule(List<ScheduleRow> rows) async {
+    final json = jsonEncode([
+      for (final row in rows)
+        {
+          'label': row.label,
+          'date': formatScheduleDate(row.date),
+          'isToday': row.isToday,
+        },
+    ]);
+    await _gateway.saveWidgetData(scheduleEventsJsonKey, json);
+    await _gateway.updateWidget(androidName: scheduleWidgetAndroidName);
   }
 }
 

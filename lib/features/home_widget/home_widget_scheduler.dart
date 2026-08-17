@@ -6,6 +6,8 @@ import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/home_widget/next_time_target.dart';
+import 'package:session_timer/features/home_widget/schedule_widget_rows.dart';
+import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
@@ -81,6 +83,9 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
       if (value == null) return;
       unawaited(_syncTimer(value, ref.read(ntpOffsetMsProvider)));
     });
+    ref.listen(scheduleWidgetRowsProvider, (previous, next) {
+      unawaited(_syncSchedule(next));
+    });
     // The NTP offset itself changing (a resync) means every already-synced
     // widget's Chronometer base is now stale relative to the app's
     // corrected clock, even though the underlying epoch values didn't
@@ -99,6 +104,7 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
       ntpOffsetMs,
     ),
     _syncTimer(ref.read(timerControllerProvider).value, ntpOffsetMs),
+    _syncSchedule(ref.read(scheduleWidgetRowsProvider)),
   ]);
 
   /// A sync failure (e.g. the platform channel not ready yet) is a
@@ -146,6 +152,14 @@ class _HomeWidgetSchedulerState extends ConsumerState<HomeWidgetScheduler>
           .syncTimer(value, ntpOffsetMs);
     } on Exception catch (e) {
       debugPrint('HomeWidgetScheduler: failed to sync timer: $e');
+    }
+  }
+
+  Future<void> _syncSchedule(List<ScheduleRow> rows) async {
+    try {
+      await ref.read(homeWidgetSyncServiceProvider).syncSchedule(rows);
+    } on Exception catch (e) {
+      debugPrint('HomeWidgetScheduler: failed to sync schedule: $e');
     }
   }
 }

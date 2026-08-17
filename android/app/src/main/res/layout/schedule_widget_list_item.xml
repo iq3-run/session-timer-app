@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
+    android:gravity="center_vertical">
+
+    <!-- wrap_content, not a fixed width: labels range from 2 chars ("OR"/"CR") up to
+         multi-digit sequence numbers ("12WE") or full-width text ("次回CR"/"今日") — a fixed
+         width risks clipping the longer ones. minWidth just keeps the common short-label case
+         reasonably column-aligned. -->
+    <TextView
+        android:id="@+id/item_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="40dp"
+        android:textColor="@color/home_widget_white"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/item_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textColor="@color/home_widget_label"
+        android:textSize="13sp" />
+</LinearLayout>
