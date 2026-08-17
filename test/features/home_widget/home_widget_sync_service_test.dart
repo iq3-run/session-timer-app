@@ -143,47 +143,103 @@ void main() {
   });
 
   group('HomeWidgetSyncService.syncSchedule', () {
+    /// Encodes a single row and decodes back the JSON object at index 0 —
+    /// each test below only cares about one row's own field values, not the
+    /// list-level plumbing (already covered by the "for each row"/"empty
+    /// list" tests).
+    Future<Map<String, dynamic>> encodedRow(ScheduleRow row) async {
+      await service.syncSchedule([row]);
+      final decoded =
+          jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
+              as List<dynamic>;
+      return decoded.single as Map<String, dynamic>;
+    }
+
     test(
-      'sends label/date/isToday/chainGap/todayGap for each row as JSON and '
-      'updates the schedule widget',
+      'sends label/date/isToday for each row as JSON and updates the '
+      'schedule widget',
       () async {
         final rows = [
-          ScheduleRow(
-            label: 'OR',
-            date: DateTime(2026, 8, 10),
-            isToday: false,
-            chainGap: const GapResult(days: 3, weeks: 1),
-          ),
-          ScheduleRow(
-            label: '今日',
-            date: DateTime(2026, 8, 17),
-            isToday: true,
-            todayGap: const GapResult(days: 0, weeks: 0),
-          ),
+          ScheduleRow(label: 'OR', date: DateTime(2026, 8, 10), isToday: false),
+          ScheduleRow(label: '今日', date: DateTime(2026, 8, 17), isToday: true),
         ];
 
         await service.syncSchedule(rows);
 
         final decoded =
-            jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
-                as List<dynamic>;
-        expect(decoded, [
-          {
-            'label': 'OR',
-            'date': '8/10(月)',
-            'isToday': false,
-            'chainGap': '3日(1W)',
-            'todayGap': '',
-          },
-          {
-            'label': '今日',
-            'date': '8/17(月)',
-            'isToday': true,
-            'chainGap': '',
-            'todayGap': '0日(0W)',
-          },
-        ]);
+            (jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
+                    as List<dynamic>)
+                .cast<Map<String, dynamic>>();
+        expect(decoded.map((r) => r['label']), ['OR', '今日']);
+        expect(decoded.map((r) => r['date']), ['8/10(月)', '8/17(月)']);
+        expect(decoded.map((r) => r['isToday']), [false, true]);
         expect(gateway.updatedAndroidNames, [scheduleWidgetAndroidName]);
+      },
+    );
+
+    test('sends empty chainGap/todayGap when a row has neither', () async {
+      final row = ScheduleRow(
+        label: 'CR',
+        date: DateTime(2026, 8, 10),
+        isToday: false,
+      );
+
+      final encoded = await encodedRow(row);
+
+      expect(encoded['chainGap'], '');
+      expect(encoded['todayGap'], '');
+    });
+
+    test(
+      'sends chainGap and an empty todayGap when only chainGap is set',
+      () async {
+        final row = ScheduleRow(
+          label: 'OR',
+          date: DateTime(2026, 8, 10),
+          isToday: false,
+          chainGap: const GapResult(days: 3, weeks: 1),
+        );
+
+        final encoded = await encodedRow(row);
+
+        expect(encoded['chainGap'], '3日(1W)');
+        expect(encoded['todayGap'], '');
+      },
+    );
+
+    test(
+      'sends todayGap and an empty chainGap when only todayGap is set',
+      () async {
+        final row = ScheduleRow(
+          label: '今日',
+          date: DateTime(2026, 8, 17),
+          isToday: true,
+          todayGap: const GapResult(days: 0, weeks: 0),
+        );
+
+        final encoded = await encodedRow(row);
+
+        expect(encoded['chainGap'], '');
+        expect(encoded['todayGap'], '0日(0W)');
+      },
+    );
+
+    test(
+      'sends both chainGap and todayGap when a row is both a chain row and '
+      'the nearest-past/nearest-future entry',
+      () async {
+        final row = ScheduleRow(
+          label: '3WE',
+          date: DateTime(2026, 8, 24),
+          isToday: false,
+          chainGap: const GapResult(days: 12, weeks: 2),
+          todayGap: const GapResult(days: 5, weeks: 1),
+        );
+
+        final encoded = await encodedRow(row);
+
+        expect(encoded['chainGap'], '12日(2W)');
+        expect(encoded['todayGap'], '5日(1W)');
       },
     );
 
