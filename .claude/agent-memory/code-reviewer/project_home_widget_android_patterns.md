@@ -372,6 +372,37 @@ non-issue on-device, so not worth the extra attribute. Comment-policy clean: the
 "(see the layout's own comment)" cross-reference are both WHY-only /architectural-pointer, not
 task/caller self-references — extends this feature area's clean streak (first achieved at #64).
 
+**Issue #74 Follow-up 2 (same branch, reviewed again 2026-08-17 — user asked for a bigger redesign
+after the two prior rounds shipped: label/date/chainGap/todayGap all in one 4-column row, matching
+`SessionScheduleScreen`'s DataTable exactly, replacing the "2-line" layout entirely).** Verified the
+specific question this review was asked: the GONE-sibling-`layout_marginStart` bug class fixed in
+the immediately-prior round (Gemini's `<View>`-spacer / today-gap-indent finding, above) cannot
+recur here, because the new `item_chain_gap`/`item_today_gap` are never set `GONE` at all —
+`setViewVisibility` and the `android.view.View` import were removed from `ScheduleRemoteViewsFactory.kt`
+entirely; both cells stay `VISIBLE` with an empty string when a row has no gap, matching the
+in-app DataTable's own blank-cell-keeps-its-column behavior. No dangling `item_gap_row`/
+`item_gap_spacer`/`applyGapRow` references anywhere (grepped repo-wide; only hits are historical
+prose in the plan file and this memory file). Header row (`schedule_widget_layout.xml`, blank/日付/
+週末間/今日から) verified byte-for-byte matching `SessionScheduleScreen`'s `DataColumn` list by
+reading the screen directly. Comment-policy clean, function lengths fine — extends this feature
+area's clean streak since #64.
+- **Warning, open (documentation-accuracy, not a live bug):** the plan file's Follow-up 2 section
+  claims `minWidth="270dp"` was chosen with "余裕を持たせた" margin, but its own stated content-width
+  arithmetic (240dp: 44+60+56+56+24dp column margins) omits the outer container's
+  `layout_margin="4dp"`×2 + `padding="8dp"`×2 (24dp) from `schedule_widget_layout.xml`, so the real
+  content width is 264dp against a declared 270dp — only ~6dp (2%) of actual headroom, not a
+  generous buffer. Notable because this is the *exact* feature area where a naively-calculated,
+  seemingly-safe width (the stopwatch widget's 150dp) still silently dropped views from the inflated
+  RemoteViews tree and needed a ~47% jump to 220dp to actually work (see the #62 saga above) — so a
+  270dp value with 2% headroom is riskier than the plan's own framing suggests, even though a fresh
+  on-device placement this round did render all three sample rows correctly with no clipping. Not
+  blocking (real device evidence exists for at least one config), but flag if a future width tweak in
+  this file trusts the plan's "generous margin" framing at face value.
+- Suggestion, not flagged as a fix: column widths (44/60/56/56dp) are literal-duplicated across
+  `schedule_widget_layout.xml`'s header row and `schedule_widget_list_item.xml`'s data row, kept in
+  sync only by a comment, not a mechanism — consistent with this repo having zero `dimens.xml`
+  anywhere (confirmed by search), so not a new deviation, just an opportunity if this drifts later.
+
 **This is the 2nd confirmed instance in this feature area of an AI-suggested fix that looked
 syntactically correct but was wrong about a RemoteViews-specific constraint, only caught by
 actually running it on-device** — 1st was CodeRabbit's 150dp stopwatch-widget width "fix" (issue

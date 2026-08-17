@@ -1,79 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 種別・日付・週末間・今日からを1行4列に並べる — 空のセルも列の位置を保つため
+     chainGap/todayGap は常にVISIBLEのまま空文字列を許す（GONEで詰めない）。read-only
+     スケジュール画面のDataTableが空セルでも列を保持するのと同じ挙動。列幅は
+     schedule_widget_layout.xmlのヘッダー行と同じminWidth値を使う。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
     android:paddingTop="4dp"
     android:paddingBottom="4dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <!-- wrap_content, not a fixed width: labels range from 2 chars ("OR"/"CR") up to
+         multi-digit sequence numbers ("12WE") or full-width text ("次回CR"/"今日") — a fixed
+         width risks clipping the longer ones. minWidth just keeps the common short-label case
+         reasonably column-aligned. -->
+    <TextView
+        android:id="@+id/item_label"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:minWidth="44dp"
+        android:textColor="@color/home_widget_white"
+        android:textSize="13sp"
+        android:textStyle="bold" />
 
-        <!-- wrap_content, not a fixed width: labels range from 2 chars ("OR"/"CR") up to
-             multi-digit sequence numbers ("12WE") or full-width text ("次回CR"/"今日") — a fixed
-             width risks clipping the longer ones. minWidth just keeps the common short-label case
-             reasonably column-aligned. -->
-        <TextView
-            android:id="@+id/item_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="40dp"
-            android:textColor="@color/home_widget_white"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/item_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textColor="@color/home_widget_label"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <!-- 週末間/今日から side by side, mirroring the read-only スケジュール screen's two
-         adjacent gap columns — two independent TextViews rather than one combined sentence, so
-         either can show/hide on its own (most rows have at most one of the two). The whole row
-         collapses to nothing when neither applies, same as before. -->
-    <LinearLayout
-        android:id="@+id/item_gap_row"
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/item_date"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:orientation="horizontal">
+        android:layout_marginStart="8dp"
+        android:minWidth="60dp"
+        android:textColor="@color/home_widget_label"
+        android:textSize="13sp" />
 
-        <TextView
-            android:id="@+id/item_chain_gap"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/home_widget_label"
-            android:textSize="11sp" />
+    <TextView
+        android:id="@+id/item_chain_gap"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:minWidth="56dp"
+        android:textColor="@color/home_widget_label"
+        android:textSize="11sp" />
 
-        <!-- A LinearLayout child's marginStart is always applied at its own position in the
-             layout pass, not relative to a specific sibling's true edge — so a fixed
-             marginStart on item_today_gap would indent it from the row's start even when
-             item_chain_gap is GONE (no sibling to be "next to"). This spacer is toggled
-             VISIBLE only when both gaps are shown, so item_today_gap sits flush at the row's
-             start when it's the only value present. A plain <View>/<Space> isn't usable here —
-             RemoteViews only inflates a fixed whitelist of widget classes (confirmed on-device:
-             a bare <View> throws "Error inflating class android.view.View" in the widget host
-             process), so this reuses TextView, which is already known-supported. -->
-        <TextView
-            android:id="@+id/item_gap_spacer"
-            android:layout_width="12dp"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:importantForAccessibility="no"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/item_today_gap"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/home_widget_label"
-            android:textSize="11sp" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/item_today_gap"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:minWidth="56dp"
+        android:textColor="@color/home_widget_label"
+        android:textSize="11sp" />
 </LinearLayout>
