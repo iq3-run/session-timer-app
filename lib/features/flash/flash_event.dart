@@ -31,6 +31,9 @@ const defaultCompletionFlashPointsMinutes = [
 /// Timer完了 5/3/1分前 single-shot flash points (spec 3-1節).
 const timerFlashPointsMinutes = [5, 3, 1];
 
+/// 指定時刻 15/10/5/3/2/1分前 pre-notify flash points.
+const targetFlashPointsMinutes = [15, 10, 5, 3, 2, 1];
+
 /// A single scheduled flash. [instant] is the wall-clock moment the flash
 /// animation must *end* — see [flashAnimationDuration].
 class FlashEvent {
@@ -70,13 +73,18 @@ List<FlashEvent> completionFlashEvents(
   );
 }
 
-/// One flash per time target, ending exactly at its time.
+/// Per time target: the exact-instant flash plus the 15/10/5/3/2/1分前
+/// pre-notify flashes. A titled target uses its title in the wording
+/// ("タイトルまで残り○分"); an untitled one keeps the generic
+/// "指定時刻"/"残り○分" text.
 List<FlashEvent> targetFlashEvents(List<TimeTarget> targets) => [
   for (final t in targets)
-    FlashEvent(
-      id: 'target:${t.id}:${t.epochMs}',
-      instant: t.targetTime,
-      label: '指定時刻になりました',
+    ..._exactPlusMinutesBefore(
+      idPrefix: 'target:${t.id}',
+      target: t.targetTime,
+      minutesBefore: targetFlashPointsMinutes,
+      exactLabel: t.title != null ? '${t.title}になりました' : '指定時刻になりました',
+      labelFor: (m) => t.title != null ? '${t.title}まで残り$m分' : '残り$m分',
     ),
 ];
 
@@ -97,8 +105,9 @@ List<FlashEvent> timerFlashEvents(TimerState? timer) {
   );
 }
 
-/// Shared shape behind [completionFlashEvents] and [timerFlashEvents]: one
-/// exact-instant flash at [target] plus one per entry in [minutesBefore].
+/// Shared shape behind [completionFlashEvents], [timerFlashEvents], and
+/// [targetFlashEvents]: one exact-instant flash at [target] plus one per
+/// entry in [minutesBefore].
 List<FlashEvent> _exactPlusMinutesBefore({
   required String idPrefix,
   required DateTime target,

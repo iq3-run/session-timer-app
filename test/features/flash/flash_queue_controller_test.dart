@@ -117,7 +117,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await _tick(clock, target.subtract(const Duration(seconds: 10)));
+      // Well before even the earliest (15分前) pre-notify window opens, so
+      // none of the target's 7 candidate events (exact + 6 pre-notify) have
+      // entered their window yet.
+      await _tick(clock, target.subtract(const Duration(minutes: 20)));
 
       final state = container.read(flashQueueControllerProvider);
       expect(state.active, isNull);
@@ -141,7 +144,10 @@ void main() {
         await _tick(clock, target.subtract(const Duration(seconds: 2)));
 
         final state = container.read(flashQueueControllerProvider);
-        expect(state.active?.id, 'target:t1:${target.millisecondsSinceEpoch}');
+        expect(
+          state.active?.id,
+          'target:t1:${target.millisecondsSinceEpoch}:0',
+        );
       },
     );
 
@@ -166,7 +172,7 @@ void main() {
         expect(state.active, isNull);
         expect(
           state.firedIds,
-          contains('target:t1:${target.millisecondsSinceEpoch}'),
+          contains('target:t1:${target.millisecondsSinceEpoch}:0'),
         );
       },
     );
@@ -215,11 +221,14 @@ void main() {
         await _tick(clock, t0);
 
         final first = container.read(flashQueueControllerProvider).active;
-        expect(first?.id, 'target:t1:${t0.millisecondsSinceEpoch}');
+        expect(first?.id, 'target:t1:${t0.millisecondsSinceEpoch}:0');
 
         container.read(flashQueueControllerProvider.notifier).advance();
         final second = container.read(flashQueueControllerProvider).active;
-        expect(second?.id, 'target:t2:${t1Instant.millisecondsSinceEpoch}');
+        expect(
+          second?.id,
+          'target:t2:${t1Instant.millisecondsSinceEpoch}:0',
+        );
       },
     );
 
@@ -251,11 +260,11 @@ void main() {
         await _tick(clock, early);
 
         final first = container.read(flashQueueControllerProvider).active;
-        expect(first?.id, 'target:early:${early.millisecondsSinceEpoch}');
+        expect(first?.id, 'target:early:${early.millisecondsSinceEpoch}:0');
 
         container.read(flashQueueControllerProvider.notifier).advance();
         final second = container.read(flashQueueControllerProvider).active;
-        expect(second?.id, 'target:late:${late.millisecondsSinceEpoch}');
+        expect(second?.id, 'target:late:${late.millisecondsSinceEpoch}:0');
       },
     );
 
@@ -384,7 +393,7 @@ void main() {
         await _tick(clock, targetInstant);
         expect(
           container.read(flashQueueControllerProvider).active?.id,
-          'target:t1:${targetInstant.millisecondsSinceEpoch}',
+          'target:t1:${targetInstant.millisecondsSinceEpoch}:0',
         );
 
         flashPointsController.setPoints(const [
