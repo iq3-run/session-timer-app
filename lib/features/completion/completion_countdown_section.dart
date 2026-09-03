@@ -6,6 +6,7 @@ import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/clock/time_of_day_resolver.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
+import 'package:session_timer/features/flash/flash_legible_text.dart';
 
 class CompletionCountdownSection extends ConsumerWidget {
   const CompletionCountdownSection({super.key});
@@ -62,7 +63,7 @@ class _CountdownBody extends ConsumerWidget {
     return Column(
       children: [
         const Text('完了まで', style: SessionTimerTextStyles.label),
-        Text(
+        FlashLegibleText(
           target == null ? '--:--' : formatCountdown(target!.difference(now)),
           style: SessionTimerTextStyles.value.copyWith(
             color: isOverdue

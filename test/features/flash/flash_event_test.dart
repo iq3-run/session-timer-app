@@ -124,7 +124,12 @@ void main() {
         TimerState(targetEpochMs: target.millisecondsSinceEpoch),
       );
 
-      expect(events, hasLength(timerFlashPointsMinutes.length + 1));
+      expect(
+        events,
+        hasLength(
+          timerFlashPointsMinutes.length + timerFlashPointsSeconds.length + 1,
+        ),
+      );
       final exact = events.singleWhere(
         (e) => e.id == 'timer:${target.millisecondsSinceEpoch}:0',
       );
@@ -134,6 +139,21 @@ void main() {
       for (final m in timerFlashPointsMinutes) {
         final event = events.firstWhere((e) => e.id.endsWith(':$m'));
         expect(event.instant, target.subtract(Duration(minutes: m)));
+      }
+    });
+
+    test('returns the 30/15/10-second-before points too', () {
+      final target = DateTime(2026, 8, 8, 15);
+      final events = timerFlashEvents(
+        TimerState(targetEpochMs: target.millisecondsSinceEpoch),
+      );
+
+      for (final s in timerFlashPointsSeconds) {
+        final event = events.singleWhere(
+          (e) => e.id == 'timer:${target.millisecondsSinceEpoch}:${s}s',
+        );
+        expect(event.instant, target.subtract(Duration(seconds: s)));
+        expect(event.label, 'タイマー残り$s秒');
       }
     });
   });

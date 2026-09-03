@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/duration_format.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/flash/flash_legible_text.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
 
@@ -111,7 +112,7 @@ class _TimerBodyState extends State<_TimerBody> {
     return Column(
       children: [
         Text(_label(state, isOverdue), style: SessionTimerTextStyles.label),
-        Text(_value(state, now), style: _valueStyle(isOverdue)),
+        FlashLegibleText(_value(state, now), style: _valueStyle(isOverdue)),
         Text(
           _subtitle(state),
           style: const TextStyle(

@@ -21,6 +21,10 @@ class ClockScreen extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
+            // Drawn first (behind the content below) so a flash only
+            // washes the background — it must never obscure the text on
+            // top of it.
+            FlashOverlay(),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: SingleChildScrollView(
@@ -58,7 +62,6 @@ class ClockScreen extends StatelessWidget {
                 ),
               ),
             ),
-            FlashOverlay(),
           ],
         ),
       ),
