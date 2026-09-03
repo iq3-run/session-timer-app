@@ -59,7 +59,7 @@ Play App Signing を利用する前提のため、upload keyを紛失してもPl
 
 ## ディレクトリ構成
 
-機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）・`home_widget/`（Androidホーム画面ウィジェットへのデータ同期、Android向けのみ）。
+機能ごとにIssue単位で段階的に構築する（`plans/`参照）。現時点で実装済みなのは`clock/`・`core/theme/`・`completion/`・`targets/`・`stopwatch/`・`timer/`・`flash/`・`notifications/`・`settings/`（フラッシュポイントの追加/削除・フラッシュ/通知トグル・NTP時刻同期）・`schedule/`（セッションスケジュール管理・週末間日数計算）・`session_plan/`（1日のセッションの流れの事前登録・完了時刻/指定時刻への自動反映）・`home_widget/`（Androidホーム画面ウィジェットへのデータ同期、Android向けのみ）。
 
 ```text
 lib/
@@ -76,6 +76,7 @@ lib/
     notifications/ # フラッシュポイントの端末通知スケジューリング
     settings/    # 設定シート（フラッシュポイント・通知・NTP）
     schedule/    # セッションスケジュール管理（OR/WE/WD/CR/SS/CS・週末間日数計算）
+    session_plan/ # 1日のセッションの流れの事前登録・完了時刻/指定時刻への自動反映
     home_widget/ # Androidホーム画面ウィジェット（7種）へのデータ同期
 test/            # libと同じfeature構成でミラーリング
 
