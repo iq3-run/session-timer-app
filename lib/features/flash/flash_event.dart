@@ -31,6 +31,10 @@ const defaultCompletionFlashPointsMinutes = [
 /// Timer完了 5/3/1分前 single-shot flash points (spec 3-1節).
 const timerFlashPointsMinutes = [5, 3, 1];
 
+/// Timer完了 30/15/10秒前 single-shot flash points, in addition to
+/// [timerFlashPointsMinutes].
+const timerFlashPointsSeconds = [30, 15, 10];
+
 /// 指定時刻 15/10/5/3/2/1分前 pre-notify flash points.
 const targetFlashPointsMinutes = [15, 10, 5, 3, 2, 1];
 
@@ -96,13 +100,43 @@ List<FlashEvent> targetFlashEvents(List<TimeTarget> targets) => [
 List<FlashEvent> timerFlashEvents(TimerState? timer) {
   final target = timer?.targetTime;
   if (target == null) return const [];
-  return _exactPlusMinutesBefore(
-    idPrefix: 'timer',
-    target: target,
-    minutesBefore: timerFlashPointsMinutes,
-    exactLabel: 'タイマー終了です',
-    labelFor: (m) => 'タイマー残り$m分',
-  );
+  return [
+    ..._exactPlusMinutesBefore(
+      idPrefix: 'timer',
+      target: target,
+      minutesBefore: timerFlashPointsMinutes,
+      exactLabel: 'タイマー終了です',
+      labelFor: (m) => 'タイマー残り$m分',
+    ),
+    ..._secondsBefore(
+      idPrefix: 'timer',
+      target: target,
+      secondsBefore: timerFlashPointsSeconds,
+      labelFor: (s) => 'タイマー残り$s秒',
+    ),
+  ];
+}
+
+/// One flash per entry in [secondsBefore], counted down from [target]. Kept
+/// separate from [_exactPlusMinutesBefore] (minute-only) rather than
+/// generalizing it, so the id format completion/target already rely on
+/// stays untouched. The trailing "s" in each id keeps these from ever
+/// colliding with a minute-based id from the same [target].
+List<FlashEvent> _secondsBefore({
+  required String idPrefix,
+  required DateTime target,
+  required List<int> secondsBefore,
+  required String Function(int seconds) labelFor,
+}) {
+  final targetEpochMs = target.millisecondsSinceEpoch;
+  return [
+    for (final s in secondsBefore)
+      FlashEvent(
+        id: '$idPrefix:$targetEpochMs:${s}s',
+        instant: target.subtract(Duration(seconds: s)),
+        label: labelFor(s),
+      ),
+  ];
 }
 
 /// Shared shape behind [completionFlashEvents], [timerFlashEvents], and
