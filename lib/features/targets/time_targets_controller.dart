@@ -95,6 +95,19 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
     await _mutate((targets) => targets.where((t) => t.id != id).toList());
   }
 
+  /// Creates or replaces the target at the caller-chosen [id], unlike
+  /// [addTarget] which always mints a fresh `UniqueKey()` id. For callers
+  /// that need to keep exactly one auto-managed target up to date across
+  /// repeated calls, rather than accumulating a new entry every time.
+  Future<void> upsertTarget(String id, DateTime time, {String? title}) async {
+    await _mutate(
+      (targets) => [
+        ...targets.where((t) => t.id != id),
+        TimeTarget(id: id, epochMs: time.millisecondsSinceEpoch, title: title),
+      ],
+    );
+  }
+
   Future<void> _mutate(
     List<TimeTarget> Function(List<TimeTarget>) update,
   ) {

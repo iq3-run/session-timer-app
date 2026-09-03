@@ -294,4 +294,16 @@ threshold by a wide margin. Raised as Warning, fixed same-PR (commit
 area past the limit, cite this as the second time it's happened, not a
 fresh discovery.
 
-Related: [[project_readme_maintenance_gap]]
+**Mutation-queue skeleton — now 6 instances, still not extracted (2026-09-03,
+`feat/78-session-plan`)**: `SessionPlanController` (new in this PR) duplicates
+the same `_mutationQueue`/`_initialLoad`/`_lastGood`/`_mutate`/`_mutateNow`/
+`_persistenceFailure` skeleton yet again. Confirmed via
+`grep -l "Future<void> _mutationQueue"` under `lib/`: `time_targets_controller.dart`,
+`timer_controller.dart`, `stopwatch_controller.dart`, `session_event_controller.dart`,
+`flash_points_controller.dart`, `session_plan_controller.dart` — 6 files now. The
+extraction (`MutationQueueNotifier<T>` or similar) was already recommended as a
+Warning at the 4th instance (2026-08-09) and has not happened across two more
+controllers since. Keep flagging every new instance as Warning, and note the
+still-rising count explicitly — this is well past "wait and see."
+
+Related: [[project_readme_maintenance_gap]], [[project_session_plan_patterns]]

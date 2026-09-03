@@ -139,6 +139,54 @@ void main() {
       expect(targets.single.title, '朝礼');
     });
 
+    test('upsertTarget creates a new target at the given id', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(timeTargetsControllerProvider.future);
+      final notifier = container.read(timeTargetsControllerProvider.notifier);
+
+      final time = DateTime.now().add(const Duration(hours: 1));
+      await notifier.upsertTarget('fixed-id', time, title: '次のセッション開始');
+      final targets = await container.read(
+        timeTargetsControllerProvider.future,
+      );
+
+      expect(targets.single.id, 'fixed-id');
+      expect(targets.single.epochMs, time.millisecondsSinceEpoch);
+      expect(targets.single.title, '次のセッション開始');
+    });
+
+    test(
+      'upsertTarget replaces the existing target at that id instead of '
+      'adding a second one',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(timeTargetsControllerProvider.future);
+        final notifier = container.read(
+          timeTargetsControllerProvider.notifier,
+        );
+        await notifier.upsertTarget(
+          'fixed-id',
+          DateTime.now().add(const Duration(hours: 1)),
+        );
+        await notifier.addTarget(DateTime.now().add(const Duration(hours: 2)));
+
+        final newTime = DateTime.now().add(const Duration(hours: 3));
+        await notifier.upsertTarget('fixed-id', newTime, title: 'updated');
+        final targets = await container.read(
+          timeTargetsControllerProvider.future,
+        );
+
+        expect(targets, hasLength(2));
+        final upserted = targets.firstWhere((t) => t.id == 'fixed-id');
+        expect(upserted.epochMs, newTime.millisecondsSinceEpoch);
+        expect(upserted.title, 'updated');
+      },
+    );
+
     test('updateTarget can set and then clear a title', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
