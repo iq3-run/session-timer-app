@@ -121,6 +121,49 @@ void main() {
       },
     );
 
+    test('addTarget persists an optional title', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(timeTargetsControllerProvider.future);
+      final notifier = container.read(timeTargetsControllerProvider.notifier);
+
+      await notifier.addTarget(
+        DateTime.now().add(const Duration(hours: 1)),
+        title: '朝礼',
+      );
+      final targets = await container.read(
+        timeTargetsControllerProvider.future,
+      );
+
+      expect(targets.single.title, '朝礼');
+    });
+
+    test('updateTarget can set and then clear a title', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(timeTargetsControllerProvider.future);
+      final notifier = container.read(timeTargetsControllerProvider.notifier);
+      await notifier.addTarget(DateTime.now().add(const Duration(hours: 1)));
+      final id = (await container.read(
+        timeTargetsControllerProvider.future,
+      )).single.id;
+
+      final newTime = DateTime.now().add(const Duration(hours: 2));
+      await notifier.updateTarget(id, newTime, title: '朝礼');
+      final titled = await container.read(
+        timeTargetsControllerProvider.future,
+      );
+      expect(titled.single.title, '朝礼');
+
+      await notifier.updateTarget(id, newTime, clearTitle: true);
+      final cleared = await container.read(
+        timeTargetsControllerProvider.future,
+      );
+      expect(cleared.single.title, isNull);
+    });
+
     test('removeTarget deletes the target', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();

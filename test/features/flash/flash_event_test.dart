@@ -67,15 +67,43 @@ void main() {
   });
 
   group('targetFlashEvents', () {
-    test('returns one event per target ending exactly at its time', () {
+    test(
+      'returns the exact-instant event plus the 15/10/5/3/2/1-minute-before '
+      'points, untitled wording',
+      () {
+        final t = DateTime(2026, 8, 8, 12, 30);
+        final events = targetFlashEvents([
+          TimeTarget(id: 'abc', epochMs: t.millisecondsSinceEpoch),
+        ]);
+
+        expect(events, hasLength(targetFlashPointsMinutes.length + 1));
+        final exact = events.singleWhere(
+          (e) => e.id == 'target:abc:${t.millisecondsSinceEpoch}:0',
+        );
+        expect(exact.instant, t);
+        expect(exact.label, '指定時刻になりました');
+
+        for (final m in targetFlashPointsMinutes) {
+          final event = events.firstWhere((e) => e.id.endsWith(':$m'));
+          expect(event.instant, t.subtract(Duration(minutes: m)));
+          expect(event.label, '残り$m分');
+        }
+      },
+    );
+
+    test('uses the target title in the exact and pre-notify wording', () {
       final t = DateTime(2026, 8, 8, 12, 30);
       final events = targetFlashEvents([
-        TimeTarget(id: 'abc', epochMs: t.millisecondsSinceEpoch),
+        TimeTarget(id: 'abc', epochMs: t.millisecondsSinceEpoch, title: '朝礼'),
       ]);
 
-      expect(events, hasLength(1));
-      expect(events.single.id, 'target:abc:${t.millisecondsSinceEpoch}');
-      expect(events.single.instant, t);
+      final exact = events.singleWhere(
+        (e) => e.id == 'target:abc:${t.millisecondsSinceEpoch}:0',
+      );
+      expect(exact.label, '朝礼になりました');
+
+      final fiveMinBefore = events.firstWhere((e) => e.id.endsWith(':5'));
+      expect(fiveMinBefore.label, '朝礼まで残り5分');
     });
 
     test('returns nothing for an empty list', () {

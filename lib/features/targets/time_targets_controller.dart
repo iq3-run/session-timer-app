@@ -61,20 +61,30 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
     }
   }
 
-  Future<void> addTarget(DateTime time) async {
+  Future<void> addTarget(DateTime time, {String? title}) async {
     final target = TimeTarget(
       id: UniqueKey().toString(),
       epochMs: time.millisecondsSinceEpoch,
+      title: title,
     );
     await _mutate((targets) => [...targets, target]);
   }
 
-  Future<void> updateTarget(String id, DateTime time) async {
+  Future<void> updateTarget(
+    String id,
+    DateTime time, {
+    String? title,
+    bool clearTitle = false,
+  }) async {
     await _mutate(
       (targets) => [
         for (final t in targets)
           if (t.id == id)
-            t.copyWith(epochMs: time.millisecondsSinceEpoch)
+            t.copyWith(
+              epochMs: time.millisecondsSinceEpoch,
+              title: title,
+              clearTitle: clearTitle,
+            )
           else
             t,
       ],
