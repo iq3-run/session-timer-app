@@ -7,6 +7,7 @@ import 'package:session_timer/core/clock/duration_format.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_legible_text.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
+import 'package:session_timer/features/timer/timer_label.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
 
 const _defaultSetupDuration = Duration(minutes: 5);
@@ -111,7 +112,7 @@ class _TimerBodyState extends State<_TimerBody> {
     final isOverdue = state != null && state.isOverdueAt(now);
     return Column(
       children: [
-        Text(_label(state, isOverdue), style: SessionTimerTextStyles.label),
+        Text(timerLabel(state, now), style: SessionTimerTextStyles.label),
         FlashLegibleText(_value(state, now), style: _valueStyle(isOverdue)),
         Text(
           _subtitle(state),
@@ -133,12 +134,6 @@ class _TimerBodyState extends State<_TimerBody> {
       SessionTimerTextStyles.value.copyWith(
         color: isOverdue ? SessionTimerColors.red : SessionTimerColors.amber,
       );
-
-  String _label(TimerState? state, bool isOverdue) {
-    if (state == null || !state.isRunning) return 'タイマー';
-    final modeLabel = state.mode == TimerMode.linked ? '連動タイマー' : 'タイマー';
-    return isOverdue ? '$modeLabel（超過）' : modeLabel;
-  }
 
   String _subtitle(TimerState? state) {
     if (state == null || !state.isRunning) return 'タップして設定';
