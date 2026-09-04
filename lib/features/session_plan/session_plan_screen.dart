@@ -9,10 +9,13 @@ import 'package:session_timer/features/session_plan/session_plan_controller.dart
 import 'package:session_timer/features/session_plan/session_plan_entry.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 
-/// `SessionTimerTextStyles.label` (12px) is meant as a small caption
-/// alongside a large number elsewhere in the app — on this screen it would
-/// be the only text in each row, so rows use this larger size instead.
-const _rowTextStyle = TextStyle(color: SessionTimerColors.muted, fontSize: 18);
+/// `SessionTimerTextStyles.label` is a small caption meant to sit alongside
+/// a large number elsewhere in the app — on this screen it would be the
+/// only text in each row, so rows instead match `SessionScheduleScreen`'s
+/// `DataTable` cells, which inherit this same theme style (size from
+/// Material 3's default, color overridden to white app-wide).
+TextStyle _rowTextStyle(BuildContext context) =>
+    Theme.of(context).textTheme.bodyMedium!;
 
 /// Registers a plan of sessions (start + end time each) and lets the user
 /// derive 完了時刻/指定時刻 from whichever one is "current" right now. The
@@ -62,7 +65,7 @@ class _SetCurrentSessionButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ElevatedButton(
+    return FilledButton(
       onPressed: () => _apply(context, ref),
       child: const Text('現在のセッションを設定'),
     );
@@ -117,7 +120,7 @@ class _SessionRow extends ConsumerWidget {
               child: Text(
                 '${format.format(session.startTime)}〜'
                 '${format.format(session.endTime)}',
-                style: _rowTextStyle,
+                style: _rowTextStyle(context),
               ),
             ),
             Positioned(
@@ -168,9 +171,9 @@ class _AddSessionRow extends ConsumerWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _addSession(context, ref),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 10),
-        child: Text('＋ セッションを追加', style: _rowTextStyle),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text('＋ セッションを追加', style: _rowTextStyle(context)),
       ),
     );
   }

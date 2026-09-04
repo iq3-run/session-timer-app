@@ -49,3 +49,37 @@ test/features/timer test/features/session_plan` all clean (45 tests pass).
 
 Related: [[project_stopwatch_pr_patterns]] (resolveXxx pure-function precedent),
 [[project_session_plan_patterns]]
+
+## Follow-up: issue #88 (fix/88-session-plan-styling-consistency), reviewed 2026-09-04
+
+Uncommitted working tree, 1 file changed (`session_plan_screen.dart` only).
+`_rowTextStyle` (added #86, noted above) was superseded: went from a file-scope
+`const TextStyle(color: muted, fontSize: 18)` to `TextStyle _rowTextStyle(BuildContext
+context) => Theme.of(context).textTheme.bodyMedium!;`, to match
+`SessionScheduleScreen`'s `DataTable` cells, which get their font implicitly via
+`DataTable`'s `dataTextStyle` fallback chain ending in `theme.textTheme.bodyMedium`
+(verified against `data_table.dart` line ~979-981 in the installed Flutter 3.47.0 SDK
+at `C:/src/flutter`). `_SetCurrentSessionButton` also switched `ElevatedButton` →
+`FilledButton`, matching 6 other `FilledButton` sites app-wide (now 7) — it was the
+last `ElevatedButton` holdout.
+
+- `Theme.of(context).textTheme.bodyMedium!` — first `!`-on-textTheme instance in this
+  repo. Verified safe: `useMaterial3: true` + `SessionTimerTheme.dark`'s `textTheme:
+  TextTheme(bodyMedium: ...)` gets merged over `Typography.material2021` defaults by
+  `ThemeData()`, which always populates all `TextTheme` fields — `bodyMedium` cannot
+  be null here. Not flagged.
+- `FilledButton` + `ColorScheme.dark(primary: amber)` with `onPrimary` left
+  unspecified: confirmed against the SDK's `ColorScheme.dark()` factory default
+  (`onPrimary = Colors.black`), so button text renders black-on-amber — good contrast,
+  not a mismatch. This same combination was already live at the other 6
+  `FilledButton` sites before this PR, so it isn't new exposure from this change.
+- Losing `const` on `_AddSessionRow`'s `Padding` (forced by `_rowTextStyle` needing
+  `context`) is an inherent, unavoidable consequence of the const→function
+  conversion, not a regression worth flagging.
+- No widget test file exists for `session_plan_screen.dart` at all (pre-existing gap,
+  confirmed via glob — not introduced by this PR). Pure cosmetic/style diff, so not
+  escalated, but worth a first-instance widget test if this file gets touched again
+  for behavior (not just styling).
+- Comment pass clean again: the updated multi-line WHY comment on `_rowTextStyle`
+  names sibling classes (`SessionScheduleScreen`, `DataTable`) for architectural
+  context, not a caller/task/issue-# self-reference.
