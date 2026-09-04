@@ -136,6 +136,18 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
     return prefs.setString(sessionPlanJsonKey, json);
   }
 
+  // Sessions represent a repeating daily rhythm (e.g. AM/PM/evening blocks),
+  // not one-off dated appointments — each entry's stored date only reflects
+  // which calendar day `resolveNextOccurrence` happened to land on when it
+  // was registered, not anything the user actually chose. Sorting by the
+  // full epoch would group entries by that incidental date first, showing
+  // e.g. "today 19:00, tomorrow 9:00, tomorrow 13:30" instead of the
+  // expected daily order — so this sorts by time-of-day only.
   List<SessionPlanEntry> _sorted(List<SessionPlanEntry> sessions) =>
-      [...sessions]..sort((a, b) => a.startEpochMs.compareTo(b.startEpochMs));
+      [...sessions]..sort(
+        (a, b) =>
+            _minutesOfDay(a.startTime).compareTo(_minutesOfDay(b.startTime)),
+      );
+
+  int _minutesOfDay(DateTime time) => time.hour * 60 + time.minute;
 }
