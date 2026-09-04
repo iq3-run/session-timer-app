@@ -101,8 +101,36 @@ class _SetCurrentSessionButton extends ConsumerWidget {
   }
 }
 
-class _SessionRow extends ConsumerWidget {
+class _SessionRow extends StatelessWidget {
   const _SessionRow({required this.session});
+
+  final SessionPlanEntry session;
+
+  @override
+  Widget build(BuildContext context) {
+    // A Row lays its two children side by side with no geometric overlap,
+    // unlike the Stack/Positioned layout this replaced — that one let the
+    // whole-row tap-to-edit region and the close button's own tap region
+    // both claim the same pixels, so tapping the button also opened the
+    // edit dialog (Stack hit-testing collects every overlapping child, not
+    // just the topmost one).
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            Expanded(child: _EditSessionLabel(session: session)),
+            _RemoveSessionButton(session: session),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditSessionLabel extends ConsumerWidget {
+  const _EditSessionLabel({required this.session});
 
   final SessionPlanEntry session;
 
@@ -112,33 +140,11 @@ class _SessionRow extends ConsumerWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _editSession(context, ref),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Stack(
-          children: [
-            Center(
-              child: Text(
-                '${format.format(session.startTime)}〜'
-                '${format.format(session.endTime)}',
-                style: _rowTextStyle(context),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: IconButton(
-                tooltip: 'このセッションを削除',
-                icon: const Icon(
-                  Icons.close,
-                  color: SessionTimerColors.muted,
-                  size: 16,
-                ),
-                onPressed: () => ref
-                    .read(sessionPlanControllerProvider.notifier)
-                    .removeSession(session.id),
-              ),
-            ),
-          ],
+      child: Center(
+        child: Text(
+          '${format.format(session.startTime)}〜'
+          '${format.format(session.endTime)}',
+          style: _rowTextStyle(context),
         ),
       ),
     );
@@ -160,6 +166,24 @@ class _SessionRow extends ConsumerWidget {
     await ref
         .read(sessionPlanControllerProvider.notifier)
         .updateSession(session.id, start, end);
+  }
+}
+
+class _RemoveSessionButton extends ConsumerWidget {
+  const _RemoveSessionButton({required this.session});
+
+  final SessionPlanEntry session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      key: Key('removeSession_${session.id}'),
+      tooltip: 'このセッションを削除',
+      icon: const Icon(Icons.close, color: SessionTimerColors.muted, size: 16),
+      onPressed: () => ref
+          .read(sessionPlanControllerProvider.notifier)
+          .removeSession(session.id),
+    );
   }
 }
 
