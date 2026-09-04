@@ -20,14 +20,18 @@ void main() {
       expect(sessions, isEmpty);
     });
 
-    test('addSession appends and sorts by start time', () async {
+    test('addSession appends and sorts by time of day', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
       await container.read(sessionPlanControllerProvider.future);
       final notifier = container.read(sessionPlanControllerProvider.notifier);
-      final laterStart = DateTime.now().add(const Duration(hours: 5));
-      final soonerStart = DateTime.now().add(const Duration(hours: 1));
+      // Fixed same-day times, not DateTime.now() — the sort is now by
+      // time-of-day only, so a now()-relative fixture would flip order
+      // (and fail) whenever "later" wraps past midnight, e.g. any run
+      // between 19:00 and 23:00 local time.
+      final laterStart = DateTime(2026, 8, 8, 19);
+      final soonerStart = DateTime(2026, 8, 8, 9);
 
       await notifier.addSession(
         laterStart,
@@ -46,6 +50,47 @@ void main() {
         laterStart.millisecondsSinceEpoch,
       ]);
     });
+
+    test(
+      'sorts by time-of-day even when entries land on different calendar '
+      'dates',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(sessionPlanControllerProvider.future);
+        final notifier = container.read(
+          sessionPlanControllerProvider.notifier,
+        );
+        // 19:00 today has an earlier epoch than 9:00 tomorrow, but 9:00 is
+        // earlier in the day — this is the exact scenario
+        // resolveNextOccurrence produces when a user registers "9:00"
+        // after 9am has already passed today, landing it on tomorrow's
+        // date while an evening session registered earlier that same day
+        // still resolves to today.
+        final today = DateTime(2026, 8, 8);
+        final eveningToday = DateTime(2026, 8, 8, 19);
+        final morningTomorrow = DateTime(2026, 8, 9, 9);
+
+        await notifier.addSession(
+          eveningToday,
+          eveningToday.add(const Duration(hours: 2)),
+        );
+        await notifier.addSession(
+          morningTomorrow,
+          morningTomorrow.add(const Duration(hours: 2)),
+        );
+        final sessions = await container.read(
+          sessionPlanControllerProvider.future,
+        );
+
+        expect(sessions.map((s) => s.startTime.hour), [9, 19]);
+        // Sanity check the fixture actually crosses midnight (today's
+        // guard against the two DateTimes above drifting to the same day
+        // if this test is ever edited).
+        expect(morningTomorrow.day, isNot(today.day));
+      },
+    );
 
     test('updateSession changes the start/end time in place', () async {
       SharedPreferences.setMockInitialValues({});
