@@ -26,6 +26,25 @@ Issue: #90（親: #1）
 - `key: Key('removeSession_${session.id}')`を✕ボタンに付与する
   （`flash_points_settings_section.dart`の`Key('removeFlashPoint_$m')`と同じ命名規則。
   ウィジェットテストで個別の行を確実に指定してタップできるようにするため）
+- 行タップ＝編集の`GestureDetector`を、行全体を覆う形から「✕ボタンの48px幅の右端コーナーを
+  除いた領域」に変更する（`Positioned(left:0, top:0, bottom:0, right:48)`）。Stackの
+  ヒットテストは重なった全ての子を収集するため（最前面の子だけで止まらない）、
+  行全体を覆う編集用GestureDetectorと✕ボタンが幾何学的に重なっていると、✕ボタンを
+  タップしたときに編集用GestureDetectorの`onTap`も同時に発火してしまう。実際に
+  ウィジェットテストで検証して確認した実バグ（詳細は下記「実装前調査結果」参照）
+
+## 実装前調査結果（詳細）
+
+- ソートは既存実装（`SessionPlanController._sorted`）で正しく動作していることを確認
+- 削除ボタン自体の配線（`onPressed`・`removeSession`呼び出し）は元々正しかったが、行の
+  高さ不足によりボタンの下側がはみ出し、`WidgetTester.tap()`でのヒットテストが外れる
+  問題があった（`SizedBox(height: 48)`で解消）
+- 高さ修正後、✕ボタンをタップすると削除自体は成功するが、行全体を覆う編集用
+  `GestureDetector`の`onTap`も同時に発火し、`showTimePicker`（編集フロー）が開いてしまう
+  実バグを発見した。原因は「Stackのヒットテストは最前面の子だけでなく重なった全ての子を
+  収集する」というFlutterの挙動によるもので、祖先/兄弟の木構造を変えるだけでは解決せず、
+  タップ領域を幾何学的に重複させないこと（✕ボタンの48px分を編集用領域から除外する）で
+  解決した
 
 ## 実装しないこと
 
