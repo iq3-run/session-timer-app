@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/session_plan/session_plan_controller.dart';
 import 'package:session_timer/features/session_plan/session_plan_screen.dart';
+import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pumpScreen(WidgetTester tester) async {
@@ -150,5 +152,137 @@ void main() {
         expect(find.text('該当するセッションがありません'), findsNothing);
       },
     );
+
+    group('per-row 適用 button (#94)', () {
+      ProviderContainer containerOf(WidgetTester tester) =>
+          ProviderScope.containerOf(
+            tester.element(find.byType(SessionPlanScreen)),
+          );
+
+      int minutesOfDay(DateTime time) => time.hour * 60 + time.minute;
+
+      Future<
+        ({
+          DateTime now,
+          DateTime? completion,
+          DateTime? start,
+          String? startTitle,
+        })
+      >
+      applyAndRead(
+        WidgetTester tester, {
+        required int startOffsetMinutes,
+        required int durationMinutes,
+      }) async {
+        final now = DateTime.now();
+        final startMinutes =
+            (minutesOfDay(now) + startOffsetMinutes) % (24 * 60);
+        _seedSessions([_entryJson('s1', startMinutes, durationMinutes)]);
+
+        await _pumpScreen(tester);
+        await tester.tap(find.byKey(const Key('applySession_s1')));
+        await tester.pumpAndSettle();
+
+        final container = containerOf(tester);
+        final completion = container
+            .read(completionTimeControllerProvider)
+            .value
+            ?.targetEpochMs;
+        final targets = container.read(timeTargetsControllerProvider).value;
+        final auto = targets?.where((t) => t.id == autoSessionTargetId);
+        return (
+          now: now,
+          completion: completion == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(completion),
+          start: auto == null || auto.isEmpty
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(auto.first.epochMs),
+          startTitle: auto == null || auto.isEmpty ? null : auto.first.title,
+        );
+      }
+
+      testWidgets('an upcoming session applies as is', (tester) async {
+        final r = await applyAndRead(
+          tester,
+          startOffsetMinutes: 120,
+          durationMinutes: 60,
+        );
+
+        expect(r.start!.isAfter(r.now), isTrue);
+        expect(r.completion!.difference(r.start!), const Duration(hours: 1));
+        expect(r.startTitle, 'セッション開始');
+        expect(find.textContaining('適用しました'), findsOneWidget);
+      });
+
+      testWidgets('a session in progress applies with a start in the past', (
+        tester,
+      ) async {
+        final r = await applyAndRead(
+          tester,
+          startOffsetMinutes: -60,
+          durationMinutes: 180,
+        );
+
+        expect(r.start!.isBefore(r.now), isTrue); // 残りがマイナス
+        expect(r.completion!.isAfter(r.now), isTrue);
+        expect(r.completion!.difference(r.start!), const Duration(hours: 3));
+      });
+
+      testWidgets('an ended session applies to tomorrow', (tester) async {
+        final r = await applyAndRead(
+          tester,
+          startOffsetMinutes: -300,
+          durationMinutes: 60,
+        );
+
+        // Started 5h ago and lasted 1h, so the next occurrence is ~19h away.
+        expect(
+          r.start!.difference(r.now),
+          greaterThan(const Duration(hours: 15)),
+        );
+        expect(r.completion!.difference(r.start!), const Duration(hours: 1));
+      });
+
+      testWidgets('applying one row leaves the others untouched and does not '
+          'open the edit picker', (tester) async {
+        _seedSessions([
+          _entryJson('a', 9 * 60, 60),
+          _entryJson('b', 13 * 60, 60),
+        ]);
+        await _pumpScreen(tester);
+
+        await tester.tap(find.byKey(const Key('applySession_a')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(TimePickerDialog), findsNothing);
+        expect(find.text('9:00〜10:00'), findsOneWidget);
+        expect(find.text('13:00〜14:00'), findsOneWidget);
+        expect(find.byIcon(Icons.close), findsNWidgets(2));
+      });
+
+      testWidgets('applying a second row replaces the auto 指定時刻 rather '
+          'than adding another', (tester) async {
+        _seedSessions([
+          _entryJson('a', 9 * 60, 60),
+          _entryJson('b', 13 * 60, 60),
+        ]);
+        await _pumpScreen(tester);
+
+        await tester.tap(find.byKey(const Key('applySession_a')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('applySession_b')));
+        await tester.pumpAndSettle();
+
+        final targets = containerOf(
+          tester,
+        ).read(timeTargetsControllerProvider).value!;
+        expect(targets.where((t) => t.id == autoSessionTargetId), hasLength(1));
+        final applied = DateTime.fromMillisecondsSinceEpoch(
+          targets.singleWhere((t) => t.id == autoSessionTargetId).epochMs,
+        );
+        expect(applied.hour, 13);
+      });
+    });
   });
 }

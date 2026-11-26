@@ -78,25 +78,41 @@ class _SetCurrentSessionButton extends ConsumerWidget {
       );
       return;
     }
-    await ref
-        .read(completionTimeControllerProvider.notifier)
-        .setTarget(resolution.completionTarget);
-    if (!context.mounted) return;
-    await _applyAutoTarget(ref, resolution.autoTargetStart);
+    await _applyTimes(
+      ref,
+      completionTarget: resolution.completionTarget,
+      autoTargetStart: resolution.autoTargetStart,
+      autoTargetTitle: '次のセッション開始',
+    );
     if (!context.mounted) return;
     messenger.showSnackBar(const SnackBar(content: Text('現在のセッションを設定しました')));
   }
+}
 
-  Future<void> _applyAutoTarget(WidgetRef ref, DateTime? autoTargetStart) {
-    final targets = ref.read(timeTargetsControllerProvider.notifier);
-    return autoTargetStart != null
-        ? targets.upsertTarget(
-            autoSessionTargetId,
-            autoTargetStart,
-            title: '次のセッション開始',
-          )
-        : targets.removeTarget(autoSessionTargetId);
-  }
+/// Sets 完了時刻 to [completionTarget] and the single auto-managed 指定時刻
+/// to [autoTargetStart] (or removes it when `null`) — shared by "現在の
+/// セッションを設定" and each row's own 適用 button, so both write the same
+/// two places.
+Future<void> _applyTimes(
+  WidgetRef ref, {
+  required DateTime completionTarget,
+  required DateTime? autoTargetStart,
+  required String autoTargetTitle,
+}) async {
+  // Both notifiers are read before the first await: if the screen is left
+  // mid-write, the second write must still happen (the providers outlive
+  // the widget), or 完了時刻 and 指定時刻 would end up describing different
+  // sessions. `ref` itself can't be used after the widget is gone.
+  final completion = ref.read(completionTimeControllerProvider.notifier);
+  final targets = ref.read(timeTargetsControllerProvider.notifier);
+  await completion.setTarget(completionTarget);
+  await (autoTargetStart != null
+      ? targets.upsertTarget(
+          autoSessionTargetId,
+          autoTargetStart,
+          title: autoTargetTitle,
+        )
+      : targets.removeTarget(autoSessionTargetId));
 }
 
 class _SessionRow extends StatelessWidget {
@@ -119,6 +135,7 @@ class _SessionRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: _EditSessionLabel(session: session)),
+            _ApplySessionButton(session: session),
             _RemoveSessionButton(session: session),
           ],
         ),
@@ -166,6 +183,44 @@ class _EditSessionLabel extends ConsumerWidget {
           startMinutes: startMinutes,
           durationMinutes: durationMinutes,
         );
+  }
+}
+
+/// Applies this one session — whichever it is, not just the current one —
+/// to 完了時刻 and 指定時刻 using [resolveSessionOccurrence]'s rules: an
+/// upcoming session applies as is, one in progress applies with its start
+/// already past (so the remaining time reads negative), and one that has
+/// ended applies to tomorrow.
+class _ApplySessionButton extends ConsumerWidget {
+  const _ApplySessionButton({required this.session});
+
+  final SessionPlanEntry session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton(
+      key: Key('applySession_${session.id}'),
+      style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+      onPressed: () => _apply(context, ref),
+      child: const Text('適用'),
+    );
+  }
+
+  Future<void> _apply(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final occurrence = resolveSessionOccurrence(session, DateTime.now());
+    await _applyTimes(
+      ref,
+      completionTarget: occurrence.end,
+      autoTargetStart: occurrence.start,
+      autoTargetTitle: 'セッション開始',
+    );
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${session.startLabel}〜${session.endLabel} を適用しました'),
+      ),
+    );
   }
 }
 

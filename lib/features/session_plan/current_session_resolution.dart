@@ -10,7 +10,8 @@ typedef CurrentSessionResolution = ({
   DateTime? autoTargetStart,
 });
 
-typedef _Occurrence = ({DateTime start, DateTime end});
+/// One concrete placement of a session on the calendar.
+typedef SessionOccurrence = ({DateTime start, DateTime end});
 
 /// Picks the session that is in progress right now or, failing that, the
 /// next one to begin — whichever ends soonest. Sessions hold only a time of
@@ -29,9 +30,9 @@ CurrentSessionResolution? resolveCurrentSession(
   if (sessions.isEmpty) return null;
 
   SessionPlanEntry? selected;
-  _Occurrence? selectedOccurrence;
+  SessionOccurrence? selectedOccurrence;
   for (final session in sessions) {
-    final occurrence = _currentOrNextOccurrence(session, now);
+    final occurrence = resolveSessionOccurrence(session, now);
     if (selectedOccurrence == null ||
         occurrence.end.isBefore(selectedOccurrence.end)) {
       selected = session;
@@ -62,11 +63,26 @@ CurrentSessionResolution? resolveCurrentSession(
   );
 }
 
-/// The earliest occurrence of [session] that hasn't ended yet at [now]:
-/// the one in progress, or the next to begin. Durations are at most 24h,
-/// so looking from yesterday (a session that ran past midnight) through
-/// tomorrow is always enough to find one.
-_Occurrence _currentOrNextOccurrence(SessionPlanEntry session, DateTime now) {
+/// The start and end to apply when the user picks [session] by hand: its
+/// earliest occurrence that hasn't ended yet at [now] — the one in
+/// progress, or the next to begin.
+///
+/// - End: today's end if it is still ahead, otherwise tomorrow's.
+/// - Start: the start belonging to that end. It is ahead of [now] for an
+///   upcoming session, and already behind it (so a countdown to it reads
+///   negative) for one in progress; once today's end has passed, both move
+///   to tomorrow.
+///
+/// Deriving the start from the end, rather than from today's date alone,
+/// keeps a session that runs past midnight right: at 01:00 a 23:00〜02:00
+/// session started yesterday and ends later today.
+///
+/// Durations are at most 24h, so looking from yesterday (a session that ran
+/// past midnight) through tomorrow is always enough to find one.
+SessionOccurrence resolveSessionOccurrence(
+  SessionPlanEntry session,
+  DateTime now,
+) {
   final today = DateTime(now.year, now.month, now.day);
   for (var dayOffset = -1; dayOffset <= 0; dayOffset++) {
     final day = DateTime(today.year, today.month, today.day + dayOffset);
