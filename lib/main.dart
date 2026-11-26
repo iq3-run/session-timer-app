@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/app.dart';
 import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/home_widget/home_widget_background_callback.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The next DateTime matching [time]'s hour/minute — today if that moment
 /// hasn't passed yet, otherwise tomorrow. Mirrors the HTML prototype's

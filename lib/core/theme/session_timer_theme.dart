@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Color palette carried over from the HTML prototype (docs/session-timer.html)
 /// so the native app keeps the same OLED-black, low-repaint visual language.

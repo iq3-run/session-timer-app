@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/clock/duration_format.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/clock/time_of_day_resolver.dart';

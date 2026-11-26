@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_overlay.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';

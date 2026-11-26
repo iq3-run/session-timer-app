@@ -149,9 +149,9 @@ void main() {
     /// list" tests).
     Future<Map<String, dynamic>> encodedRow(ScheduleRow row) async {
       await service.syncSchedule([row]);
-      final decoded =
-          jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
-              as List<dynamic>;
+      final decoded = jsonDecode(
+        gateway.valueOf(scheduleEventsJsonKey)! as String,
+      ) as List<dynamic>;
       return decoded.single as Map<String, dynamic>;
     }
 
@@ -166,10 +166,9 @@ void main() {
 
         await service.syncSchedule(rows);
 
-        final decoded =
-            (jsonDecode(gateway.valueOf(scheduleEventsJsonKey)! as String)
-                    as List<dynamic>)
-                .cast<Map<String, dynamic>>();
+        final decoded = (jsonDecode(
+          gateway.valueOf(scheduleEventsJsonKey)! as String,
+        ) as List<dynamic>).cast<Map<String, dynamic>>();
         expect(decoded.map((r) => r['label']), ['OR', '今日']);
         expect(decoded.map((r) => r['date']), ['8/10(月)', '8/17(月)']);
         expect(decoded.map((r) => r['isToday']), [false, true]);
