@@ -154,7 +154,7 @@ void main() {
     });
 
     test(
-      'removeAllEvents drops every event and persists the empty list',
+      'removeEvents drops only the given ids and persists the rest',
       () async {
         SharedPreferences.setMockInitialValues({});
         final container = ProviderContainer();
@@ -171,8 +171,40 @@ void main() {
           SessionEventType.orientation,
           DateTime(2026, 8, 7),
         );
+        final all = await container.read(sessionEventControllerProvider.future);
+        final keep = all.firstWhere((e) => e.type == SessionEventType.workday);
 
-        await notifier.removeAllEvents();
+        await notifier.removeEvents({
+          for (final e in all)
+            if (e.id != keep.id) e.id,
+        });
+        final events = await container.read(
+          sessionEventControllerProvider.future,
+        );
+
+        expect(events.map((e) => e.id), [keep.id]);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString(sessionEventsJsonKey), contains(keep.id));
+      },
+    );
+
+    test(
+      'removeEvents can clear everything, persisting the empty list',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(
+          sessionEventControllerProvider.notifier,
+        );
+        await notifier.addEvent(
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+        );
+        await notifier.addEvent(SessionEventType.workday, DateTime(2026, 9, 5));
+        final all = await container.read(sessionEventControllerProvider.future);
+
+        await notifier.removeEvents({for (final e in all) e.id});
         final events = await container.read(
           sessionEventControllerProvider.future,
         );
@@ -183,18 +215,48 @@ void main() {
       },
     );
 
-    test('removeAllEvents on an empty schedule is a harmless no-op', () async {
+    test(
+      'removeEvents leaves an event added after the ids were chosen',
+      () async {
+        // The confirmation dialog counts the events on screen; one added
+        // before the delete runs must survive it.
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(
+          sessionEventControllerProvider.notifier,
+        );
+        await notifier.addEvent(
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+        );
+        final confirmed = await container.read(
+          sessionEventControllerProvider.future,
+        );
+        await notifier.addEvent(SessionEventType.workday, DateTime(2026, 9, 5));
+
+        await notifier.removeEvents({for (final e in confirmed) e.id});
+        final events = await container.read(
+          sessionEventControllerProvider.future,
+        );
+
+        expect(events.map((e) => e.type), [SessionEventType.workday]);
+      },
+    );
+
+    test('removeEvents with unknown ids is a harmless no-op', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final notifier = container.read(sessionEventControllerProvider.notifier);
+      await notifier.addEvent(SessionEventType.weekend, DateTime(2026, 8, 21));
 
-      await notifier.removeAllEvents();
+      await notifier.removeEvents({'no-such-id'});
       final events = await container.read(
         sessionEventControllerProvider.future,
       );
 
-      expect(events, isEmpty);
+      expect(events, hasLength(1));
     });
 
     test('past events are not dropped on a fresh build (unlike '

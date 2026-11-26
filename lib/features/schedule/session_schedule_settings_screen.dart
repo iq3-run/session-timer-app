@@ -213,8 +213,10 @@ Future<void> _confirmAndDeleteAll(
     context: context,
     builder: (context) => _DeleteAllDialog(count: events.length),
   );
-  if (confirmed != true) return;
-  await ref.read(sessionEventControllerProvider.notifier).removeAllEvents();
+  if (confirmed != true || !context.mounted) return;
+  await ref.read(sessionEventControllerProvider.notifier).removeEvents({
+    for (final e in events) e.id,
+  });
 }
 
 class _DeleteAllDialog extends StatelessWidget {
@@ -242,6 +244,10 @@ class _DeleteAllDialog extends StatelessWidget {
         ),
         FilledButton(
           key: const Key('deleteAllConfirm'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
           onPressed: () => Navigator.of(context).pop(true),
           child: const Text('削除'),
         ),
