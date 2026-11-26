@@ -12,6 +12,9 @@ const Set<SessionEventType> _chainTypes = {
   SessionEventType.completion,
 };
 
+/// A 週末間 value measured from one schedule's own previous event.
+typedef TrackGap = ({SessionTrack track, GapResult gap});
+
 /// One row of the schedule table. [event] is null only for the synthetic
 /// "今日" row inserted when today doesn't land on any event's date.
 class ScheduleRow {
@@ -21,6 +24,7 @@ class ScheduleRow {
     required this.isToday,
     this.event,
     this.chainGap,
+    this.trackChainGaps = const [],
     this.todayGap,
   });
 
@@ -28,7 +32,16 @@ class ScheduleRow {
   final String label;
   final DateTime date;
   final bool isToday;
+
+  /// 週末間 from the previous event. Null for the first row, and for a
+  /// row that instead has [trackChainGaps].
   final GapResult? chainGap;
+
+  /// Set only on the row where the A and B schedules merge, when the two
+  /// schedules' previous events differ: one 週末間 per schedule, each
+  /// measured from that schedule's own previous event. Empty everywhere
+  /// else, and then [chainGap] carries the value.
+  final List<TrackGap> trackChainGaps;
   final GapResult? todayGap;
 }
 
@@ -73,34 +86,99 @@ List<ScheduleRow> _buildChainRows(
   DateTime endOf(SessionEvent e) => e.endDate(
     isFirstWeekend: e.type == SessionEventType.weekend && numbers[e.id] == 1,
   );
+  // The schedules only need to be told apart once both A and B have events;
+  // with one (or none) the chain is a single sequence as before.
+  final branched =
+      {
+        for (final e in chainEvents)
+          if (e.track != SessionTrack.common) e.track,
+      }.length ==
+      2;
   return [
     for (var i = 0; i < chainEvents.length; i++)
       _chainRow(
         chainEvents[i],
-        previous: i == 0 ? null : chainEvents[i - 1],
+        chainGaps: _chainGaps(chainEvents, i, branched: branched, endOf: endOf),
         numbers: numbers,
-        endOf: endOf,
         today: today,
+        endOf: endOf,
       ),
   ];
 }
 
+/// The 週末間 value(s) for `chain[index]`.
+///
+/// Normally that is the gap from the previous event. When A and B are both
+/// in use, each schedule measures from its own previous event — 1WD(A) from
+/// 1WE(A), 1WD(B) from 1WE(B) — instead of from whatever happens to sit
+/// before it in date order. A common event (where the schedules merge) has
+/// one previous event per schedule; if they differ both gaps are returned,
+/// otherwise there is just one.
+({GapResult? gap, List<TrackGap> trackGaps}) _chainGaps(
+  List<SessionEvent> chain,
+  int index, {
+  required bool branched,
+  required DateTime Function(SessionEvent) endOf,
+}) {
+  final event = chain[index];
+  GapResult? gapFrom(SessionEvent? previous) => previous == null
+      ? null
+      : calculateGap(fromEnd: endOf(previous), toStart: event.date);
+
+  if (!branched) {
+    return (
+      gap: gapFrom(index == 0 ? null : chain[index - 1]),
+      trackGaps: const [],
+    );
+  }
+  if (event.track != SessionTrack.common) {
+    return (
+      gap: gapFrom(_previousOnTrack(chain, index, event.track)),
+      trackGaps: const [],
+    );
+  }
+  final previousA = _previousOnTrack(chain, index, SessionTrack.a);
+  final previousB = _previousOnTrack(chain, index, SessionTrack.b);
+  if (previousA == null || previousB == null || previousA.id == previousB.id) {
+    return (gap: gapFrom(previousA ?? previousB), trackGaps: const []);
+  }
+  return (
+    gap: null,
+    trackGaps: [
+      (track: SessionTrack.a, gap: gapFrom(previousA)!),
+      (track: SessionTrack.b, gap: gapFrom(previousB)!),
+    ],
+  );
+}
+
+/// The closest earlier event in `chain` that [track]'s schedule passes
+/// through: a common event, or one of [track]'s own.
+SessionEvent? _previousOnTrack(
+  List<SessionEvent> chain,
+  int index,
+  SessionTrack track,
+) {
+  for (var i = index - 1; i >= 0; i--) {
+    final candidate = chain[i].track;
+    if (candidate == SessionTrack.common || candidate == track) return chain[i];
+  }
+  return null;
+}
+
 ScheduleRow _chainRow(
   SessionEvent event, {
-  required SessionEvent? previous,
+  required ({GapResult? gap, List<TrackGap> trackGaps}) chainGaps,
   required Map<String, int> numbers,
   required DateTime Function(SessionEvent) endOf,
   required DateTime today,
 }) {
-  final chainGap = previous == null
-      ? null
-      : calculateGap(fromEnd: endOf(previous), toStart: event.date);
   return ScheduleRow(
     event: event,
     label: sessionEventLabel(event, numbers),
     date: event.date,
     isToday: _isOngoing(event, endOf, today),
-    chainGap: chainGap,
+    chainGap: chainGaps.gap,
+    trackChainGaps: chainGaps.trackGaps,
     todayGap: _todayGapFor(event, today, endOf),
   );
 }
@@ -183,12 +261,17 @@ List<ScheduleRow> _withTodayMarker(List<ScheduleRow> rows, DateTime today) {
 /// reuse the same labeling logic.
 String sessionEventLabel(SessionEvent event, Map<String, int> numbers) {
   final number = event.manualNumber ?? numbers[event.id];
-  return switch (event.type) {
+  final label = switch (event.type) {
     SessionEventType.orientation => 'OR',
     SessionEventType.weekend => '${number}WE',
     SessionEventType.workday => '${number}WD',
     SessionEventType.classroom => 'CR',
     SessionEventType.specialSession => '${number}SS',
     SessionEventType.completion => 'CS',
+  };
+  return switch (event.track) {
+    SessionTrack.common => label,
+    SessionTrack.a => '$label(A)',
+    SessionTrack.b => '$label(B)',
   };
 }

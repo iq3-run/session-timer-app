@@ -50,4 +50,197 @@ void main() {
       expect(numbers['earlier-added'], 2);
     });
   });
+
+  group('assignSequenceNumbers with A/B schedules', () {
+    SessionEvent track(
+      String id,
+      SessionEventType type,
+      DateTime date,
+      SessionTrack track,
+    ) => SessionEvent(id: id, type: type, date: date, track: track);
+
+    test('A and B each count on their own, so both are 1WE', () {
+      final events = [
+        track(
+          'a',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'b',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['a'], 1);
+      expect(numbers['b'], 1); // not 2: it is B's own first weekend
+    });
+
+    test('the merged (common) event follows the A/B weekends', () {
+      final events = [
+        track(
+          'a',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'b',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+        track(
+          'after',
+          SessionEventType.weekend,
+          DateTime(2026, 10, 24),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['merged'], 2);
+      expect(numbers['after'], 3);
+    });
+
+    test('WE and WD are numbered independently, each with its own A/B', () {
+      final events = [
+        track(
+          'weA',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'weB',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+        track(
+          'wdA',
+          SessionEventType.workday,
+          DateTime(2026, 9, 5),
+          SessionTrack.a,
+        ),
+        track(
+          'wdB',
+          SessionEventType.workday,
+          DateTime(2026, 9, 12),
+          SessionTrack.b,
+        ),
+        track(
+          'wd2',
+          SessionEventType.workday,
+          DateTime(2026, 11),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['wdA'], 1);
+      expect(numbers['wdB'], 1);
+      expect(numbers['wd2'], 2);
+    });
+
+    test('a common event continues from whichever schedule ran further', () {
+      final events = [
+        track(
+          'a1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'a2',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 5),
+          SessionTrack.a,
+        ),
+        track(
+          'b1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['a1'], 1);
+      expect(numbers['a2'], 2);
+      expect(numbers['b1'], 1);
+      expect(numbers['merged'], 3);
+    });
+
+    test('a common event before the split counts toward both schedules', () {
+      final events = [
+        track(
+          'first',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 7),
+          SessionTrack.common,
+        ),
+        track(
+          'a',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'b',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['first'], 1);
+      expect(numbers['a'], 2);
+      expect(numbers['b'], 2);
+    });
+
+    test('with no A/B events the numbering is unchanged', () {
+      final events = [
+        track(
+          'w1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.common,
+        ),
+        track(
+          'w2',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['w1'], 1);
+      expect(numbers['w2'], 2);
+    });
+  });
 }

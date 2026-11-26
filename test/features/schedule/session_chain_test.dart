@@ -10,12 +10,14 @@ SessionEvent _event(
   DateTime date, {
   bool visible = true,
   int? manualNumber,
+  SessionTrack track = SessionTrack.common,
 }) => SessionEvent(
   id: id,
   type: type,
   date: date,
   visible: visible,
   manualNumber: manualNumber,
+  track: track,
 );
 
 /// OR(8/7) -> 1WE(8/21, 3日間) -> 1WD(9/5) -> 2WE(9/26, 2日間) -> 2WD(11/1).
@@ -466,5 +468,191 @@ void main() {
         expect(sessionEventLabel(events[3], numbers), '2WE'); // we2 unaffected
       },
     );
+  });
+
+  group('buildScheduleRows with A/B schedules', () {
+    /// OR(8/7) -> 1WE(A, 8/21) / 1WE(B, 8/28) -> 1WD(A, 9/5) / 1WD(B, 9/12)
+    /// -> 2WE (9/26, merged).
+    List<SessionEvent> branched() => [
+      _event('or', SessionEventType.orientation, DateTime(2026, 8, 7)),
+      _event(
+        'weA',
+        SessionEventType.weekend,
+        DateTime(2026, 8, 21),
+        track: SessionTrack.a,
+      ),
+      _event(
+        'weB',
+        SessionEventType.weekend,
+        DateTime(2026, 8, 28),
+        track: SessionTrack.b,
+      ),
+      _event(
+        'wdA',
+        SessionEventType.workday,
+        DateTime(2026, 9, 5),
+        track: SessionTrack.a,
+      ),
+      _event(
+        'wdB',
+        SessionEventType.workday,
+        DateTime(2026, 9, 12),
+        track: SessionTrack.b,
+      ),
+      _event('we2', SessionEventType.weekend, DateTime(2026, 9, 26)),
+    ];
+
+    // Far before everything, so the 今日から column stays out of the way.
+    final farBefore = DateTime(2026);
+
+    test('labels carry the schedule and both 1WE are numbered 1', () {
+      final rows = buildScheduleRows(branched(), farBefore);
+
+      expect(_rowFor(rows, 'weA').label, '1WE(A)');
+      expect(_rowFor(rows, 'weB').label, '1WE(B)');
+      expect(_rowFor(rows, 'wdA').label, '1WD(A)');
+      expect(_rowFor(rows, 'wdB').label, '1WD(B)');
+      expect(_rowFor(rows, 'we2').label, '2WE');
+    });
+
+    test('rows stay in date order, A and B interleaved', () {
+      final rows = buildScheduleRows(branched(), farBefore);
+
+      expect(
+        rows.map((r) => r.event?.id).whereType<String>().toList(),
+        ['or', 'weA', 'weB', 'wdA', 'wdB', 'we2'],
+      );
+    });
+
+    test('each schedule measures 週末間 from its own previous event', () {
+      final rows = buildScheduleRows(branched(), farBefore);
+
+      // Both 1WE follow the OR, not each other.
+      expect(_rowFor(rows, 'weA').chainGap?.days, 13);
+      expect(_rowFor(rows, 'weB').chainGap?.days, 20);
+      expect(_rowFor(rows, 'weB').chainGap?.weeks, 3);
+      // 1WD(A) follows 1WE(A) (ends 8/23), 1WD(B) follows 1WE(B) (ends 8/30)
+      // — not whichever event happens to sit before it in date order.
+      expect(_rowFor(rows, 'wdA').chainGap?.days, 12);
+      expect(_rowFor(rows, 'wdB').chainGap?.days, 12);
+    });
+
+    test(
+      'both 1WE last 3 days, the first-weekend rule applying per schedule',
+      () {
+        final rows = buildScheduleRows(branched(), DateTime(2026, 8, 30));
+
+        // 8/30 is the third day of 1WE(B) (8/28-8/30), so that row is today.
+        expect(_rowFor(rows, 'weB').isToday, isTrue);
+        expect(_rowFor(rows, 'weA').isToday, isFalse);
+      },
+    );
+
+    test('the merge row shows one 週末間 per schedule', () {
+      final rows = buildScheduleRows(branched(), farBefore);
+      final merged = _rowFor(rows, 'we2');
+
+      expect(merged.chainGap, isNull);
+      expect(merged.trackChainGaps.map((g) => g.track), [
+        SessionTrack.a,
+        SessionTrack.b,
+      ]);
+      expect(merged.trackChainGaps[0].gap.days, 20); // from 1WD(A), 9/5
+      expect(merged.trackChainGaps[0].gap.weeks, 3);
+      expect(merged.trackChainGaps[1].gap.days, 13); // from 1WD(B), 9/12
+      expect(merged.trackChainGaps[1].gap.weeks, 2);
+    });
+
+    test('only the merge row has per-schedule gaps', () {
+      final rows = buildScheduleRows(branched(), farBefore);
+
+      for (final id in ['or', 'weA', 'weB', 'wdA', 'wdB']) {
+        expect(_rowFor(rows, id).trackChainGaps, isEmpty, reason: id);
+      }
+    });
+
+    test('events after the merge are a single chain again', () {
+      final events = [
+        ...branched(),
+        _event('wd2', SessionEventType.workday, DateTime(2026, 11)),
+      ];
+
+      final rows = buildScheduleRows(events, farBefore);
+
+      expect(_rowFor(rows, 'wd2').trackChainGaps, isEmpty);
+      expect(_rowFor(rows, 'wd2').chainGap?.days, 34); // from 2WE (ends 9/27)
+    });
+
+    test('with only one schedule in use the chain is a single sequence', () {
+      final onlyA = [
+        _event('or', SessionEventType.orientation, DateTime(2026, 8, 7)),
+        _event(
+          'weA',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          track: SessionTrack.a,
+        ),
+        _event(
+          'wdA',
+          SessionEventType.workday,
+          DateTime(2026, 9, 5),
+          track: SessionTrack.a,
+        ),
+        _event('we2', SessionEventType.weekend, DateTime(2026, 9, 26)),
+      ];
+
+      final rows = buildScheduleRows(onlyA, farBefore);
+
+      expect(_rowFor(rows, 'we2').trackChainGaps, isEmpty);
+      expect(_rowFor(rows, 'we2').chainGap?.days, 20); // from 1WD(A)
+    });
+
+    test('without any A/B events nothing changes', () {
+      final rows = buildScheduleRows(_confirmedChain(), farBefore);
+
+      for (final row in rows) {
+        expect(row.trackChainGaps, isEmpty);
+      }
+      expect(_rowFor(rows, 'we2').chainGap?.days, 20);
+    });
+
+    test(
+      'a merge row whose schedules share a previous event shows one value',
+      () {
+        // A and B events exist, but both schedules' last event before the
+        // common one is the same common event.
+        final events = [
+          _event('or', SessionEventType.orientation, DateTime(2026, 8, 7)),
+          _event('common', SessionEventType.weekend, DateTime(2026, 8, 14)),
+          _event(
+            'weA',
+            SessionEventType.weekend,
+            DateTime(2026, 9, 5),
+            track: SessionTrack.a,
+          ),
+          _event(
+            'weB',
+            SessionEventType.weekend,
+            DateTime(2026, 9, 12),
+            track: SessionTrack.b,
+          ),
+        ];
+
+        final rows = buildScheduleRows(events, farBefore);
+
+        expect(_rowFor(rows, 'weA').chainGap?.days, isNotNull);
+        expect(_rowFor(rows, 'weB').chainGap?.days, isNotNull);
+        expect(_rowFor(rows, 'common').trackChainGaps, isEmpty);
+      },
+    );
+
+    test('the 今日から value does not depend on the schedule', () {
+      final rows = buildScheduleRows(branched(), DateTime(2026, 9, 14));
+
+      // Every row has its own today-gap, A and B alike.
+      expect(_rowFor(rows, 'weA').todayGap, isNotNull);
+      expect(_rowFor(rows, 'weB').todayGap, isNotNull);
+      expect(_rowFor(rows, 'we2').todayGap, isNotNull);
+    });
   });
 }

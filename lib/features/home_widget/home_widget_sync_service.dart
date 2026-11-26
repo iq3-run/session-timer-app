@@ -116,7 +116,7 @@ class HomeWidgetSyncService {
           'label': row.label,
           'date': formatScheduleDate(row.date),
           'isToday': row.isToday,
-          'chainGap': formatGap(row.chainGap),
+          'chainGap': formatChainGap(row),
           'todayGap': formatGap(row.todayGap),
         },
     ]);

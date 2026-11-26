@@ -273,4 +273,83 @@ void main() {
       expect(restored, isNull);
     });
   });
+
+  group('SessionEvent track (A/B schedules)', () {
+    SessionEvent weekend(SessionTrack track) => SessionEvent(
+      id: 'we',
+      type: SessionEventType.weekend,
+      date: DateTime(2026, 8, 21),
+      track: track,
+    );
+
+    test('defaults to the common schedule', () {
+      expect(weekend(SessionTrack.common).track, SessionTrack.common);
+      expect(
+        SessionEvent(
+          id: 'or',
+          type: SessionEventType.orientation,
+          date: DateTime(2026, 8, 7),
+        ).track,
+        SessionTrack.common,
+      );
+    });
+
+    test('only WE and WD support a track', () {
+      for (final type in SessionEventType.values) {
+        expect(
+          SessionEvent.supportsTrack(type),
+          type == SessionEventType.weekend || type == SessionEventType.workday,
+          reason: type.name,
+        );
+      }
+    });
+
+    test('round-trips A and B through JSON', () {
+      for (final track in [SessionTrack.a, SessionTrack.b]) {
+        final restored = SessionEvent.tryFromJson(weekend(track).toJson());
+
+        expect(restored?.track, track);
+      }
+    });
+
+    test(
+      'omits the track from JSON when common, keeping old data identical',
+      () {
+        expect(
+          weekend(SessionTrack.common).toJson().containsKey('track'),
+          isFalse,
+        );
+        expect(weekend(SessionTrack.a).toJson()['track'], 'a');
+      },
+    );
+
+    test('an entry saved before A/B existed loads as common', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'we',
+        'type': 'weekend',
+        'epochMs': DateTime.utc(2026, 8, 21).millisecondsSinceEpoch,
+      });
+
+      expect(restored?.track, SessionTrack.common);
+    });
+
+    test('rejects an unknown or wrong-typed track', () {
+      final base = weekend(SessionTrack.a).toJson();
+
+      expect(SessionEvent.tryFromJson({...base, 'track': 'c'}), isNull);
+      expect(SessionEvent.tryFromJson({...base, 'track': 1}), isNull);
+      expect(SessionEvent.tryFromJson({...base, 'track': null}), isNull);
+    });
+
+    test('rejects a track on a type that cannot have one', () {
+      final restored = SessionEvent.tryFromJson({
+        'id': 'or',
+        'type': 'orientation',
+        'epochMs': 0,
+        'track': 'a',
+      });
+
+      expect(restored, isNull);
+    });
+  });
 }
