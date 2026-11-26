@@ -92,6 +92,18 @@ class SessionScheduleSettingsScreen extends ConsumerWidget {
         backgroundColor: SessionTimerColors.background,
         foregroundColor: SessionTimerColors.white,
         title: const Text('日程設定'),
+        actions: [
+          IconButton(
+            key: const Key('deleteAllScheduleEvents'),
+            tooltip: 'すべての日程を削除',
+            icon: const Icon(Icons.delete_sweep),
+            // Nothing to delete — disabled rather than opening a dialog
+            // that would confirm removing zero rows.
+            onPressed: events.isEmpty
+                ? null
+                : () => unawaited(_confirmAndDeleteAll(context, ref, events)),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -186,6 +198,60 @@ class _EventRow extends ConsumerWidget {
         formatScheduleDate(event.date),
         style: const TextStyle(color: SessionTimerColors.white),
       ),
+    );
+  }
+}
+
+/// Asks for confirmation (stating how many events would go), then removes
+/// every event. Cancelling — or dismissing the dialog — leaves them all.
+Future<void> _confirmAndDeleteAll(
+  BuildContext context,
+  WidgetRef ref,
+  List<SessionEvent> events,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DeleteAllDialog(count: events.length),
+  );
+  if (confirmed != true || !context.mounted) return;
+  await ref.read(sessionEventControllerProvider.notifier).removeEvents({
+    for (final e in events) e.id,
+  });
+}
+
+class _DeleteAllDialog extends StatelessWidget {
+  const _DeleteAllDialog({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: SessionTimerColors.panel,
+      title: const Text(
+        'すべての日程を削除',
+        style: TextStyle(color: SessionTimerColors.white),
+      ),
+      content: Text(
+        '登録されている$count件の日程をすべて削除します。\nこの操作は元に戻せません。',
+        style: const TextStyle(color: SessionTimerColors.white),
+      ),
+      actions: [
+        TextButton(
+          key: const Key('deleteAllCancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          key: const Key('deleteAllConfirm'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('削除'),
+        ),
+      ],
     );
   }
 }
