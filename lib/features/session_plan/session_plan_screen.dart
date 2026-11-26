@@ -79,7 +79,6 @@ class _SetCurrentSessionButton extends ConsumerWidget {
       return;
     }
     await _applyTimes(
-      context,
       ref,
       completionTarget: resolution.completionTarget,
       autoTargetStart: resolution.autoTargetStart,
@@ -95,17 +94,18 @@ class _SetCurrentSessionButton extends ConsumerWidget {
 /// セッションを設定" and each row's own 適用 button, so both write the same
 /// two places.
 Future<void> _applyTimes(
-  BuildContext context,
   WidgetRef ref, {
   required DateTime completionTarget,
   required DateTime? autoTargetStart,
   required String autoTargetTitle,
 }) async {
-  await ref
-      .read(completionTimeControllerProvider.notifier)
-      .setTarget(completionTarget);
-  if (!context.mounted) return;
+  // Both notifiers are read before the first await: if the screen is left
+  // mid-write, the second write must still happen (the providers outlive
+  // the widget), or 完了時刻 and 指定時刻 would end up describing different
+  // sessions. `ref` itself can't be used after the widget is gone.
+  final completion = ref.read(completionTimeControllerProvider.notifier);
   final targets = ref.read(timeTargetsControllerProvider.notifier);
+  await completion.setTarget(completionTarget);
   await (autoTargetStart != null
       ? targets.upsertTarget(
           autoSessionTargetId,
@@ -210,7 +210,6 @@ class _ApplySessionButton extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final occurrence = resolveSessionOccurrence(session, DateTime.now());
     await _applyTimes(
-      context,
       ref,
       completionTarget: occurrence.end,
       autoTargetStart: occurrence.start,
