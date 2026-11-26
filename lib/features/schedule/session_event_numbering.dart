@@ -18,10 +18,10 @@ const Set<SessionEventType> _numberedTypes = {
 /// earlier ones. A common event — where the two schedules merge — continues
 /// from whichever track has run further, so the merged 2WE follows
 /// 1WE(A)/1WE(B) — and if A has run to 2WE while B stopped at 1WE, the
-/// merged one is 3WE. The schedules are expected to end at the merge; an A/B
-/// event dated after a common one simply keeps counting on from it, so no
-/// number is ever given twice. With no A/B events this is the plain
-/// date-order count.
+/// merged one is 3WE. The schedules are expected to end at the merge, but if
+/// an A/B event is dated after a common one it counts on from it — from the
+/// furthest schedule, whichever one it is on — so no number is ever given
+/// twice. With no A/B events this is the plain date-order count.
 Map<String, int> assignSequenceNumbers(List<SessionEvent> events) {
   final result = <String, int>{};
   for (final type in _numberedTypes) {
@@ -41,6 +41,12 @@ Map<String, int> assignSequenceNumbers(List<SessionEvent> events) {
       if (event.track == SessionTrack.common) {
         final furthest = onTrack.values.reduce((a, b) => a > b ? a : b);
         result[event.id] = common + furthest + 1;
+        // Both schedules pass through a merge, so the one that was behind
+        // catches up to the one that was ahead. Otherwise a later event on
+        // the lagging schedule would be given this event's number again.
+        for (final track in onTrack.keys) {
+          onTrack[track] = furthest;
+        }
         common++;
       } else {
         final count = onTrack[event.track]!;

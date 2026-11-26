@@ -250,6 +250,99 @@ void main() {
       expect(numbers['a2'], 3);
     });
 
+    test('a lagging schedule does not reuse the merged number afterwards', () {
+      // A, B, A, common, B in date order. The merge is 3WE (A had run to
+      // 2WE); the B event after it must carry on from there, not repeat 3.
+      final events = [
+        track(
+          'a1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'b1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+        track(
+          'a2',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 5),
+          SessionTrack.a,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+        track(
+          'b2',
+          SessionEventType.weekend,
+          DateTime(2026, 10, 24),
+          SessionTrack.b,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['a1'], 1);
+      expect(numbers['b1'], 1);
+      expect(numbers['a2'], 2);
+      expect(numbers['merged'], 3);
+      expect(numbers['b2'], 4);
+    });
+
+    test('no number is given twice when a lagging schedule continues', () {
+      final events = [
+        track(
+          'a1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'a2',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 5),
+          SessionTrack.a,
+        ),
+        track(
+          'b1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.b,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+        track(
+          'b2',
+          SessionEventType.weekend,
+          DateTime(2026, 10, 10),
+          SessionTrack.b,
+        ),
+        track(
+          'after',
+          SessionEventType.weekend,
+          DateTime(2026, 10, 24),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      // The merge and the events after it are all distinct and increasing.
+      final afterMerge = [numbers['merged'], numbers['b2'], numbers['after']];
+      expect(afterMerge.toSet(), hasLength(3));
+      expect(afterMerge, [3, 4, 5]);
+    });
+
     test('B running ahead of A is handled the same as A ahead of B', () {
       final events = [
         track(
