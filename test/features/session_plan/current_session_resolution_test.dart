@@ -151,4 +151,112 @@ void main() {
       expect(resolution?.session.id, 'pm');
     });
   });
+
+  group('resolveSessionOccurrence (manual apply, #94)', () {
+    // 9:00〜12:00 on 2026-08-08.
+    final morning = _entry('am', startHour: 9, durationMinutes: 180);
+
+    test('before the start: applied as is, today', () {
+      final occurrence = resolveSessionOccurrence(
+        morning,
+        DateTime(2026, 8, 8, 8),
+      );
+
+      expect(occurrence.start, DateTime(2026, 8, 8, 9));
+      expect(occurrence.end, DateTime(2026, 8, 8, 12));
+    });
+
+    test('after the start but before the end: the start is in the past', () {
+      final now = DateTime(2026, 8, 8, 10);
+
+      final occurrence = resolveSessionOccurrence(morning, now);
+
+      expect(occurrence.start, DateTime(2026, 8, 8, 9));
+      expect(occurrence.start.isBefore(now), isTrue); // 残りがマイナス
+      expect(occurrence.end, DateTime(2026, 8, 8, 12));
+    });
+
+    test('exactly at the start counts as started, still today', () {
+      final occurrence = resolveSessionOccurrence(
+        morning,
+        DateTime(2026, 8, 8, 9),
+      );
+
+      expect(occurrence.start, DateTime(2026, 8, 8, 9));
+      expect(occurrence.end, DateTime(2026, 8, 8, 12));
+    });
+
+    test('exactly at the end counts as ended: both move to tomorrow', () {
+      final occurrence = resolveSessionOccurrence(
+        morning,
+        DateTime(2026, 8, 8, 12),
+      );
+
+      expect(occurrence.start, DateTime(2026, 8, 9, 9));
+      expect(occurrence.end, DateTime(2026, 8, 9, 12));
+    });
+
+    test('after the end: both move to tomorrow', () {
+      final occurrence = resolveSessionOccurrence(
+        morning,
+        DateTime(2026, 8, 8, 20),
+      );
+
+      expect(occurrence.start, DateTime(2026, 8, 9, 9));
+      expect(occurrence.end, DateTime(2026, 8, 9, 12));
+    });
+
+    group('a session that runs past midnight (23:00〜2:00)', () {
+      final night = _entry('night', startHour: 23, durationMinutes: 180);
+
+      test(
+        'in the evening, before it starts: today 23:00 to tomorrow 2:00',
+        () {
+          final occurrence = resolveSessionOccurrence(
+            night,
+            DateTime(2026, 8, 8, 21),
+          );
+
+          expect(occurrence.start, DateTime(2026, 8, 8, 23));
+          expect(occurrence.end, DateTime(2026, 8, 9, 2));
+        },
+      );
+
+      test('after midnight, in progress: it started yesterday', () {
+        final occurrence = resolveSessionOccurrence(
+          night,
+          DateTime(2026, 8, 9, 1),
+        );
+
+        expect(occurrence.start, DateTime(2026, 8, 8, 23));
+        expect(occurrence.end, DateTime(2026, 8, 9, 2));
+      });
+
+      test('once it ended (2:00), the next one is tonight', () {
+        final occurrence = resolveSessionOccurrence(
+          night,
+          DateTime(2026, 8, 9, 2),
+        );
+
+        expect(occurrence.start, DateTime(2026, 8, 9, 23));
+        expect(occurrence.end, DateTime(2026, 8, 10, 2));
+      });
+    });
+
+    test('a full-day session in progress started yesterday', () {
+      const allDay = SessionPlanEntry(
+        id: 'all',
+        startMinutes: 9 * 60,
+        durationMinutes: 24 * 60,
+      );
+
+      final occurrence = resolveSessionOccurrence(
+        allDay,
+        DateTime(2026, 8, 8, 10),
+      );
+
+      expect(occurrence.start, DateTime(2026, 8, 8, 9));
+      expect(occurrence.end, DateTime(2026, 8, 9, 9));
+    });
+  });
 }
