@@ -23,9 +23,9 @@ final sessionPlanControllerProvider =
       SessionPlanController.new,
     );
 
-/// Unlike `TimeTargetsController`, this deliberately never drops
-/// already-ended entries on load — the plan is kept until the user removes
-/// it by hand, not reset per calendar day.
+/// Unlike `TimeTargetsController`, this never drops entries on load: sessions
+/// hold only a time of day, so none is ever "already ended" — the plan is
+/// kept until the user removes it by hand, not reset per calendar day.
 class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
   Future<void> _mutationQueue = Future.value();
   final Completer<void> _initialLoad = Completer<void>();
@@ -45,24 +45,31 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
     }
   }
 
-  Future<void> addSession(DateTime start, DateTime end) async {
+  Future<void> addSession({
+    required int startMinutes,
+    required int durationMinutes,
+  }) async {
     final entry = SessionPlanEntry(
       id: UniqueKey().toString(),
-      startEpochMs: start.millisecondsSinceEpoch,
-      endEpochMs: end.millisecondsSinceEpoch,
+      startMinutes: startMinutes,
+      durationMinutes: durationMinutes,
     );
     await _mutate((sessions) => [...sessions, entry]);
   }
 
-  Future<void> updateSession(String id, DateTime start, DateTime end) async {
+  Future<void> updateSession(
+    String id, {
+    required int startMinutes,
+    required int durationMinutes,
+  }) async {
     await _mutate(
       (sessions) => [
         for (final s in sessions)
           if (s.id == id)
             SessionPlanEntry(
               id: id,
-              startEpochMs: start.millisecondsSinceEpoch,
-              endEpochMs: end.millisecondsSinceEpoch,
+              startMinutes: startMinutes,
+              durationMinutes: durationMinutes,
             )
           else
             s,
@@ -136,18 +143,8 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
     return prefs.setString(sessionPlanJsonKey, json);
   }
 
-  // Sessions represent a repeating daily rhythm (e.g. AM/PM/evening blocks),
-  // not one-off dated appointments — each entry's stored date only reflects
-  // which calendar day `resolveNextOccurrence` happened to land on when it
-  // was registered, not anything the user actually chose. Sorting by the
-  // full epoch would group entries by that incidental date first, showing
-  // e.g. "today 19:00, tomorrow 9:00, tomorrow 13:30" instead of the
-  // expected daily order — so this sorts by time-of-day only.
+  // Sessions are a repeating daily rhythm with no calendar date, so the
+  // list is simply ordered by time of day.
   List<SessionPlanEntry> _sorted(List<SessionPlanEntry> sessions) =>
-      [...sessions]..sort(
-        (a, b) =>
-            _minutesOfDay(a.startTime).compareTo(_minutesOfDay(b.startTime)),
-      );
-
-  int _minutesOfDay(DateTime time) => time.hour * 60 + time.minute;
+      [...sessions]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 }

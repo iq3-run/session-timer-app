@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:intl/intl.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/session_plan/session_plan_controller.dart';
 import 'package:session_timer/features/session_plan/session_plan_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-final _format = DateFormat('H:mm');
 
 Future<void> _pumpScreen(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(400, 1400));
@@ -23,10 +20,11 @@ Future<void> _pumpScreen(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-String _rangeLabel(DateTime start, DateTime end) =>
-    '${_format.format(start)}〜${_format.format(end)}';
+String _entryJson(String id, int startMinutes, int durationMinutes) =>
+    '{"id":"$id","startMinutes":$startMinutes,'
+    '"durationMinutes":$durationMinutes}';
 
-String _entryJson(String id, DateTime start, DateTime end) =>
+String _legacyEntryJson(String id, DateTime start, DateTime end) =>
     '{"id":"$id",'
     '"startEpochMs":${start.millisecondsSinceEpoch},'
     '"endEpochMs":${end.millisecondsSinceEpoch}}';
@@ -43,43 +41,55 @@ void main() {
       'renders persisted sessions sorted by start time, regardless of the '
       'order they were persisted in',
       (tester) async {
-        final laterStart = DateTime.now().add(const Duration(hours: 5));
-        final laterEnd = laterStart.add(const Duration(hours: 1));
-        final soonerStart = DateTime.now().add(const Duration(hours: 1));
-        final soonerEnd = soonerStart.add(const Duration(hours: 1));
         _seedSessions([
-          _entryJson('later', laterStart, laterEnd),
-          _entryJson('sooner', soonerStart, soonerEnd),
+          _entryJson('later', 19 * 60, 120),
+          _entryJson('sooner', 9 * 60 + 30, 210),
         ]);
 
         await _pumpScreen(tester);
 
-        final soonerY = tester
-            .getTopLeft(find.text(_rangeLabel(soonerStart, soonerEnd)))
-            .dy;
-        final laterY = tester
-            .getTopLeft(find.text(_rangeLabel(laterStart, laterEnd)))
-            .dy;
+        final soonerY = tester.getTopLeft(find.text('9:30〜13:00')).dy;
+        final laterY = tester.getTopLeft(find.text('19:00〜21:00')).dy;
 
         expect(soonerY, lessThan(laterY));
       },
     );
 
     testWidgets(
+      'renders a session persisted in the legacy epoch format by its time '
+      'of day only',
+      (tester) async {
+        final start = DateTime(2020, 3, 4, 9, 30);
+        final end = DateTime(2020, 3, 4, 13);
+        _seedSessions([_legacyEntryJson('legacy', start, end)]);
+
+        await _pumpScreen(tester);
+
+        expect(find.text('9:30〜13:00'), findsOneWidget);
+      },
+    );
+
+    testWidgets('renders a session that runs past midnight', (tester) async {
+      _seedSessions([_entryJson('night', 23 * 60, 180)]);
+
+      await _pumpScreen(tester);
+
+      expect(find.text('23:00〜2:00'), findsOneWidget);
+    });
+
+    testWidgets(
       "tapping a row's ✕ button deletes only that session, without also "
       "triggering the row's tap-to-edit gesture",
       (tester) async {
-        final start = DateTime.now().add(const Duration(hours: 1));
-        final end = start.add(const Duration(hours: 1));
-        _seedSessions([_entryJson('s1', start, end)]);
+        _seedSessions([_entryJson('s1', 9 * 60, 60)]);
 
         await _pumpScreen(tester);
-        expect(find.text(_rangeLabel(start, end)), findsOneWidget);
+        expect(find.text('9:00〜10:00'), findsOneWidget);
 
         await tester.tap(find.byKey(const Key('removeSession_s1')));
         await tester.pumpAndSettle();
 
-        expect(find.text(_rangeLabel(start, end)), findsNothing);
+        expect(find.text('9:00〜10:00'), findsNothing);
         expect(find.byType(TimePickerDialog), findsNothing);
       },
     );
@@ -88,12 +98,10 @@ void main() {
       'tapping the row itself (not the ✕ button) still opens the edit '
       'time picker',
       (tester) async {
-        final start = DateTime.now().add(const Duration(hours: 1));
-        final end = start.add(const Duration(hours: 1));
-        _seedSessions([_entryJson('s1', start, end)]);
+        _seedSessions([_entryJson('s1', 9 * 60, 60)]);
 
         await _pumpScreen(tester);
-        await tester.tap(find.text(_rangeLabel(start, end)));
+        await tester.tap(find.text('9:00〜10:00'));
         await tester.pumpAndSettle();
 
         expect(find.byType(TimePickerDialog), findsOneWidget);
@@ -103,17 +111,10 @@ void main() {
     testWidgets(
       'deleting one of several sessions leaves the others, still sorted',
       (tester) async {
-        final first = DateTime.now().add(const Duration(hours: 1));
-        final second = DateTime.now().add(const Duration(hours: 2));
-        final third = DateTime.now().add(const Duration(hours: 3));
-        const duration = Duration(minutes: 30);
-        final firstEnd = first.add(duration);
-        final secondEnd = second.add(duration);
-        final thirdEnd = third.add(duration);
         _seedSessions([
-          _entryJson('a', first, firstEnd),
-          _entryJson('b', second, secondEnd),
-          _entryJson('c', third, thirdEnd),
+          _entryJson('a', 9 * 60, 30),
+          _entryJson('b', 10 * 60, 30),
+          _entryJson('c', 11 * 60, 30),
         ]);
 
         await _pumpScreen(tester);
@@ -125,14 +126,28 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byIcon(Icons.close), findsNWidgets(2));
-        expect(find.text(_rangeLabel(second, secondEnd)), findsNothing);
-        final firstY = tester
-            .getTopLeft(find.text(_rangeLabel(first, firstEnd)))
-            .dy;
-        final thirdY = tester
-            .getTopLeft(find.text(_rangeLabel(third, thirdEnd)))
-            .dy;
+        expect(find.text('10:00〜10:30'), findsNothing);
+        final firstY = tester.getTopLeft(find.text('9:00〜9:30')).dy;
+        final thirdY = tester.getTopLeft(find.text('11:00〜11:30')).dy;
         expect(firstY, lessThan(thirdY));
+      },
+    );
+
+    testWidgets(
+      '"現在のセッションを設定" works for a legacy session whose registered '
+      'date has long passed',
+      (tester) async {
+        // Regression for #94: this used to report 該当するセッションがありません.
+        final start = DateTime(2020, 3, 4, 9);
+        final end = DateTime(2020, 3, 4, 12);
+        _seedSessions([_legacyEntryJson('legacy', start, end)]);
+
+        await _pumpScreen(tester);
+        await tester.tap(find.text('現在のセッションを設定'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('現在のセッションを設定しました'), findsOneWidget);
+        expect(find.text('該当するセッションがありません'), findsNothing);
       },
     );
   });
