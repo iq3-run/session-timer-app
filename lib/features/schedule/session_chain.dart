@@ -113,7 +113,13 @@ List<ScheduleRow> _buildChainRows(
 /// 1WE(A), 1WD(B) from 1WE(B) — instead of from whatever happens to sit
 /// before it in date order. A common event (where the schedules merge) has
 /// one previous event per schedule; if they differ both gaps are returned,
-/// otherwise there is just one.
+/// otherwise there is just one — including when only one schedule has an
+/// earlier event at all, which then is the only thing to measure from.
+///
+/// Until both A and B have events the chain is a single sequence, which for
+/// a lone schedule is the same thing as "common plus that schedule", so
+/// adding the first event of the other schedule never changes the gap of
+/// an existing A or B row — only a merge row gains its second value.
 ({GapResult? gap, List<TrackGap> trackGaps}) _chainGaps(
   List<SessionEvent> chain,
   int index, {

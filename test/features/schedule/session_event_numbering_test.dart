@@ -221,6 +221,70 @@ void main() {
       expect(numbers['b'], 2);
     });
 
+    test('an A/B event after a merge keeps counting without repeating', () {
+      final events = [
+        track(
+          'a1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.a,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+        track(
+          'a2',
+          SessionEventType.weekend,
+          DateTime(2026, 10, 24),
+          SessionTrack.a,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['a1'], 1);
+      expect(numbers['merged'], 2);
+      expect(numbers['a2'], 3);
+    });
+
+    test('B running ahead of A is handled the same as A ahead of B', () {
+      final events = [
+        track(
+          'b1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          SessionTrack.b,
+        ),
+        track(
+          'b2',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 5),
+          SessionTrack.b,
+        ),
+        track(
+          'a1',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 28),
+          SessionTrack.a,
+        ),
+        track(
+          'merged',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 26),
+          SessionTrack.common,
+        ),
+      ];
+
+      final numbers = assignSequenceNumbers(events);
+
+      expect(numbers['b2'], 2);
+      expect(numbers['a1'], 1);
+      expect(numbers['merged'], 3);
+    });
+
     test('with no A/B events the numbering is unchanged', () {
       final events = [
         track(

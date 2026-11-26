@@ -646,6 +646,107 @@ void main() {
       },
     );
 
+    test(
+      'a schedule with no events of its own is measured from the common one',
+      () {
+        // A has nothing before the merge, but it still passes through the
+        // common OR, so that is where A's gap is measured from.
+        final events = [
+          _event('or', SessionEventType.orientation, DateTime(2026, 8, 7)),
+          _event(
+            'weB',
+            SessionEventType.weekend,
+            DateTime(2026, 8, 21),
+            track: SessionTrack.b,
+          ),
+          _event('merged', SessionEventType.weekend, DateTime(2026, 9, 26)),
+          _event(
+            'weA',
+            SessionEventType.weekend,
+            DateTime(2026, 10, 24),
+            track: SessionTrack.a,
+          ),
+        ];
+
+        final rows = buildScheduleRows(events, farBefore);
+        final merged = _rowFor(rows, 'merged');
+
+        expect(merged.trackChainGaps.map((g) => g.track), [
+          SessionTrack.a,
+          SessionTrack.b,
+        ]);
+        expect(merged.trackChainGaps[0].gap.days, 49); // from OR (8/7)
+        expect(merged.trackChainGaps[1].gap.days, 33); // from 1WE(B), ends 8/23
+      },
+    );
+
+    test(
+      'a merge row with one schedule lacking any earlier event shows one value',
+      () {
+        // No common event before the merge either, so A has no earlier event
+        // at all: there is only B's to measure from.
+        final events = [
+          _event(
+            'weB',
+            SessionEventType.weekend,
+            DateTime(2026, 8, 21),
+            track: SessionTrack.b,
+          ),
+          _event('merged', SessionEventType.weekend, DateTime(2026, 9, 26)),
+          _event(
+            'weA',
+            SessionEventType.weekend,
+            DateTime(2026, 10, 24),
+            track: SessionTrack.a,
+          ),
+        ];
+
+        final rows = buildScheduleRows(events, farBefore);
+        final merged = _rowFor(rows, 'merged');
+
+        expect(merged.trackChainGaps, isEmpty);
+        expect(merged.chainGap?.days, 33);
+      },
+    );
+
+    test('adding the first B event leaves existing A rows unchanged', () {
+      final onlyA = [
+        _event('or', SessionEventType.orientation, DateTime(2026, 8, 7)),
+        _event(
+          'weA',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+          track: SessionTrack.a,
+        ),
+        _event(
+          'wdA',
+          SessionEventType.workday,
+          DateTime(2026, 9, 5),
+          track: SessionTrack.a,
+        ),
+      ];
+      final withB = [
+        ...onlyA,
+        _event(
+          'weB',
+          SessionEventType.weekend,
+          DateTime(2026, 8, 14),
+          track: SessionTrack.b,
+        ),
+      ];
+
+      final before = buildScheduleRows(onlyA, farBefore);
+      final after = buildScheduleRows(withB, farBefore);
+
+      for (final id in ['weA', 'wdA']) {
+        expect(
+          _rowFor(after, id).chainGap?.days,
+          _rowFor(before, id).chainGap?.days,
+          reason: id,
+        );
+      }
+    });
+
     test('the 今日から value does not depend on the schedule', () {
       final rows = buildScheduleRows(branched(), DateTime(2026, 9, 14));
 
