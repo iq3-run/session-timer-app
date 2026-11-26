@@ -21,7 +21,7 @@ jobs:
       # PR: an unpinned run once moved to a Flutter that deprecated
       # package:flutter/material.dart and failed `flutter analyze` everywhere.
       # Bump deliberately — run format/analyze/test on the new version first.
-      # The lowest Flutter this app supports is 3.47 (material_ui's floor).
+      # material_ui requires Flutter 3.47 or newer.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
