@@ -68,6 +68,10 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   Future<void> removeEvent(String id) =>
       _mutate((events) => events.where((e) => e.id != id).toList());
 
+  /// Removes every registered event at once. Callers are expected to have
+  /// confirmed with the user first — this can't be undone.
+  Future<void> removeAllEvents() => _mutate((events) => const []);
+
   /// Toggles whether [id]'s row shows on the read-only "セッションスケ
   /// ジュール" screen (see `SessionEvent.visible`). A no-op if no event
   /// with that id exists.

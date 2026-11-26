@@ -75,6 +75,93 @@ void main() {
       expect(find.text('1WE'), findsNothing);
     });
 
+    group('delete all', () {
+      Map<String, Object> seeded(List<SessionEvent> events) => {
+        sessionEventsJsonKey: jsonEncode([for (final e in events) e.toJson()]),
+      };
+
+      final twoEvents = [
+        SessionEvent(
+          id: 'a',
+          type: SessionEventType.weekend,
+          date: DateTime(2026, 8, 21),
+        ),
+        SessionEvent(
+          id: 'b',
+          type: SessionEventType.workday,
+          date: DateTime(2026, 9, 5),
+        ),
+      ];
+
+      testWidgets('the delete-all button is disabled when nothing is '
+          'registered', (tester) async {
+        await _pumpScreen(tester);
+
+        final button = tester.widget<IconButton>(
+          find.byKey(const Key('deleteAllScheduleEvents')),
+        );
+        expect(button.onPressed, isNull);
+      });
+
+      testWidgets('asks for confirmation, stating the count, before '
+          'deleting', (tester) async {
+        await _pumpScreen(tester, initialValues: seeded(twoEvents));
+
+        await tester.tap(find.byKey(const Key('deleteAllScheduleEvents')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('すべての日程を削除'), findsOneWidget);
+        expect(find.textContaining('2件'), findsOneWidget);
+        // Nothing is deleted just by opening the dialog.
+        expect(find.text('1WE'), findsOneWidget);
+        expect(find.text('1WD'), findsOneWidget);
+      });
+
+      testWidgets('cancelling keeps every event', (tester) async {
+        await _pumpScreen(tester, initialValues: seeded(twoEvents));
+
+        await tester.tap(find.byKey(const Key('deleteAllScheduleEvents')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('deleteAllCancel')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.text('1WE'), findsOneWidget);
+        expect(find.text('1WD'), findsOneWidget);
+      });
+
+      testWidgets('dismissing the dialog without choosing keeps every '
+          'event', (tester) async {
+        await _pumpScreen(tester, initialValues: seeded(twoEvents));
+
+        await tester.tap(find.byKey(const Key('deleteAllScheduleEvents')));
+        await tester.pumpAndSettle();
+        await tester.tapAt(const Offset(5, 5)); // the barrier
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.text('1WE'), findsOneWidget);
+        expect(find.text('1WD'), findsOneWidget);
+      });
+
+      testWidgets('confirming removes every event', (tester) async {
+        await _pumpScreen(tester, initialValues: seeded(twoEvents));
+
+        await tester.tap(find.byKey(const Key('deleteAllScheduleEvents')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('deleteAllConfirm')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('1WE'), findsNothing);
+        expect(find.text('1WD'), findsNothing);
+        expect(find.text('登録されている日程はありません'), findsOneWidget);
+        final button = tester.widget<IconButton>(
+          find.byKey(const Key('deleteAllScheduleEvents')),
+        );
+        expect(button.onPressed, isNull);
+      });
+    });
+
     testWidgets('shows every registered CR, not just today/next', (
       tester,
     ) async {

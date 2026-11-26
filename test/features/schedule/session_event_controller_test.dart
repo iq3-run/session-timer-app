@@ -153,6 +153,50 @@ void main() {
       expect(events, isEmpty);
     });
 
+    test(
+      'removeAllEvents drops every event and persists the empty list',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(
+          sessionEventControllerProvider.notifier,
+        );
+        await notifier.addEvent(
+          SessionEventType.weekend,
+          DateTime(2026, 8, 21),
+        );
+        await notifier.addEvent(SessionEventType.workday, DateTime(2026, 9, 5));
+        await notifier.addEvent(
+          SessionEventType.orientation,
+          DateTime(2026, 8, 7),
+        );
+
+        await notifier.removeAllEvents();
+        final events = await container.read(
+          sessionEventControllerProvider.future,
+        );
+
+        expect(events, isEmpty);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString(sessionEventsJsonKey), '[]');
+      },
+    );
+
+    test('removeAllEvents on an empty schedule is a harmless no-op', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+
+      await notifier.removeAllEvents();
+      final events = await container.read(
+        sessionEventControllerProvider.future,
+      );
+
+      expect(events, isEmpty);
+    });
+
     test('past events are not dropped on a fresh build (unlike '
         'TimeTargetsController)', () async {
       final pastEvent = SessionEvent(
