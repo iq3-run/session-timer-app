@@ -315,23 +315,11 @@ void main() {
       final service = buildService();
       final event = futureEvent();
       await service.cancelForEvent(event);
-      service.clearSuppressed();
+      expect(service.clearSuppressed(), isTrue);
+      expect(service.clearSuppressed(), isFalse); // nothing left to forget
       calls.clear();
 
       await service.rescheduleAll([event]);
-
-      expect(calls.where((c) => c.method == 'zonedSchedule'), hasLength(1));
-    });
-
-    test('forgets the suppression once the event is no longer a candidate, '
-        'so the same id notifies when it returns', () async {
-      final service = buildService();
-      final event = futureEvent();
-      await service.cancelForEvent(event);
-      await service.rescheduleAll(const []); // its source was cleared
-      calls.clear();
-
-      await service.rescheduleAll([event]); // ...and set again
 
       expect(calls.where((c) => c.method == 'zonedSchedule'), hasLength(1));
     });

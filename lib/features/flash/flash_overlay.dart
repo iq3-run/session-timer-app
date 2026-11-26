@@ -29,6 +29,8 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
     }
   }
 
+  bool _wasBackgrounded = false;
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +44,15 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   // instant rather than a few seconds after.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
+    // `inactive` alone (notification shade, a system dialog) leaves the
+    // animation running, so there is nothing to catch up on after it.
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasBackgrounded = true;
+      return;
+    }
+    if (state != AppLifecycleState.resumed || !_wasBackgrounded) return;
+    _wasBackgrounded = false;
     final before = ref.read(flashQueueControllerProvider).active;
     ref.read(flashQueueControllerProvider.notifier).dropElapsed();
     final after = ref.read(flashQueueControllerProvider).active;

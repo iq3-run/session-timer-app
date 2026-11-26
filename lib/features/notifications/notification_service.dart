@@ -136,20 +136,24 @@ class NotificationService {
   /// notifications again. For when the app leaves the foreground: a flash
   /// that was cancelled for but is no longer being watched (the user pressed
   /// Home or the screen turned off mid-flash) must still notify.
-  void clearSuppressed() => _suppressed.clear();
+  ///
+  /// Returns whether there was anything to forget.
+  bool clearSuppressed() {
+    final hadAny = _suppressed.isNotEmpty;
+    _suppressed.clear();
+    return hadAny;
+  }
 
   Future<void> _rescheduleNow(List<FlashEvent> events) async {
     await init();
     await _plugin.cancelAll();
     final now = DateTime.now();
-    // Suppression only matters until the event's instant, and only while the
-    // event is still a candidate: forgetting it afterwards (or once its
-    // source was cleared or changed) lets a later schedule that reuses the
-    // id notify normally.
-    final candidateIds = {for (final event in events) event.id};
-    _suppressed.removeWhere(
-      (id, instant) => !instant.isAfter(now) || !candidateIds.contains(id),
-    );
+    // Suppression only matters until the event's instant; forgetting it
+    // afterwards lets a later schedule that reuses the id notify normally.
+    // (Not pruned by "is it still a candidate": a source briefly reading as
+    // empty while loading or failing would drop the suppression of a flash
+    // that is still playing.)
+    _suppressed.removeWhere((_, instant) => !instant.isAfter(now));
     final upcoming = events.where(
       (event) =>
           event.instant.isAfter(now) && !_suppressed.containsKey(event.id),

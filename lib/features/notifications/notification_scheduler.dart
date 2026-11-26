@@ -40,10 +40,22 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
   /// (#95). If the app then leaves the foreground before the flash ends
   /// (Home pressed, screen off), nobody sees the rest of it — schedule the
   /// notifications back so the moment still notifies.
+  ///
+  /// `inactive` is ignored: it also happens with the app still on screen
+  /// (notification shade, a system dialog), and rescheduling then would
+  /// bring back a notification for a flash that is being watched. Going to
+  /// the background passes through `hidden` and `paused`; only the first one
+  /// has anything to restore.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
-    ref.read(notificationServiceProvider).clearSuppressed();
+    if (state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive) {
+      return;
+    }
+    final hadSuppressed = ref
+        .read(notificationServiceProvider)
+        .clearSuppressed();
+    if (!hadSuppressed) return;
     unawaited(_reschedule(ref.read(notificationCandidateEventsProvider)));
   }
 

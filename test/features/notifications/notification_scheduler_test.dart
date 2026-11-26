@@ -20,7 +20,12 @@ class _RecordingService extends NotificationService {
   Future<void> requestPermissions() async {}
 
   @override
-  void clearSuppressed() => clearSuppressedCalls++;
+  bool clearSuppressed() {
+    clearSuppressedCalls++;
+    return suppressed;
+  }
+
+  bool suppressed = true;
 
   @override
   Future<void> rescheduleAll(List<FlashEvent> events) async =>
@@ -59,6 +64,58 @@ void main() {
       expect(service.rescheduled, [
         [event],
       ]);
+    },
+  );
+
+  testWidgets('inactive alone does not restore (the app is still on screen)', (
+    tester,
+  ) async {
+    final service = _RecordingService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationServiceProvider.overrideWithValue(service),
+          notificationCandidateEventsProvider.overrideWithValue(const []),
+        ],
+        child: const MaterialApp(
+          home: NotificationScheduler(child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+    service.rescheduled.clear();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+
+    expect(service.clearSuppressedCalls, 0);
+    expect(service.rescheduled, isEmpty);
+  });
+
+  testWidgets(
+    'nothing suppressed: leaving the foreground does not reschedule',
+    (
+      tester,
+    ) async {
+      final service = _RecordingService()..suppressed = false;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            notificationServiceProvider.overrideWithValue(service),
+            notificationCandidateEventsProvider.overrideWithValue(const []),
+          ],
+          child: const MaterialApp(
+            home: NotificationScheduler(child: SizedBox()),
+          ),
+        ),
+      );
+      await tester.pump();
+      service.rescheduled.clear();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+
+      expect(service.rescheduled, isEmpty);
     },
   );
 

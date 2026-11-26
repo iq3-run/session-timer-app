@@ -152,9 +152,16 @@ void main() {
       ),
     );
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    // A brief inactive blip (shade, dialog) is not a background trip.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     expect(fake.dropElapsedCalls, 0);
 
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     expect(fake.dropElapsedCalls, 1);
   });
