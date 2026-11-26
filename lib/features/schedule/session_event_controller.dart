@@ -50,6 +50,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
     SessionEventType type,
     DateTime date, {
     int? manualNumber,
+    SessionTrack track = SessionTrack.common,
   }) {
     return _mutate((events) {
       if (_singletonTypes.contains(type) && events.any((e) => e.type == type)) {
@@ -60,6 +61,8 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
         type: type,
         date: date,
         manualNumber: manualNumber,
+        // Only WE/WD can be on the A or B schedule.
+        track: SessionEvent.supportsTrack(type) ? track : SessionTrack.common,
       );
       return [...events, event];
     });
@@ -90,6 +93,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
           date: e.date,
           visible: visible,
           manualNumber: e.manualNumber,
+          track: e.track,
         ),
       ),
     );
@@ -108,6 +112,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
           date: e.date,
           visible: e.visible,
           manualNumber: manualNumber,
+          track: e.track,
         ),
       ),
     );
@@ -126,6 +131,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
           date: date,
           visible: e.visible,
           manualNumber: e.manualNumber,
+          track: e.track,
         ),
       ),
     );

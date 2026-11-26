@@ -489,4 +489,109 @@ void main() {
       );
     });
   });
+
+  group('SessionEventController A/B schedules', () {
+    Future<ProviderContainer> container() async {
+      SharedPreferences.setMockInitialValues({});
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      await c.read(sessionEventControllerProvider.future);
+      return c;
+    }
+
+    test('addEvent stores the track on a WE and persists it', () async {
+      final c = await container();
+      final notifier = c.read(sessionEventControllerProvider.notifier);
+
+      await notifier.addEvent(
+        SessionEventType.weekend,
+        DateTime(2026, 8, 21),
+        track: SessionTrack.a,
+      );
+      final events = await c.read(sessionEventControllerProvider.future);
+
+      expect(events.single.track, SessionTrack.a);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(sessionEventsJsonKey), contains('"track":"a"'));
+    });
+
+    test('addEvent stores the track on a WD', () async {
+      final c = await container();
+
+      await c
+          .read(sessionEventControllerProvider.notifier)
+          .addEvent(
+            SessionEventType.workday,
+            DateTime(2026, 9, 5),
+            track: SessionTrack.b,
+          );
+      final events = await c.read(sessionEventControllerProvider.future);
+
+      expect(events.single.track, SessionTrack.b);
+    });
+
+    test('a track on a type that cannot have one is ignored', () async {
+      final c = await container();
+      final notifier = c.read(sessionEventControllerProvider.notifier);
+
+      for (final type in [
+        SessionEventType.orientation,
+        SessionEventType.classroom,
+        SessionEventType.specialSession,
+        SessionEventType.completion,
+      ]) {
+        await notifier.addEvent(
+          type,
+          DateTime(2026, 8, 7),
+          track: SessionTrack.a,
+        );
+      }
+      final events = await c.read(sessionEventControllerProvider.future);
+
+      expect(events, hasLength(4));
+      expect(events.every((e) => e.track == SessionTrack.common), isTrue);
+    });
+
+    test('editing visibility, number, or date keeps the track', () async {
+      final c = await container();
+      final notifier = c.read(sessionEventControllerProvider.notifier);
+      await notifier.addEvent(
+        SessionEventType.weekend,
+        DateTime(2026, 8, 21),
+        track: SessionTrack.b,
+      );
+      final id = (await c.read(sessionEventControllerProvider.future))
+          .single
+          .id;
+
+      await notifier.setVisible(id, visible: false);
+      await notifier.setManualNumber(id, 3);
+      await notifier.setDate(id, DateTime(2026, 8, 28));
+      final event = (await c.read(sessionEventControllerProvider.future))
+          .single;
+
+      expect(event.track, SessionTrack.b);
+      expect(event.visible, isFalse);
+      expect(event.manualNumber, 3);
+      expect(event.date, DateTime(2026, 8, 28));
+    });
+
+    test('a schedule saved before A/B existed loads as common', () async {
+      SharedPreferences.setMockInitialValues({
+        sessionEventsJsonKey: jsonEncode([
+          {
+            'id': 'we1',
+            'type': 'weekend',
+            'epochMs': DateTime.utc(2026, 8, 21).millisecondsSinceEpoch,
+          },
+        ]),
+      });
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+
+      final events = await c.read(sessionEventControllerProvider.future);
+
+      expect(events.single.track, SessionTrack.common);
+    });
+  });
 }

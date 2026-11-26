@@ -121,4 +121,70 @@ void main() {
       },
     );
   });
+
+  group('SessionScheduleScreen with A/B schedules', () {
+    String eventsJson(List<SessionEvent> events) =>
+        jsonEncode(events.map((e) => e.toJson()).toList());
+
+    final events = [
+      SessionEvent(
+        id: 'or',
+        type: SessionEventType.orientation,
+        date: DateTime(2026, 8, 7),
+      ),
+      SessionEvent(
+        id: 'weA',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 21),
+        track: SessionTrack.a,
+      ),
+      SessionEvent(
+        id: 'weB',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 8, 28),
+        track: SessionTrack.b,
+      ),
+      SessionEvent(
+        id: 'wdA',
+        type: SessionEventType.workday,
+        date: DateTime(2026, 9, 5),
+        track: SessionTrack.a,
+      ),
+      SessionEvent(
+        id: 'wdB',
+        type: SessionEventType.workday,
+        date: DateTime(2026, 9, 12),
+        track: SessionTrack.b,
+      ),
+      SessionEvent(
+        id: 'we2',
+        type: SessionEventType.weekend,
+        date: DateTime(2026, 9, 26),
+      ),
+    ];
+
+    testWidgets('shows A and B as separate labelled rows', (tester) async {
+      await _pumpAndOpenScreen(
+        tester,
+        initialValues: {sessionEventsJsonKey: eventsJson(events)},
+      );
+
+      expect(find.text('1WE(A)'), findsOneWidget);
+      expect(find.text('1WE(B)'), findsOneWidget);
+      expect(find.text('1WD(A)'), findsOneWidget);
+      expect(find.text('1WD(B)'), findsOneWidget);
+      expect(find.text('2WE'), findsOneWidget);
+    });
+
+    testWidgets('the merge row lists each schedule on its own line', (
+      tester,
+    ) async {
+      await _pumpAndOpenScreen(
+        tester,
+        initialValues: {sessionEventsJsonKey: eventsJson(events)},
+      );
+
+      expect(find.text('A:20日(3W)\nB:13日(2W)'), findsOneWidget);
+    });
+  });
 }

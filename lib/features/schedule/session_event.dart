@@ -9,6 +9,12 @@ enum SessionEventType {
   completion,
 }
 
+/// Which schedule an event belongs to. Some programs run two parallel
+/// schedules for their early sessions (A and B) that merge into one from a
+/// later session on; [common] is every event outside that split — and the
+/// default, so a program with no A/B split never sees this.
+enum SessionTrack { common, a, b }
+
 /// A single scheduled session (OR/WE/WD/CR/SS/CS). [date] only ever carries
 /// a calendar date — normalized to midnight in the constructor itself so
 /// that comparisons like `isAtSameMomentAs` between two events can't be
@@ -20,7 +26,13 @@ class SessionEvent {
     required DateTime date,
     this.visible = true,
     this.manualNumber,
+    this.track = SessionTrack.common,
   }) : date = DateTime(date.year, date.month, date.day);
+
+  /// Only WE and WD can be split into A/B schedules; every other type is
+  /// always [SessionTrack.common].
+  static bool supportsTrack(SessionEventType type) =>
+      type == SessionEventType.weekend || type == SessionEventType.workday;
 
   final String id;
   final SessionEventType type;
@@ -40,6 +52,12 @@ class SessionEvent {
   /// one event — it doesn't affect any other event's own auto-assigned
   /// number, and duplicate/skipped numbers across events aren't checked.
   final int? manualNumber;
+
+  /// The A or B schedule this event belongs to, or [SessionTrack.common] for
+  /// an event shared by both. Only meaningful for WE/WD (see
+  /// [supportsTrack]). Events on different tracks don't count toward each
+  /// other's sequence numbers or 週末間 gaps.
+  final SessionTrack track;
 
   /// Every type is a single day except WE, whose first occurrence
   /// ([isFirstWeekend]) runs 3 days and later ones run 2. Whether a given
@@ -82,6 +100,17 @@ class SessionEvent {
     final rawManualNumber = json['manualNumber'];
     if (rawManualNumber != null && rawManualNumber is! int) return null;
     if (rawManualNumber is int && rawManualNumber <= 0) return null;
+    // Absent (every entry saved before A/B schedules existed) is `common`.
+    // A present-but-unknown value, or a track on a type that can't have
+    // one, rejects the entry like any other malformed field.
+    final rawTrack = json['track'];
+    if (json.containsKey('track') && rawTrack is! String) return null;
+    final tracks = SessionTrack.values.where((t) => t.name == rawTrack);
+    if (rawTrack != null && tracks.isEmpty) return null;
+    final track = rawTrack == null ? SessionTrack.common : tracks.first;
+    if (track != SessionTrack.common && !supportsTrack(matches.first)) {
+      return null;
+    }
     final utc = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
     return SessionEvent(
       id: id,
@@ -89,6 +118,7 @@ class SessionEvent {
       date: utc,
       visible: (rawVisible as bool?) ?? true,
       manualNumber: rawManualNumber as int?,
+      track: track,
     );
   }
 
@@ -108,5 +138,8 @@ class SessionEvent {
     // compact as before this field existed.
     if (!visible) 'visible': false,
     if (manualNumber != null) 'manualNumber': manualNumber,
+    // Omitted for `common`, like `visible`, so an un-split schedule's JSON
+    // is unchanged.
+    if (track != SessionTrack.common) 'track': track.name,
   };
 }

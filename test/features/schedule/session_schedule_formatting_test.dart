@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:session_timer/features/schedule/session_chain.dart';
+import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_gap_calculation.dart';
 import 'package:session_timer/features/schedule/session_schedule_formatting.dart';
 
@@ -37,6 +39,42 @@ void main() {
 
     test('formats multi-digit days and weeks', () {
       expect(formatGap(const GapResult(days: 12, weeks: 2)), '12日(2W)');
+    });
+  });
+
+  group('formatChainGap', () {
+    final date = DateTime(2026, 9, 26);
+
+    test('formats a single gap like formatGap', () {
+      final row = ScheduleRow(
+        label: '2WE',
+        date: date,
+        isToday: false,
+        chainGap: const GapResult(days: 20, weeks: 3),
+      );
+
+      expect(formatChainGap(row), '20日(3W)');
+    });
+
+    test('is blank when the row has no gap', () {
+      expect(
+        formatChainGap(ScheduleRow(label: 'OR', date: date, isToday: false)),
+        '',
+      );
+    });
+
+    test('puts each schedule on its own line where A and B merge', () {
+      final row = ScheduleRow(
+        label: '2WE',
+        date: date,
+        isToday: false,
+        trackChainGaps: const [
+          (track: SessionTrack.a, gap: GapResult(days: 20, weeks: 3)),
+          (track: SessionTrack.b, gap: GapResult(days: 13, weeks: 2)),
+        ],
+      );
+
+      expect(formatChainGap(row), 'A:20日(3W)\nB:13日(2W)');
     });
   });
 }

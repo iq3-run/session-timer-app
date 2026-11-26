@@ -104,7 +104,7 @@ class _ScheduleTable extends StatelessWidget {
       DataCell(
         _TodayMarkedText(formatScheduleDate(row.date), isToday: row.isToday),
       ),
-      DataCell(Text(formatGap(row.chainGap))),
+      DataCell(Text(formatChainGap(row))),
       DataCell(Text(formatGap(row.todayGap))),
     ];
   }

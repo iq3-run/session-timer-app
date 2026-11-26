@@ -548,4 +548,125 @@ void main() {
       expect(find.byKey(const Key('editNumber_cs')), findsNothing);
     });
   });
+
+  group('A/B schedule selector', () {
+    Future<void> chooseType(WidgetTester tester, String name) async {
+      await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(name).last);
+      await tester.pumpAndSettle();
+    }
+
+    final selector = find.byKey(const Key('scheduleTrackSelector'));
+
+    testWidgets('shows for WE (the default) and WD, but not other types', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+      expect(selector, findsOneWidget);
+
+      await chooseType(tester, 'ワークデー(WD)');
+      expect(selector, findsOneWidget);
+
+      for (final name in [
+        'オリエンテーション(OR)',
+        'クラスルーム(CR)',
+        '特別セッション(SS)',
+        '完了セッション(CS)',
+      ]) {
+        await chooseType(tester, name);
+        expect(selector, findsNothing, reason: name);
+      }
+    });
+
+    testWidgets('starts on 共通, so a plain add stays a plain 1WE', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+
+      await _pickDateAndAdd(tester);
+
+      expect(find.text('1WE'), findsOneWidget);
+    });
+
+    testWidgets('adding as A and as B gives 1WE(A) and 1WE(B)', (tester) async {
+      await _pumpScreen(tester);
+
+      await tester.tap(find.descendant(of: selector, matching: find.text('A')));
+      await tester.pumpAndSettle();
+      await _pickDateAndAdd(tester);
+      await tester.tap(find.descendant(of: selector, matching: find.text('B')));
+      await tester.pumpAndSettle();
+      await _pickDateAndAdd(tester);
+
+      expect(find.text('1WE(A)'), findsOneWidget);
+      expect(find.text('1WE(B)'), findsOneWidget);
+    });
+
+    testWidgets('goes back to 共通 after each add, so it is not carried over', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+
+      await tester.tap(find.descendant(of: selector, matching: find.text('A')));
+      await tester.pumpAndSettle();
+      await _pickDateAndAdd(tester);
+      // No selector change: this one must be common, not A again.
+      await _pickDateAndAdd(tester);
+
+      expect(find.text('1WE(A)'), findsOneWidget);
+      expect(find.text('2WE'), findsOneWidget);
+    });
+
+    testWidgets('a leftover A/B choice is dropped when the type changes', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.descendant(of: selector, matching: find.text('A')));
+      await tester.pumpAndSettle();
+
+      await chooseType(tester, 'クラスルーム(CR)');
+      await chooseType(tester, '週末(WE)');
+      await _pickDateAndAdd(tester);
+
+      expect(find.text('1WE'), findsOneWidget);
+      expect(find.text('1WE(A)'), findsNothing);
+    });
+
+    testWidgets('registered A/B events show their schedule in the list', (
+      tester,
+    ) async {
+      await _pumpScreen(
+        tester,
+        initialValues: {
+          sessionEventsJsonKey: jsonEncode([
+            SessionEvent(
+              id: 'a',
+              type: SessionEventType.weekend,
+              date: DateTime(2026, 8, 21),
+              track: SessionTrack.a,
+            ).toJson(),
+            SessionEvent(
+              id: 'b',
+              type: SessionEventType.weekend,
+              date: DateTime(2026, 8, 28),
+              track: SessionTrack.b,
+            ).toJson(),
+          ]),
+        },
+      );
+
+      expect(find.text('1WE(A)'), findsOneWidget);
+      expect(find.text('1WE(B)'), findsOneWidget);
+    });
+
+    testWidgets('fits a narrow portrait screen without overflowing', (
+      tester,
+    ) async {
+      await _pumpScreen(tester, surfaceSize: const Size(360, 800));
+
+      expect(selector, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

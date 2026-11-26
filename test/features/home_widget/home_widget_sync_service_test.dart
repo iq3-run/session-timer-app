@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/home_widget/home_widget_gateway.dart';
 import 'package:session_timer/features/home_widget/home_widget_sync_service.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
+import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_gap_calculation.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/targets/time_target.dart';
@@ -173,6 +174,25 @@ void main() {
         expect(decoded.map((r) => r['date']), ['8/10(月)', '8/17(月)']);
         expect(decoded.map((r) => r['isToday']), [false, true]);
         expect(gateway.updatedAndroidNames, [scheduleWidgetAndroidName]);
+      },
+    );
+
+    test(
+      'sends one line per schedule in chainGap where A and B merge',
+      () async {
+        final row = ScheduleRow(
+          label: '2WE',
+          date: DateTime(2026, 9, 26),
+          isToday: false,
+          trackChainGaps: const [
+            (track: SessionTrack.a, gap: GapResult(days: 20, weeks: 3)),
+            (track: SessionTrack.b, gap: GapResult(days: 13, weeks: 2)),
+          ],
+        );
+
+        final encoded = await encodedRow(row);
+
+        expect(encoded['chainGap'], 'A:20日(3W)\nB:13日(2W)');
       },
     );
 

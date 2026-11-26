@@ -399,6 +399,7 @@ class _AddEventForm extends ConsumerStatefulWidget {
 
 class _AddEventFormState extends ConsumerState<_AddEventForm> {
   SessionEventType _type = SessionEventType.weekend;
+  SessionTrack _track = SessionTrack.common;
   DateTime? _pickedDate;
   final _numberController = TextEditingController();
 
@@ -410,6 +411,42 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
 
   @override
   Widget build(BuildContext context) {
+    // The A/B selector gets its own line: the main row is already full on a
+    // narrow portrait screen, and only WE/WD ever show it.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _mainRow(),
+        if (SessionEvent.supportsTrack(_type)) _trackSelector(),
+      ],
+    );
+  }
+
+  Widget _trackSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          const Text('日程', style: TextStyle(color: SessionTimerColors.muted)),
+          const SizedBox(width: 12),
+          SegmentedButton<SessionTrack>(
+            key: const Key('scheduleTrackSelector'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: SessionTrack.common, label: Text('共通')),
+              ButtonSegment(value: SessionTrack.a, label: Text('A')),
+              ButtonSegment(value: SessionTrack.b, label: Text('B')),
+            ],
+            selected: {_track},
+            onSelectionChanged: (selection) =>
+                setState(() => _track = selection.first),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mainRow() {
     return Row(
       children: [
         if (_numberedTypes.contains(_type)) ...[
@@ -476,7 +513,12 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
             ),
           ),
       ],
-      onChanged: (value) => setState(() => _type = value ?? _type),
+      onChanged: (value) => setState(() {
+        _type = value ?? _type;
+        // A/B only exists for WE/WD; don't carry a leftover choice over to
+        // a type that can't have one.
+        if (!SessionEvent.supportsTrack(_type)) _track = SessionTrack.common;
+      }),
     );
   }
 
@@ -495,17 +537,27 @@ class _AddEventFormState extends ConsumerState<_AddEventForm> {
     final date = _pickedDate;
     if (date == null) return;
     final addedType = _type;
+    final addedTrack = _track;
     final manualNumber = _numberedTypes.contains(addedType)
         ? _parseManualNumberText(_numberController.text)
         : null;
     unawaited(
       ref
           .read(sessionEventControllerProvider.notifier)
-          .addEvent(addedType, date, manualNumber: manualNumber),
+          .addEvent(
+            addedType,
+            date,
+            manualNumber: manualNumber,
+            track: addedTrack,
+          ),
     );
     setState(() {
       _pickedDate = null;
       _numberController.clear();
+      // Back to 共通 after every add, like the date and number: otherwise a
+      // forgotten A/B choice would silently put the next event on that
+      // schedule.
+      _track = SessionTrack.common;
       // OR/CS are singletons — once added, their dropdown entry disables
       // itself, so the selection must move off it or it'd point at a
       // disabled item.
