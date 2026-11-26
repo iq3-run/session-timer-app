@@ -2,12 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/session_plan/current_session_resolution.dart';
 import 'package:session_timer/features/session_plan/session_plan_entry.dart';
 
-SessionPlanEntry _entry(String id, DateTime start, DateTime end) =>
-    SessionPlanEntry(
-      id: id,
-      startEpochMs: start.millisecondsSinceEpoch,
-      endEpochMs: end.millisecondsSinceEpoch,
-    );
+SessionPlanEntry _entry(
+  String id, {
+  required int startHour,
+  required int durationMinutes,
+  int startMinute = 0,
+}) => SessionPlanEntry(
+  id: id,
+  startMinutes: startHour * 60 + startMinute,
+  durationMinutes: durationMinutes,
+);
 
 void main() {
   group('resolveCurrentSession', () {
@@ -17,33 +21,17 @@ void main() {
       expect(resolveCurrentSession(const [], now), isNull);
     });
 
-    test('returns null when every session has already ended', () {
-      final sessions = [
-        _entry(
-          's1',
-          now.subtract(const Duration(hours: 2)),
-          now.subtract(const Duration(hours: 1)),
-        ),
-      ];
-
-      expect(resolveCurrentSession(sessions, now), isNull);
-    });
-
     test(
       'a not-yet-started session becomes current, with its own start as '
       'the auto target',
       () {
-        final session = _entry(
-          's1',
-          now.add(const Duration(hours: 1)),
-          now.add(const Duration(hours: 4)),
-        );
+        final session = _entry('s1', startHour: 11, durationMinutes: 180);
 
         final resolution = resolveCurrentSession([session], now);
 
         expect(resolution?.session.id, 's1');
-        expect(resolution?.completionTarget, session.endTime);
-        expect(resolution?.autoTargetStart, session.startTime);
+        expect(resolution?.completionTarget, DateTime(2026, 8, 8, 14));
+        expect(resolution?.autoTargetStart, DateTime(2026, 8, 8, 11));
       },
     );
 
@@ -51,33 +39,21 @@ void main() {
       "an in-progress session becomes current, with the next session's "
       'start as the auto target',
       () {
-        final current = _entry(
-          'am',
-          now.subtract(const Duration(hours: 1)),
-          now.add(const Duration(hours: 2, minutes: 30)),
-        );
-        final next = _entry(
-          'pm',
-          now.add(const Duration(hours: 3, minutes: 30)),
-          now.add(const Duration(hours: 7)),
-        );
+        final current = _entry('am', startHour: 9, durationMinutes: 210);
+        final next = _entry('pm', startHour: 13, durationMinutes: 210);
 
         final resolution = resolveCurrentSession([current, next], now);
 
         expect(resolution?.session.id, 'am');
-        expect(resolution?.completionTarget, current.endTime);
-        expect(resolution?.autoTargetStart, next.startTime);
+        expect(resolution?.completionTarget, DateTime(2026, 8, 8, 12, 30));
+        expect(resolution?.autoTargetStart, DateTime(2026, 8, 8, 13));
       },
     );
 
     test(
       'an in-progress session with no next session clears the auto target',
       () {
-        final current = _entry(
-          'am',
-          now.subtract(const Duration(hours: 1)),
-          now.add(const Duration(hours: 2, minutes: 30)),
-        );
+        final current = _entry('am', startHour: 9, durationMinutes: 210);
 
         final resolution = resolveCurrentSession([current], now);
 
@@ -87,24 +63,92 @@ void main() {
     );
 
     test(
-      'picks the session ending soonest among not-yet-ended ones, not the '
-      'one listed first',
+      'picks the session ending soonest, not the one listed first',
       () {
         final endsSoon = _entry(
           'soon',
-          now.subtract(const Duration(minutes: 30)),
-          now.add(const Duration(minutes: 10)),
+          startHour: 9,
+          startMinute: 30,
+          durationMinutes: 40,
         );
-        final endsLater = _entry(
-          'later',
-          now.subtract(const Duration(hours: 1)),
-          now.add(const Duration(hours: 3)),
-        );
+        final endsLater = _entry('later', startHour: 9, durationMinutes: 240);
 
         final resolution = resolveCurrentSession([endsLater, endsSoon], now);
 
         expect(resolution?.session.id, 'soon');
       },
     );
+
+    test(
+      'a session whose time of day already passed today is still applied, '
+      'targeting its next occurrence (tomorrow)',
+      () {
+        // Regression for #94: sessions used to carry the date they were
+        // registered on, so one whose stored date had passed read as
+        // "already ended" and could not be applied at all.
+        final morning = _entry('am', startHour: 6, durationMinutes: 120);
+        final lateNow = DateTime(2026, 8, 8, 20);
+
+        final resolution = resolveCurrentSession([morning], lateNow);
+
+        expect(resolution?.session.id, 'am');
+        expect(resolution?.completionTarget, DateTime(2026, 8, 9, 8));
+        expect(resolution?.autoTargetStart, DateTime(2026, 8, 9, 6));
+      },
+    );
+
+    test(
+      'after the last session of the day, the first one tomorrow is next',
+      () {
+        final am = _entry('am', startHour: 9, durationMinutes: 180);
+        final pm = _entry('pm', startHour: 13, durationMinutes: 180);
+        final evening = DateTime(2026, 8, 8, 20);
+
+        final resolution = resolveCurrentSession([pm, am], evening);
+
+        expect(resolution?.session.id, 'am');
+        expect(resolution?.completionTarget, DateTime(2026, 8, 9, 12));
+        expect(resolution?.autoTargetStart, DateTime(2026, 8, 9, 9));
+      },
+    );
+
+    test(
+      'a session running past midnight is current after midnight, ending '
+      'later that same day',
+      () {
+        final night = _entry('night', startHour: 23, durationMinutes: 180);
+        final afterMidnight = DateTime(2026, 8, 9, 1);
+
+        final resolution = resolveCurrentSession([night], afterMidnight);
+
+        expect(resolution?.session.id, 'night');
+        expect(resolution?.completionTarget, DateTime(2026, 8, 9, 2));
+        // Started yesterday, and it is the last session: nothing next.
+        expect(resolution?.autoTargetStart, isNull);
+      },
+    );
+
+    test(
+      'a session running past midnight is upcoming before it starts, with '
+      'its end on the following day',
+      () {
+        final night = _entry('night', startHour: 23, durationMinutes: 180);
+        final evening = DateTime(2026, 8, 8, 21);
+
+        final resolution = resolveCurrentSession([night], evening);
+
+        expect(resolution?.completionTarget, DateTime(2026, 8, 9, 2));
+        expect(resolution?.autoTargetStart, DateTime(2026, 8, 8, 23));
+      },
+    );
+
+    test('a session ending exactly now is treated as ended', () {
+      final ended = _entry('am', startHour: 8, durationMinutes: 120);
+      final next = _entry('pm', startHour: 13, durationMinutes: 120);
+
+      final resolution = resolveCurrentSession([ended, next], now);
+
+      expect(resolution?.session.id, 'pm');
+    });
   });
 }

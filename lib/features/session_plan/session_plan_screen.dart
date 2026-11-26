@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:session_timer/core/clock/time_of_day_resolver.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/session_plan/current_session_resolution.dart';
@@ -136,14 +134,12 @@ class _EditSessionLabel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final format = DateFormat('H:mm');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _editSession(context, ref),
       child: Center(
         child: Text(
-          '${format.format(session.startTime)}〜'
-          '${format.format(session.endTime)}',
+          '${session.startLabel}〜${session.endLabel}',
           style: _rowTextStyle(context),
         ),
       ),
@@ -153,19 +149,23 @@ class _EditSessionLabel extends ConsumerWidget {
   Future<void> _editSession(BuildContext context, WidgetRef ref) async {
     final pickedStart = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(session.startTime),
+      initialTime: _timeOfDay(session.startMinutes),
     );
     if (pickedStart == null || !context.mounted) return;
-    final start = resolveNextOccurrence(pickedStart, DateTime.now());
-    final end = await _promptSessionEnd(
+    final startMinutes = _minutesOf(pickedStart);
+    final durationMinutes = await _promptSessionDuration(
       context,
-      start: start,
-      initialEnd: session.endTime,
+      startMinutes: startMinutes,
+      initialEndMinutes: session.endMinutes,
     );
-    if (end == null || !context.mounted) return;
+    if (durationMinutes == null || !context.mounted) return;
     await ref
         .read(sessionPlanControllerProvider.notifier)
-        .updateSession(session.id, start, end);
+        .updateSession(
+          session.id,
+          startMinutes: startMinutes,
+          durationMinutes: durationMinutes,
+        );
   }
 }
 
@@ -203,30 +203,40 @@ class _AddSessionRow extends ConsumerWidget {
   }
 
   Future<void> _addSession(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
     final pickedStart = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(now),
+      initialTime: TimeOfDay.fromDateTime(DateTime.now()),
     );
     if (pickedStart == null || !context.mounted) return;
-    final start = resolveNextOccurrence(pickedStart, now);
-    final end = await _promptSessionEnd(context, start: start);
-    if (end == null || !context.mounted) return;
+    final startMinutes = _minutesOf(pickedStart);
+    final durationMinutes = await _promptSessionDuration(
+      context,
+      startMinutes: startMinutes,
+    );
+    if (durationMinutes == null || !context.mounted) return;
     await ref
         .read(sessionPlanControllerProvider.notifier)
-        .addSession(start, end);
+        .addSession(
+          startMinutes: startMinutes,
+          durationMinutes: durationMinutes,
+        );
   }
 }
 
+int _minutesOf(TimeOfDay time) => time.hour * 60 + time.minute;
+
+TimeOfDay _timeOfDay(int minutes) =>
+    TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
+
 enum _EndInputMode { duration, exact }
 
-/// Asks how to specify a session's end — a duration from [start] (default
-/// 3.5h) or an exact end time — then runs the matching sub-dialog. Returns
-/// `null` if the user backs out at any step.
-Future<DateTime?> _promptSessionEnd(
+/// Asks how to specify a session's end — a duration (default 3.5h) or an
+/// exact end time — then runs the matching sub-dialog. Returns the session's
+/// length in minutes, or `null` if the user backs out at any step.
+Future<int?> _promptSessionDuration(
   BuildContext context, {
-  required DateTime start,
-  DateTime? initialEnd,
+  required int startMinutes,
+  int? initialEndMinutes,
 }) async {
   final mode = await showDialog<_EndInputMode>(
     context: context,
@@ -247,14 +257,18 @@ Future<DateTime?> _promptSessionEnd(
   );
   if (mode == null || !context.mounted) return null;
   return mode == _EndInputMode.duration
-      ? _promptDurationEnd(context, start: start)
-      : _promptExactEnd(context, start: start, initialEnd: initialEnd);
+      ? _promptDurationMinutes(context)
+      : _promptExactEndDuration(
+          context,
+          startMinutes: startMinutes,
+          initialEndMinutes: initialEndMinutes,
+        );
 }
 
-Future<DateTime?> _promptDurationEnd(
-  BuildContext context, {
-  required DateTime start,
-}) async {
+/// Returns the entered length in minutes, or `null` if cancelled or not a
+/// positive length of at most 24 hours (a session repeats daily, so it can't
+/// be longer than a day) — in the latter case after telling the user why.
+Future<int?> _promptDurationMinutes(BuildContext context) async {
   final defaultHours = defaultSessionDuration.inMinutes / 60;
   final controller = TextEditingController(text: _formatHours(defaultHours));
   final double? hours;
@@ -266,24 +280,37 @@ Future<DateTime?> _promptDurationEnd(
   } finally {
     controller.dispose();
   }
-  if (hours == null || hours <= 0) return null;
-  return start.add(Duration(minutes: (hours * 60).round()));
+  if (hours == null) return null;
+  // Range-check before rounding: NaN/Infinity (or a product that overflows
+  // to Infinity) would make `.round()` throw. NaN fails every comparison.
+  final minutes = hours > 0 && hours <= 24 ? (hours * 60).round() : 0;
+  if (minutes > 0 && minutes <= minutesPerDay) return minutes;
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('所要時間は0より大きく24時間以内で入力してください')),
+    );
+  }
+  return null;
 }
 
-Future<DateTime?> _promptExactEnd(
+/// Asks for an end time of day and converts it to a length: the time from
+/// [startMinutes] to the next occurrence of that time (so an end earlier
+/// than the start runs past midnight, and an identical time is a full day).
+Future<int?> _promptExactEndDuration(
   BuildContext context, {
-  required DateTime start,
-  DateTime? initialEnd,
+  required int startMinutes,
+  int? initialEndMinutes,
 }) async {
-  final initial = initialEnd ?? start.add(defaultSessionDuration);
+  final initialEnd =
+      initialEndMinutes ??
+      (startMinutes + defaultSessionDuration.inMinutes) % minutesPerDay;
   final picked = await showTimePicker(
     context: context,
-    initialTime: TimeOfDay.fromDateTime(initial),
+    initialTime: _timeOfDay(initialEnd),
   );
-  // start (not DateTime.now()) is the reference instant: resolveNextOccurrence
-  // returns the next time that time-of-day occurs after it, guaranteeing the
-  // end always lands after the chosen start rather than after "now".
-  return picked == null ? null : resolveNextOccurrence(picked, start);
+  if (picked == null) return null;
+  final difference = (_minutesOf(picked) - startMinutes) % minutesPerDay;
+  return difference == 0 ? minutesPerDay : difference;
 }
 
 String _formatHours(double hours) =>

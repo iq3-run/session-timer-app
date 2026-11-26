@@ -10,42 +10,76 @@ typedef CurrentSessionResolution = ({
   DateTime? autoTargetStart,
 });
 
-/// Picks, among sessions that haven't ended yet, the one ending soonest —
-/// that's either the session currently in progress or the next one coming
-/// up, since sessions are expected to be chronological and non-overlapping.
-/// Returns `null` when [sessions] is empty or every session has already
-/// ended.
+typedef _Occurrence = ({DateTime start, DateTime end});
+
+/// Picks the session that is in progress right now or, failing that, the
+/// next one to begin — whichever ends soonest. Sessions hold only a time of
+/// day, so each one is placed on the calendar relative to [now]; any
+/// non-empty plan therefore always has a current session. Returns `null`
+/// only when [sessions] is empty.
 ///
 /// `autoTargetStart` is the resolved session's own start time if it hasn't
 /// started yet (a countdown to "when this session begins"), or — once it
-/// has started — the start time of whichever session comes next after it
-/// in start-time order, or `null` if there is no next session to show.
+/// has started — the next start of whichever session follows it in
+/// time-of-day order, or `null` if it is the last one.
 CurrentSessionResolution? resolveCurrentSession(
   List<SessionPlanEntry> sessions,
   DateTime now,
 ) {
-  final notEnded = sessions.where((s) => s.endTime.isAfter(now)).toList()
-    ..sort((a, b) => a.endTime.compareTo(b.endTime));
-  if (notEnded.isEmpty) return null;
-  final selected = notEnded.first;
+  if (sessions.isEmpty) return null;
 
-  if (selected.startTime.isAfter(now)) {
+  SessionPlanEntry? selected;
+  _Occurrence? selectedOccurrence;
+  for (final session in sessions) {
+    final occurrence = _currentOrNextOccurrence(session, now);
+    if (selectedOccurrence == null ||
+        occurrence.end.isBefore(selectedOccurrence.end)) {
+      selected = session;
+      selectedOccurrence = occurrence;
+    }
+  }
+  // Non-empty list: both were assigned on the first iteration.
+  if (selected == null || selectedOccurrence == null) return null;
+
+  if (selectedOccurrence.start.isAfter(now)) {
     return (
       session: selected,
-      completionTarget: selected.endTime,
-      autoTargetStart: selected.startTime,
+      completionTarget: selectedOccurrence.end,
+      autoTargetStart: selectedOccurrence.start,
     );
   }
 
   final byStart = [...sessions]
-    ..sort((a, b) => a.startEpochMs.compareTo(b.startEpochMs));
-  final selectedIndex = byStart.indexWhere((s) => s.id == selected.id);
+    ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+  final selectedIndex = byStart.indexWhere((s) => s.id == selected!.id);
   final next = selectedIndex + 1 < byStart.length
       ? byStart[selectedIndex + 1]
       : null;
   return (
     session: selected,
-    completionTarget: selected.endTime,
-    autoTargetStart: next?.startTime,
+    completionTarget: selectedOccurrence.end,
+    autoTargetStart: next == null ? null : _nextStartAfter(next, now),
   );
+}
+
+/// The earliest occurrence of [session] that hasn't ended yet at [now]:
+/// the one in progress, or the next to begin. Durations are at most 24h,
+/// so looking from yesterday (a session that ran past midnight) through
+/// tomorrow is always enough to find one.
+_Occurrence _currentOrNextOccurrence(SessionPlanEntry session, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  for (var dayOffset = -1; dayOffset <= 0; dayOffset++) {
+    final day = DateTime(today.year, today.month, today.day + dayOffset);
+    final end = session.endOn(day);
+    if (end.isAfter(now)) return (start: session.startOn(day), end: end);
+  }
+  final tomorrow = DateTime(today.year, today.month, today.day + 1);
+  return (start: session.startOn(tomorrow), end: session.endOn(tomorrow));
+}
+
+/// The next moment [session] starts strictly after [now].
+DateTime _nextStartAfter(SessionPlanEntry session, DateTime now) {
+  final today = session.startOn(now);
+  if (today.isAfter(now)) return today;
+  return session.startOn(DateTime(now.year, now.month, now.day + 1));
 }
