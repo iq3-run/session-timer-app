@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';

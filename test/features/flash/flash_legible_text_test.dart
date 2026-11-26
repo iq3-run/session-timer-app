@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_legible_text.dart';
 

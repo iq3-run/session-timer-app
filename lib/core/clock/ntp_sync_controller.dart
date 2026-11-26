@@ -38,8 +38,10 @@ class NtpSyncState {
 /// `NTP.getNtpOffset`'s signature so the default binding below is a
 /// direct tear-off; tests override this provider with a fake so they
 /// never open a real socket.
-typedef NtpOffsetFetcher =
-    Future<int> Function(String host, {required Duration timeout});
+typedef NtpOffsetFetcher = Future<int> Function(
+  String host, {
+  required Duration timeout,
+});
 
 /// Resolves a hostname to its addresses, injectable so tests can supply
 /// deterministic results instead of hitting real DNS. Matches
