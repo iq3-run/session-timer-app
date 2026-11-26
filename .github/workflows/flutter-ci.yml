@@ -17,9 +17,14 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned: an unpinned `stable` moved to Flutter 3.50.1, which deprecates
+      # package:flutter/material.dart and fails `flutter analyze`. 3.47.2 is the
+      # version CI last passed on. Bump deliberately together with the
+      # material_ui/cupertino_ui import migration.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.47.2"
           cache: true
 
       - run: flutter pub get
@@ -45,6 +50,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.47.2"
           cache: true
 
       - uses: actions/setup-java@v4
@@ -69,6 +75,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.47.2"
           cache: true
 
       - run: flutter pub get
