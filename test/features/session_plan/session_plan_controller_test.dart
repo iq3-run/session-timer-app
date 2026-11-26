@@ -26,93 +26,58 @@ void main() {
       addTearDown(container.dispose);
       await container.read(sessionPlanControllerProvider.future);
       final notifier = container.read(sessionPlanControllerProvider.notifier);
-      // Fixed same-day times, not DateTime.now() — the sort is now by
-      // time-of-day only, so a now()-relative fixture would flip order
-      // (and fail) whenever "later" wraps past midnight, e.g. any run
-      // between 19:00 and 23:00 local time.
-      final laterStart = DateTime(2026, 8, 8, 19);
-      final soonerStart = DateTime(2026, 8, 8, 9);
 
-      await notifier.addSession(
-        laterStart,
-        laterStart.add(const Duration(hours: 1)),
-      );
-      await notifier.addSession(
-        soonerStart,
-        soonerStart.add(const Duration(hours: 1)),
-      );
+      await notifier.addSession(startMinutes: 19 * 60, durationMinutes: 60);
+      await notifier.addSession(startMinutes: 9 * 60, durationMinutes: 60);
       final sessions = await container.read(
         sessionPlanControllerProvider.future,
       );
 
-      expect(sessions.map((s) => s.startEpochMs), [
-        soonerStart.millisecondsSinceEpoch,
-        laterStart.millisecondsSinceEpoch,
-      ]);
+      expect(sessions.map((s) => s.startMinutes), [9 * 60, 19 * 60]);
     });
 
     test(
-      'sorts by time-of-day even when entries land on different calendar '
-      'dates',
+      'updateSession changes the start time and duration in place',
       () async {
         SharedPreferences.setMockInitialValues({});
         final container = ProviderContainer();
         addTearDown(container.dispose);
         await container.read(sessionPlanControllerProvider.future);
-        final notifier = container.read(
-          sessionPlanControllerProvider.notifier,
-        );
-        // 19:00 today has an earlier epoch than 9:00 tomorrow, but 9:00 is
-        // earlier in the day — this is the exact scenario
-        // resolveNextOccurrence produces when a user registers "9:00"
-        // after 9am has already passed today, landing it on tomorrow's
-        // date while an evening session registered earlier that same day
-        // still resolves to today.
-        final today = DateTime(2026, 8, 8);
-        final eveningToday = DateTime(2026, 8, 8, 19);
-        final morningTomorrow = DateTime(2026, 8, 9, 9);
+        final notifier = container.read(sessionPlanControllerProvider.notifier);
+        await notifier.addSession(startMinutes: 9 * 60, durationMinutes: 60);
+        final id = (await container.read(
+          sessionPlanControllerProvider.future,
+        )).single.id;
 
-        await notifier.addSession(
-          eveningToday,
-          eveningToday.add(const Duration(hours: 2)),
-        );
-        await notifier.addSession(
-          morningTomorrow,
-          morningTomorrow.add(const Duration(hours: 2)),
+        await notifier.updateSession(
+          id,
+          startMinutes: 13 * 60,
+          durationMinutes: 120,
         );
         final sessions = await container.read(
           sessionPlanControllerProvider.future,
         );
 
-        expect(sessions.map((s) => s.startTime.hour), [9, 19]);
-        // Sanity check the fixture actually crosses midnight (today's
-        // guard against the two DateTimes above drifting to the same day
-        // if this test is ever edited).
-        expect(morningTomorrow.day, isNot(today.day));
+        expect(sessions.single.startMinutes, 13 * 60);
+        expect(sessions.single.durationMinutes, 120);
       },
     );
 
-    test('updateSession changes the start/end time in place', () async {
+    test('persists the new date-less format', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
       await container.read(sessionPlanControllerProvider.future);
-      final notifier = container.read(sessionPlanControllerProvider.notifier);
-      final start = DateTime.now().add(const Duration(hours: 1));
-      await notifier.addSession(start, start.add(const Duration(hours: 1)));
-      final id = (await container.read(
-        sessionPlanControllerProvider.future,
-      )).single.id;
 
-      final newStart = DateTime.now().add(const Duration(hours: 3));
-      final newEnd = newStart.add(const Duration(hours: 2));
-      await notifier.updateSession(id, newStart, newEnd);
-      final sessions = await container.read(
-        sessionPlanControllerProvider.future,
-      );
+      await container
+          .read(sessionPlanControllerProvider.notifier)
+          .addSession(startMinutes: 540, durationMinutes: 210);
 
-      expect(sessions.single.startEpochMs, newStart.millisecondsSinceEpoch);
-      expect(sessions.single.endEpochMs, newEnd.millisecondsSinceEpoch);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(sessionPlanJsonKey)!;
+      expect(raw, contains('"startMinutes":540'));
+      expect(raw, contains('"durationMinutes":210'));
+      expect(raw, isNot(contains('Epoch')));
     });
 
     test('removeSession deletes the session', () async {
@@ -121,8 +86,7 @@ void main() {
       addTearDown(container.dispose);
       await container.read(sessionPlanControllerProvider.future);
       final notifier = container.read(sessionPlanControllerProvider.notifier);
-      final start = DateTime.now().add(const Duration(hours: 1));
-      await notifier.addSession(start, start.add(const Duration(hours: 1)));
+      await notifier.addSession(startMinutes: 9 * 60, durationMinutes: 60);
       final id = (await container.read(
         sessionPlanControllerProvider.future,
       )).single.id;
@@ -136,17 +100,18 @@ void main() {
     });
 
     test(
-      'keeps an already-ended session across a cold restart, unlike '
-      'TimeTargetsController — the plan is only cleared by hand',
+      'loads sessions persisted in the legacy epoch format as time-of-day '
+      'only, however long ago they were registered',
       () async {
-        final pastStart = DateTime.now().subtract(const Duration(days: 1));
-        final pastEnd = pastStart.add(const Duration(hours: 1));
-        final pastStartMs = pastStart.millisecondsSinceEpoch;
-        final pastEndMs = pastEnd.millisecondsSinceEpoch;
+        // Regression for #94: a session registered days ago must remain
+        // appliable today, so only its time of day may survive loading.
+        final pastStart = DateTime(2020, 3, 4, 9, 30);
+        final pastEnd = DateTime(2020, 3, 4, 13);
         SharedPreferences.setMockInitialValues({
           sessionPlanJsonKey:
-              '[{"id":"past","startEpochMs":$pastStartMs,'
-              '"endEpochMs":$pastEndMs}]',
+              '[{"id":"past","startEpochMs":'
+              '${pastStart.millisecondsSinceEpoch},'
+              '"endEpochMs":${pastEnd.millisecondsSinceEpoch}}]',
         });
         final container = ProviderContainer();
         addTearDown(container.dispose);
@@ -156,6 +121,8 @@ void main() {
         );
 
         expect(sessions.single.id, 'past');
+        expect(sessions.single.startMinutes, 9 * 60 + 30);
+        expect(sessions.single.durationMinutes, 210);
       },
     );
 
@@ -163,14 +130,9 @@ void main() {
       'a mutation queued before the initial load resolves does not wipe '
       'already-persisted sessions',
       () async {
-        final existingStart = DateTime.now().add(const Duration(hours: 1));
-        final existingEnd = existingStart.add(const Duration(hours: 1));
-        final existingStartMs = existingStart.millisecondsSinceEpoch;
-        final existingEndMs = existingEnd.millisecondsSinceEpoch;
         SharedPreferences.setMockInitialValues({
           sessionPlanJsonKey:
-              '[{"id":"existing","startEpochMs":$existingStartMs,'
-              '"endEpochMs":$existingEndMs}]',
+              '[{"id":"existing","startMinutes":540,"durationMinutes":60}]',
         });
         final prefsCompleter = Completer<SharedPreferences>();
         final container = ProviderContainer(
@@ -184,10 +146,9 @@ void main() {
 
         // build() is now blocked awaiting sharedPreferencesProvider. Queue a
         // mutation before it resolves.
-        final newStart = DateTime.now().add(const Duration(hours: 3));
         final addFuture = container
             .read(sessionPlanControllerProvider.notifier)
-            .addSession(newStart, newStart.add(const Duration(hours: 1)));
+            .addSession(startMinutes: 13 * 60, durationMinutes: 60);
 
         prefsCompleter.complete(await SharedPreferences.getInstance());
         await addFuture;
