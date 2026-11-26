@@ -80,4 +80,39 @@ void main() {
     expect(find.widgetWithText(TextField, '2'), findsOneWidget);
     expect(find.widgetWithText(TextField, '30'), findsOneWidget);
   });
+
+  testWidgets('confirming without editing leaves a running stopwatch alone', (
+    tester,
+  ) async {
+    final container = await pump(tester);
+    final notifier = container.read(stopwatchControllerProvider.notifier);
+    await notifier.setElapsed(const Duration(minutes: 2));
+    await notifier.toggle(); // paused at 2:00 -> running
+    await notifier.toggle(); // running -> paused again keeps 2:00+
+    await notifier.toggle(); // running
+    final before = container.read(stopwatchControllerProvider).value!;
+    await tester.pump();
+    await openDialog(tester);
+
+    await tester.tap(find.byKey(const Key('adjustConfirm')));
+    await tester.pumpAndSettle();
+
+    final after = container.read(stopwatchControllerProvider).value!;
+    expect(after.runningSinceEpochMs, before.runningSinceEpochMs);
+    expect(after.accumulatedMs, before.accumulatedMs);
+    // Stop the ticker so the test can end cleanly.
+    await notifier.toggle();
+    await tester.pump();
+  });
+
+  testWidgets('non-digit characters are filtered out of the fields', (
+    tester,
+  ) async {
+    await pump(tester);
+    await openDialog(tester);
+
+    await tester.enterText(find.byKey(const Key('adjustMinutes')), '-2.5');
+
+    expect(find.widgetWithText(TextField, '25'), findsOneWidget);
+  });
 }
