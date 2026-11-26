@@ -21,11 +21,30 @@ class NotificationScheduler extends ConsumerStatefulWidget {
       _NotificationSchedulerState();
 }
 
-class _NotificationSchedulerState extends ConsumerState<NotificationScheduler> {
+class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_bootstrap());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// A flash's notification is cancelled when its flash starts on screen
+  /// (#95). If the app then leaves the foreground before the flash ends
+  /// (Home pressed, screen off), nobody sees the rest of it — schedule the
+  /// notifications back so the moment still notifies.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+    ref.read(notificationServiceProvider).clearSuppressed();
+    unawaited(_reschedule(ref.read(notificationCandidateEventsProvider)));
   }
 
   /// A device without notification support (or a test environment without

@@ -152,13 +152,17 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   /// advanced: it would start its full 3s only once frames resume, long
   /// after the moment it was for (the notification for it has already been
   /// delivered). Flashes whose moment is still ahead are left to play.
-  void dropElapsed() {
-    final now = DateTime.now().add(
+  ///
+  /// [now] is for tests; by default it is the device clock plus the NTP
+  /// offset, like the rest of the flash logic.
+  void dropElapsed({DateTime? now}) {
+    now ??= DateTime.now().add(
       Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
     );
-    _queue.removeWhere((event) => !event.instant.isAfter(now));
+    final cutoff = now;
+    _queue.removeWhere((event) => !event.instant.isAfter(cutoff));
     final active = _active;
-    if (active != null && !active.instant.isAfter(now)) {
+    if (active != null && !active.instant.isAfter(cutoff)) {
       _active = null;
       _promoteNextIfIdle();
     }

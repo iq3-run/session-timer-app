@@ -310,5 +310,30 @@ void main() {
         '別の指定時刻',
       );
     });
+
+    test('clearSuppressed lets the next reschedule bring it back', () async {
+      final service = buildService();
+      final event = futureEvent();
+      await service.cancelForEvent(event);
+      service.clearSuppressed();
+      calls.clear();
+
+      await service.rescheduleAll([event]);
+
+      expect(calls.where((c) => c.method == 'zonedSchedule'), hasLength(1));
+    });
+
+    test('forgets the suppression once the event is no longer a candidate, '
+        'so the same id notifies when it returns', () async {
+      final service = buildService();
+      final event = futureEvent();
+      await service.cancelForEvent(event);
+      await service.rescheduleAll(const []); // its source was cleared
+      calls.clear();
+
+      await service.rescheduleAll([event]); // ...and set again
+
+      expect(calls.where((c) => c.method == 'zonedSchedule'), hasLength(1));
+    });
   });
 }

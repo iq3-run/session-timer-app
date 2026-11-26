@@ -37,11 +37,18 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
 
   // Frames stop while backgrounded, so a flash that became active then has
   // not actually been animating. Once back, drop the ones whose moment has
-  // passed instead of playing them late (see `dropElapsed`).
+  // passed instead of playing them late (see `dropElapsed`), and restart a
+  // still-ahead one from where its window really is, so it ends at its
+  // instant rather than a few seconds after.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    final before = ref.read(flashQueueControllerProvider).active;
     ref.read(flashQueueControllerProvider.notifier).dropElapsed();
+    final after = ref.read(flashQueueControllerProvider).active;
+    // A different (or no) active event is already handled by
+    // `_onActiveEventChanged`; only the one that kept playing needs this.
+    if (after != null && after.id == before?.id) _play(after);
   }
 
   @override
@@ -68,6 +75,10 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
       return;
     }
     if (event.id == previous?.active?.id) return;
+    _play(event);
+  }
+
+  void _play(FlashEvent event) {
     _controller.stop();
     final progress = _elapsedProgress(event);
     if (progress >= 1.0) {

@@ -12,7 +12,7 @@ class _FakeFlashQueueController extends FlashQueueController {
   int dropElapsedCalls = 0;
 
   @override
-  void dropElapsed() => dropElapsedCalls++;
+  void dropElapsed({DateTime? now}) => dropElapsedCalls++;
 
   void setActive(FlashEvent? event) {
     state = FlashQueueState(firedIds: state.firedIds, active: event);

@@ -206,13 +206,12 @@ void main() {
   });
 
   group('FlashQueueController.dropElapsed', () {
-    test('drops the playing and queued flashes whose instant has passed, '
-        'keeping the ones still ahead', () async {
-      final clock = StreamController<DateTime>.broadcast();
-      addTearDown(clock.close);
-      final now = DateTime.now();
-      final soon = now.add(const Duration(milliseconds: 200));
-      final later = now.add(const Duration(milliseconds: 2900));
+    final soon = DateTime(2099, 1, 1, 12);
+    final later = soon.add(const Duration(milliseconds: 2700));
+
+    Future<ProviderContainer> setUpTwoFlashes(
+      StreamController<DateTime> clock,
+    ) async {
       final container = await _buildContainer(
         clock: clock,
         targets: [
@@ -221,45 +220,54 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
-      await _tick(clock, now);
+      // Both windows are open (the second is queued behind the first).
+      await _tick(clock, soon.subtract(const Duration(milliseconds: 100)));
       expect(
         container.read(flashQueueControllerProvider).active?.id,
         startsWith('target:soon'),
       );
+      return container;
+    }
 
-      // Real time passes the first flash's instant, as it would while the
-      // app sat in the background with the animation not advancing.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      container.read(flashQueueControllerProvider.notifier).dropElapsed();
+    test('drops the playing flash whose instant has passed and promotes '
+        'the queued one that is still ahead', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final container = await setUpTwoFlashes(clock);
 
-      // The elapsed one is gone and the still-future one took its place.
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: soon.add(const Duration(seconds: 1)));
+
       expect(
         container.read(flashQueueControllerProvider).active?.id,
         startsWith('target:later'),
       );
     });
 
-    test('clears everything when all flashes have elapsed', () async {
+    test('keeps everything while no instant has passed', () async {
       final clock = StreamController<DateTime>.broadcast();
       addTearDown(clock.close);
-      final now = DateTime.now();
-      final container = await _buildContainer(
-        clock: clock,
-        targets: [
-          TimeTarget(
-            id: 'soon',
-            epochMs: now
-                .add(const Duration(milliseconds: 200))
-                .millisecondsSinceEpoch,
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      await _tick(clock, now);
-      expect(container.read(flashQueueControllerProvider).active, isNotNull);
+      final container = await setUpTwoFlashes(clock);
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      container.read(flashQueueControllerProvider.notifier).dropElapsed();
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: soon.subtract(const Duration(milliseconds: 50)));
+
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:soon'),
+      );
+    });
+
+    test('clears everything once every instant has passed', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final container = await setUpTwoFlashes(clock);
+
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: later.add(const Duration(seconds: 1)));
 
       expect(container.read(flashQueueControllerProvider).active, isNull);
     });
