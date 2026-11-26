@@ -68,6 +68,22 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     return _mutate((s) => s.isRunning ? s : _startedFrom(s, nowEpochMs));
   }
 
+  /// Sets the elapsed time to [elapsed] (#80), e.g. correcting 2:30 to 3:00
+  /// after starting a little late or early. Keeps the running/paused status:
+  /// a running stopwatch carries on counting from the new value, a paused
+  /// one stays paused at it. Negative values are clamped to zero.
+  Future<void> setElapsed(Duration elapsed) {
+    // Captured before queuing, as in [toggle]: the new value applies from
+    // the moment the user confirmed, not from whenever the queue drains.
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final elapsedMs = clampToNonNegativeMs(elapsed.inMilliseconds);
+    return _mutate(
+      (s) => s.isRunning
+          ? StopwatchState(runningSinceEpochMs: nowEpochMs - elapsedMs)
+          : StopwatchState(accumulatedMs: elapsedMs),
+    );
+  }
+
   StopwatchState _startedFrom(StopwatchState s, int nowEpochMs) {
     return StopwatchState(
       accumulatedMs: s.accumulatedMs,

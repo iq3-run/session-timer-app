@@ -463,5 +463,77 @@ void main() {
         expect(state.isRunning, isTrue);
       },
     );
+
+    group('setElapsed (#80)', () {
+      Future<(ProviderContainer, StopwatchController)> setUpController() async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(stopwatchControllerProvider.future);
+        return (
+          container,
+          container.read(stopwatchControllerProvider.notifier),
+        );
+      }
+
+      test('on a paused stopwatch, replaces the elapsed time', () async {
+        final (container, notifier) = await setUpController();
+        await notifier.setElapsed(const Duration(minutes: 2, seconds: 30));
+
+        await notifier.setElapsed(const Duration(minutes: 3));
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.isRunning, isFalse);
+        expect(state.accumulatedMs, 180000);
+      });
+
+      test(
+        'on a running stopwatch, keeps running from the new value',
+        () async {
+          final (container, notifier) = await setUpController();
+          await notifier.toggle();
+
+          final before = DateTime.now();
+          await notifier.setElapsed(const Duration(minutes: 3));
+          final state = await container.read(
+            stopwatchControllerProvider.future,
+          );
+          final after = DateTime.now();
+
+          expect(state.isRunning, isTrue);
+          expect(state.accumulatedMs, 0);
+          // Elapsed read right after is the new value plus a few ms.
+          final elapsed = state.elapsedAt(after);
+          expect(elapsed, greaterThanOrEqualTo(const Duration(minutes: 3)));
+          expect(
+            elapsed,
+            lessThanOrEqualTo(
+              const Duration(minutes: 3) +
+                  after.difference(before) +
+                  const Duration(milliseconds: 5),
+            ),
+          );
+        },
+      );
+
+      test('clamps a negative value to zero', () async {
+        final (container, notifier) = await setUpController();
+
+        await notifier.setElapsed(const Duration(seconds: -5));
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.accumulatedMs, 0);
+      });
+
+      test('is persisted', () async {
+        final (container, notifier) = await setUpController();
+
+        await notifier.setElapsed(const Duration(seconds: 90));
+        await notifier.reloadFromDisk();
+        final state = await container.read(stopwatchControllerProvider.future);
+
+        expect(state.accumulatedMs, 90000);
+      });
+    });
   });
 }
