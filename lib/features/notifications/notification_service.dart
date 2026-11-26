@@ -108,11 +108,41 @@ class NotificationService {
     return result;
   }
 
+  /// Event ids whose notification was dropped because the flash for them
+  /// started on screen (see [cancelForEvent]), mapped to their instant. A
+  /// [rescheduleAll] landing inside the flash window would otherwise
+  /// schedule the same still-future notification again.
+  final Map<String, DateTime> _suppressed = {};
+
+  /// Drops the notification for [event]: its flash is playing on screen
+  /// right now, so the notification would only be a duplicate. Meant to be
+  /// called when the flash starts — the flash begins
+  /// [flashAnimationDuration] before [FlashEvent.instant], which is when the
+  /// notification is due, so there is time to cancel it before it appears.
+  /// A notification that has already been shown is removed too. Best effort:
+  /// if it still shows, that is harmless.
+  Future<void> cancelForEvent(FlashEvent event) {
+    _suppressed[event.id] = event.instant;
+    final previous = _rescheduleQueue;
+    final result = previous.then((_) async {
+      await init();
+      await _plugin.cancel(id: _notificationId(event.id));
+    });
+    _rescheduleQueue = result.catchError((_) {});
+    return result;
+  }
+
   Future<void> _rescheduleNow(List<FlashEvent> events) async {
     await init();
     await _plugin.cancelAll();
     final now = DateTime.now();
-    final upcoming = events.where((event) => event.instant.isAfter(now));
+    // Suppression only matters until the event's instant; forgetting it
+    // afterwards lets a later schedule that reuses the id notify normally.
+    _suppressed.removeWhere((_, instant) => !instant.isAfter(now));
+    final upcoming = events.where(
+      (event) =>
+          event.instant.isAfter(now) && !_suppressed.containsKey(event.id),
+    );
     final scheduleMode = await _scheduleMode();
     await Future.wait(
       upcoming.map(

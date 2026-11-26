@@ -264,4 +264,51 @@ void main() {
       },
     );
   });
+
+  group('NotificationService.cancelForEvent (#95)', () {
+    FlashEvent futureEvent() => FlashEvent(
+      id: 'target:t1:1',
+      instant: DateTime.now().add(const Duration(hours: 1)),
+      label: '指定時刻になりました',
+    );
+
+    test(
+      'cancels the notification under the id it was scheduled with',
+      () async {
+        final service = buildService();
+        final event = futureEvent();
+        await service.rescheduleAll([event]);
+        final scheduledId =
+            (calls.singleWhere((c) => c.method == 'zonedSchedule').arguments!
+                as Map<dynamic, dynamic>)['id'];
+        calls.clear();
+
+        await service.cancelForEvent(event);
+
+        final cancel = calls.singleWhere((c) => c.method == 'cancel');
+        expect((cancel.arguments! as Map<dynamic, dynamic>)['id'], scheduledId);
+      },
+    );
+
+    test('a later reschedule does not bring the notification back', () async {
+      final service = buildService();
+      final event = futureEvent();
+      final other = FlashEvent(
+        id: 'target:t2:1',
+        instant: DateTime.now().add(const Duration(hours: 2)),
+        label: '別の指定時刻',
+      );
+      await service.cancelForEvent(event);
+      calls.clear();
+
+      await service.rescheduleAll([event, other]);
+
+      final scheduled = calls.where((c) => c.method == 'zonedSchedule');
+      expect(scheduled, hasLength(1));
+      expect(
+        (scheduled.single.arguments! as Map<dynamic, dynamic>)['body'],
+        '別の指定時刻',
+      );
+    });
+  });
 }
