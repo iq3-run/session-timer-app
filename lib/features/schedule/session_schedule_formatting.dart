@@ -8,7 +8,7 @@ String formatScheduleDate(DateTime date) =>
     '${date.month}/${date.day}(${_weekdayLabels[date.weekday - 1]})';
 
 /// `Nd(MW)`, or `''` when [gap] is `null` (the read-only schedule table
-/// leaves 週末間/今日から blank for rows with no gap — see
-/// `_todayGapFor`/chain-row logic in `session_chain.dart`).
+/// leaves 週末間 blank for the first chain row, and 今日から blank for an
+/// ongoing event and the synthetic 今日 row — see `session_chain.dart`).
 String formatGap(GapResult? gap) =>
     gap == null ? '' : '${gap.days}日(${gap.weeks}W)';

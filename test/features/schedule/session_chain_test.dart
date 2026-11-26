@@ -58,23 +58,79 @@ void main() {
       expect(_rowFor(rows, 'cs').todayGap, isNotNull);
     });
 
-    test(
-      'only the nearest past and nearest future WE/WD/SS get a today-gap',
-      () {
-        final rows = buildScheduleRows(
-          _confirmedChain(),
-          DateTime(2026, 9, 14),
-        );
+    test('every chain row gets a today-gap, past and future alike', () {
+      // 2026-09-14 is a Monday, between wd1 (9/5) and we2 (9/26): every
+      // row — not just the nearest on each side — has a value.
+      final rows = buildScheduleRows(_confirmedChain(), DateTime(2026, 9, 14));
 
-        // 9/14 sits between wd1 (9/5, nearest past) and we2 (9/26, nearest
-        // future) — we1 (further past) and wd2 (further future) must stay
-        // blank.
-        expect(_rowFor(rows, 'wd1').todayGap, isNotNull);
-        expect(_rowFor(rows, 'we2').todayGap, isNotNull);
-        expect(_rowFor(rows, 'we1').todayGap, isNull);
-        expect(_rowFor(rows, 'wd2').todayGap, isNull);
-      },
-    );
+      // Past rows count from the event's last day to today.
+      expect(_rowFor(rows, 'or').todayGap?.days, 37); // 8/8..9/13
+      expect(_rowFor(rows, 'or').todayGap?.weeks, 5);
+      expect(_rowFor(rows, 'we1').todayGap?.days, 21); // ends 8/23
+      expect(_rowFor(rows, 'we1').todayGap?.weeks, 3);
+      expect(_rowFor(rows, 'wd1').todayGap?.days, 8);
+      expect(_rowFor(rows, 'wd1').todayGap?.weeks, 1);
+      // Future rows count from today to the event's first day.
+      expect(_rowFor(rows, 'we2').todayGap?.days, 11);
+      expect(_rowFor(rows, 'we2').todayGap?.weeks, 2);
+      expect(_rowFor(rows, 'wd2').todayGap?.days, 47);
+      expect(_rowFor(rows, 'wd2').todayGap?.weeks, 7);
+    });
+
+    test('a finished CS counts days since it, not a negative gap', () {
+      final events = [
+        ..._confirmedChain(),
+        _event('cs', SessionEventType.completion, DateTime(2026, 9)),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026, 9, 14));
+
+      expect(_rowFor(rows, 'cs').todayGap?.days, 12); // 9/2..9/13
+      expect(_rowFor(rows, 'cs').todayGap?.weeks, 2);
+    });
+
+    test('the synthetic 今日 row has no today-gap', () {
+      final rows = buildScheduleRows(_confirmedChain(), DateTime(2026, 9, 14));
+
+      expect(rows.singleWhere((r) => r.event == null).todayGap, isNull);
+    });
+
+    test('every row shown has a today-gap except the ongoing/今日 ones', () {
+      final events = [
+        ..._confirmedChain(),
+        _event('cr-next', SessionEventType.classroom, DateTime(2026, 9, 18)),
+        _event('cs', SessionEventType.completion, DateTime(2027)),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026, 9, 14));
+
+      expect(
+        rows.where((r) => r.todayGap == null).map((r) => r.label),
+        ['今日'],
+      );
+    });
+
+    test('hidden rows do not change the today-gap of the rows still shown', () {
+      final hidden = [
+        for (final e in _confirmedChain())
+          if (e.id == 'we2' || e.id == 'wd2')
+            _event(e.id, e.type, e.date, visible: false)
+          else
+            e,
+      ];
+
+      final rows = buildScheduleRows(hidden, DateTime(2026, 9, 14));
+      final baseline = buildScheduleRows(
+        _confirmedChain(),
+        DateTime(2026, 9, 14),
+      );
+
+      expect(rows.where((r) => r.event?.id == 'we2'), isEmpty);
+      expect(
+        _rowFor(rows, 'wd1').todayGap?.days,
+        _rowFor(baseline, 'wd1').todayGap?.days,
+      );
+    });
 
     test('today not matching any event inserts a synthetic row in date '
         'order', () {
