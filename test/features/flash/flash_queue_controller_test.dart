@@ -205,6 +205,66 @@ void main() {
     });
   });
 
+  group('FlashQueueController.dropElapsed', () {
+    test('drops the playing and queued flashes whose instant has passed, '
+        'keeping the ones still ahead', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final now = DateTime.now();
+      final soon = now.add(const Duration(milliseconds: 200));
+      final later = now.add(const Duration(milliseconds: 2900));
+      final container = await _buildContainer(
+        clock: clock,
+        targets: [
+          TimeTarget(id: 'soon', epochMs: soon.millisecondsSinceEpoch),
+          TimeTarget(id: 'later', epochMs: later.millisecondsSinceEpoch),
+        ],
+      );
+      addTearDown(container.dispose);
+      await _tick(clock, now);
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:soon'),
+      );
+
+      // Real time passes the first flash's instant, as it would while the
+      // app sat in the background with the animation not advancing.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      container.read(flashQueueControllerProvider.notifier).dropElapsed();
+
+      // The elapsed one is gone and the still-future one took its place.
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:later'),
+      );
+    });
+
+    test('clears everything when all flashes have elapsed', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final now = DateTime.now();
+      final container = await _buildContainer(
+        clock: clock,
+        targets: [
+          TimeTarget(
+            id: 'soon',
+            epochMs: now
+                .add(const Duration(milliseconds: 200))
+                .millisecondsSinceEpoch,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await _tick(clock, now);
+      expect(container.read(flashQueueControllerProvider).active, isNotNull);
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      container.read(flashQueueControllerProvider.notifier).dropElapsed();
+
+      expect(container.read(flashQueueControllerProvider).active, isNull);
+    });
+  });
+
   group('FlashQueueController', () {
     test('does not fire before the window opens', () async {
       final clock = StreamController<DateTime>.broadcast();

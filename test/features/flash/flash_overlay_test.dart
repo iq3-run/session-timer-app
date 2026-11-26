@@ -9,6 +9,11 @@ class _FakeFlashQueueController extends FlashQueueController {
   @override
   FlashQueueState build() => const FlashQueueState(firedIds: {});
 
+  int dropElapsedCalls = 0;
+
+  @override
+  void dropElapsed() => dropElapsedCalls++;
+
   void setActive(FlashEvent? event) {
     state = FlashQueueState(firedIds: state.firedIds, active: event);
   }
@@ -135,4 +140,22 @@ void main() {
       expect(_overlayOpacity(tester), 0);
     },
   );
+
+  testWidgets('drops elapsed flashes when the app returns to the foreground', (
+    tester,
+  ) async {
+    final fake = _FakeFlashQueueController();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [flashQueueControllerProvider.overrideWith(() => fake)],
+        child: const MaterialApp(home: FlashOverlay()),
+      ),
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    expect(fake.dropElapsedCalls, 0);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    expect(fake.dropElapsedCalls, 1);
+  });
 }

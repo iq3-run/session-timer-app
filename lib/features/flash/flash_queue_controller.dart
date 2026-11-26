@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/lifecycle/app_foreground.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
@@ -140,6 +141,27 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   void advance() {
     _active = null;
     _promoteNextIfIdle();
+    state = FlashQueueState(active: _active, firedIds: {..._firedIds});
+  }
+
+  /// Drops every flash — playing or queued — whose instant has already
+  /// passed. Called when the app returns to the foreground.
+  ///
+  /// While the app was in the background the clock kept admitting events,
+  /// but no frames were drawn, so the playing flash's animation had not
+  /// advanced: it would start its full 3s only once frames resume, long
+  /// after the moment it was for (the notification for it has already been
+  /// delivered). Flashes whose moment is still ahead are left to play.
+  void dropElapsed() {
+    final now = DateTime.now().add(
+      Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
+    );
+    _queue.removeWhere((event) => !event.instant.isAfter(now));
+    final active = _active;
+    if (active != null && !active.instant.isAfter(now)) {
+      _active = null;
+      _promoteNextIfIdle();
+    }
     state = FlashQueueState(active: _active, firedIds: {..._firedIds});
   }
 

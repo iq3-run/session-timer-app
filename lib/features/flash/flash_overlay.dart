@@ -17,7 +17,7 @@ class FlashOverlay extends ConsumerStatefulWidget {
 }
 
 class _FlashOverlayState extends ConsumerState<FlashOverlay>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final _controller = AnimationController(
     vsync: this,
     duration: flashAnimationDuration,
@@ -30,7 +30,23 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // Frames stop while backgrounded, so a flash that became active then has
+  // not actually been animating. Once back, drop the ones whose moment has
+  // passed instead of playing them late (see `dropElapsed`).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    ref.read(flashQueueControllerProvider.notifier).dropElapsed();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
@@ -45,7 +61,13 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   // the overlay stuck fully opaque. Advance directly instead.
   void _onActiveEventChanged(FlashQueueState? previous, FlashQueueState next) {
     final event = next.active;
-    if (event == null || event.id == previous?.active?.id) return;
+    if (event == null) {
+      // Cleared while still animating (dropElapsed): stop, so the stale
+      // animation can't finish later and advance() past a newer event.
+      _controller.stop();
+      return;
+    }
+    if (event.id == previous?.active?.id) return;
     _controller.stop();
     final progress = _elapsedProgress(event);
     if (progress >= 1.0) {
