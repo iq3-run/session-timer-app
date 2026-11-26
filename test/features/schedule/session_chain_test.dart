@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_numbering.dart';
+import 'package:session_timer/features/schedule/session_gap_calculation.dart';
 
 SessionEvent _event(
   String id,
@@ -26,6 +27,11 @@ List<SessionEvent> _confirmedChain() => [
   _event('wd2', SessionEventType.workday, DateTime(2026, 11)),
 ];
 
+typedef GapResultView = ({int days, int weeks});
+
+GapResultView? _gapView(GapResult? gap) =>
+    gap == null ? null : (days: gap.days, weeks: gap.weeks);
+
 ScheduleRow _rowFor(List<ScheduleRow> rows, String id) =>
     rows.firstWhere((r) => r.event?.id == id);
 
@@ -47,7 +53,7 @@ void main() {
       expect(_rowFor(rows, 'wd2').chainGap?.weeks, 5);
     });
 
-    test('CS always gets a today-gap even though it is not WE/WD/SS', () {
+    test('CS gets a today-gap like every other row', () {
       final events = [
         ..._confirmedChain(),
         _event('cs', SessionEventType.completion, DateTime(2027)),
@@ -58,23 +64,141 @@ void main() {
       expect(_rowFor(rows, 'cs').todayGap, isNotNull);
     });
 
-    test(
-      'only the nearest past and nearest future WE/WD/SS get a today-gap',
-      () {
-        final rows = buildScheduleRows(
-          _confirmedChain(),
-          DateTime(2026, 9, 14),
+    test('every chain row gets a today-gap, past and future alike', () {
+      // 2026-09-14 is a Monday, between wd1 (9/5) and we2 (9/26): every
+      // row — not just the nearest on each side — has a value.
+      final rows = buildScheduleRows(_confirmedChain(), DateTime(2026, 9, 14));
+
+      // Past rows count from the event's last day to today.
+      expect(_rowFor(rows, 'or').todayGap?.days, 37); // 8/8..9/13
+      expect(_rowFor(rows, 'or').todayGap?.weeks, 5);
+      expect(_rowFor(rows, 'we1').todayGap?.days, 21); // ends 8/23
+      expect(_rowFor(rows, 'we1').todayGap?.weeks, 3);
+      expect(_rowFor(rows, 'wd1').todayGap?.days, 8);
+      expect(_rowFor(rows, 'wd1').todayGap?.weeks, 1);
+      // Future rows count from today to the event's first day.
+      expect(_rowFor(rows, 'we2').todayGap?.days, 11);
+      expect(_rowFor(rows, 'we2').todayGap?.weeks, 2);
+      expect(_rowFor(rows, 'wd2').todayGap?.days, 47);
+      expect(_rowFor(rows, 'wd2').todayGap?.weeks, 7);
+    });
+
+    test('a finished CS counts days since it, not a negative gap', () {
+      final events = [
+        ..._confirmedChain(),
+        _event('cs', SessionEventType.completion, DateTime(2026, 9)),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026, 9, 14));
+
+      expect(_rowFor(rows, 'cs').todayGap?.days, 12); // 9/2..9/13
+      expect(_rowFor(rows, 'cs').todayGap?.weeks, 2);
+    });
+
+    test('the synthetic 今日 row has no today-gap', () {
+      final rows = buildScheduleRows(_confirmedChain(), DateTime(2026, 9, 14));
+
+      expect(rows.singleWhere((r) => r.event == null).todayGap, isNull);
+    });
+
+    group('today-gap at the day boundaries (today = Mon 2026-09-14)', () {
+      final today = DateTime(2026, 9, 14);
+
+      GapResultView? gapOf(SessionEvent event) => _gapView(
+        _rowFor(buildScheduleRows([event], today), event.id).todayGap,
+      );
+
+      test('an event that ended yesterday is 0 days away', () {
+        final event = _event(
+          'e',
+          SessionEventType.workday,
+          DateTime(2026, 9, 13),
         );
 
-        // 9/14 sits between wd1 (9/5, nearest past) and we2 (9/26, nearest
-        // future) — we1 (further past) and wd2 (further future) must stay
-        // blank.
-        expect(_rowFor(rows, 'wd1').todayGap, isNotNull);
-        expect(_rowFor(rows, 'we2').todayGap, isNotNull);
-        expect(_rowFor(rows, 'we1').todayGap, isNull);
-        expect(_rowFor(rows, 'wd2').todayGap, isNull);
-      },
-    );
+        expect(gapOf(event), (days: 0, weeks: 0));
+      });
+
+      test('an event starting tomorrow is 0 days away', () {
+        final event = _event(
+          'e',
+          SessionEventType.workday,
+          DateTime(2026, 9, 15),
+        );
+
+        expect(gapOf(event), (days: 0, weeks: 0));
+      });
+
+      test('a single-day event on today has no gap (it is today)', () {
+        final event = _event('e', SessionEventType.workday, today);
+
+        expect(gapOf(event), isNull);
+      });
+
+      test('a CS on today has no gap, rather than the old -1 days', () {
+        final event = _event('e', SessionEventType.completion, today);
+
+        expect(gapOf(event), isNull);
+      });
+
+      test('a multi-day event on its last day has no gap', () {
+        // 1WE runs 3 days: 9/12 (Sat) through 9/14.
+        final event = _event(
+          'e',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 12),
+        );
+
+        expect(gapOf(event), isNull);
+      });
+
+      test('a multi-day event that ended yesterday is 0 days away', () {
+        // 1WE runs 3 days: 9/11 (Fri) through 9/13.
+        final event = _event(
+          'e',
+          SessionEventType.weekend,
+          DateTime(2026, 9, 11),
+        );
+
+        expect(gapOf(event), (days: 0, weeks: 0));
+      });
+    });
+
+    test('every row shown has a today-gap except the ongoing/今日 ones', () {
+      final events = [
+        ..._confirmedChain(),
+        _event('cr-next', SessionEventType.classroom, DateTime(2026, 9, 18)),
+        _event('cs', SessionEventType.completion, DateTime(2027)),
+      ];
+
+      final rows = buildScheduleRows(events, DateTime(2026, 9, 14));
+
+      expect(
+        rows.where((r) => r.todayGap == null).map((r) => r.label),
+        ['今日'],
+      );
+    });
+
+    test('hidden rows do not change the today-gap of the rows still shown', () {
+      final hidden = [
+        for (final e in _confirmedChain())
+          if (e.id == 'we2' || e.id == 'wd2')
+            _event(e.id, e.type, e.date, visible: false)
+          else
+            e,
+      ];
+
+      final rows = buildScheduleRows(hidden, DateTime(2026, 9, 14));
+      final baseline = buildScheduleRows(
+        _confirmedChain(),
+        DateTime(2026, 9, 14),
+      );
+
+      expect(rows.where((r) => r.event?.id == 'we2'), isEmpty);
+      expect(
+        _rowFor(rows, 'wd1').todayGap?.days,
+        _rowFor(baseline, 'wd1').todayGap?.days,
+      );
+    });
 
     test('today not matching any event inserts a synthetic row in date '
         'order', () {
@@ -121,8 +245,8 @@ void main() {
 
     test(
       "today falling on a WE's 2nd/3rd day still highlights that row, "
-      "and doesn't count it as \"nearest past\" (which would produce a "
-      'negative gap against its not-yet-reached end date)',
+      'and leaves its today-gap blank (measuring against its '
+      'not-yet-reached end date would produce a negative gap)',
       () {
         // we1 spans 8/21 (Fri) through 8/23 (Sun); 8/22 is its middle day.
         final rows = buildScheduleRows(
@@ -133,9 +257,9 @@ void main() {
         expect(_rowFor(rows, 'we1').isToday, isTrue);
         expect(_rowFor(rows, 'we1').todayGap, isNull);
         expect(rows.where((r) => r.event == null), isEmpty);
-        // we1 being "ongoing" (not fully finished) must not block wd1
-        // (9/5) from being picked up as the nearest *future* WE/WD/SS —
-        // that pool is unaffected by this fix.
+        // we1 being "ongoing" only blanks its own cell: the rows before and
+        // after it still get theirs.
+        expect(_rowFor(rows, 'or').todayGap, isNotNull);
         expect(_rowFor(rows, 'wd1').todayGap, isNotNull);
       },
     );

@@ -12,15 +12,6 @@ const Set<SessionEventType> _chainTypes = {
   SessionEventType.completion,
 };
 
-/// The pool eligible for the single nearest-past/nearest-future "今日から"
-/// gap — only WE/WD/SS, not OR (always in the past) or CS (handled
-/// unconditionally, see [_todayGapFor]).
-const Set<SessionEventType> _nearestTypes = {
-  SessionEventType.weekend,
-  SessionEventType.workday,
-  SessionEventType.specialSession,
-};
-
 /// One row of the schedule table. [event] is null only for the synthetic
 /// "今日" row inserted when today doesn't land on any event's date.
 class ScheduleRow {
@@ -82,8 +73,6 @@ List<ScheduleRow> _buildChainRows(
   DateTime endOf(SessionEvent e) => e.endDate(
     isFirstWeekend: e.type == SessionEventType.weekend && numbers[e.id] == 1,
   );
-  final nearestPast = _nearestPast(chainEvents, today, endOf);
-  final nearestFuture = _nearestFuture(chainEvents, today);
   return [
     for (var i = 0; i < chainEvents.length; i++)
       _chainRow(
@@ -92,8 +81,6 @@ List<ScheduleRow> _buildChainRows(
         numbers: numbers,
         endOf: endOf,
         today: today,
-        nearestPast: nearestPast,
-        nearestFuture: nearestFuture,
       ),
   ];
 }
@@ -104,8 +91,6 @@ ScheduleRow _chainRow(
   required Map<String, int> numbers,
   required DateTime Function(SessionEvent) endOf,
   required DateTime today,
-  required SessionEvent? nearestPast,
-  required SessionEvent? nearestFuture,
 }) {
   final chainGap = previous == null
       ? null
@@ -116,7 +101,7 @@ ScheduleRow _chainRow(
     date: event.date,
     isToday: _isOngoing(event, endOf, today),
     chainGap: chainGap,
-    todayGap: _todayGapFor(event, today, endOf, nearestPast, nearestFuture),
+    todayGap: _todayGapFor(event, today, endOf),
   );
 }
 
@@ -131,51 +116,23 @@ bool _isOngoing(
   return !today.isBefore(event.date) && !today.isAfter(endOf(event));
 }
 
-/// 今日から column: only the single nearest-past WE/WD/SS, the single
-/// nearest-future WE/WD/SS, and CS (always) get a value — every other chain
-/// row leaves this blank.
+/// 今日から column: how far [event] is from [today], for every row shown.
+/// A finished event counts days since its last day; an upcoming one counts
+/// days until its first day. An ongoing multi-day event (today falls within
+/// its span) has no gap — today isn't before or after it, and measuring
+/// against its not-yet-reached end date would give a nonsensical negative
+/// result — so that row stays blank, as does the synthetic "今日" row.
 GapResult? _todayGapFor(
   SessionEvent event,
   DateTime today,
   DateTime Function(SessionEvent) endOf,
-  SessionEvent? nearestPast,
-  SessionEvent? nearestFuture,
 ) {
-  if (identical(event, nearestPast)) {
-    return calculateGap(fromEnd: endOf(event), toStart: today);
+  final end = endOf(event);
+  if (end.isBefore(today)) return calculateGap(fromEnd: end, toStart: today);
+  if (event.date.isAfter(today)) {
+    return calculateGap(fromEnd: today, toStart: event.date);
   }
-  final isNextOrCompletion =
-      identical(event, nearestFuture) ||
-      event.type == SessionEventType.completion;
-  return isNextOrCompletion
-      ? calculateGap(fromEnd: today, toStart: event.date)
-      : null;
-}
-
-/// "Nearest past" means fully finished — an ongoing multi-day WE (today
-/// falls within its span but hasn't reached its end date yet) doesn't
-/// count, or [_todayGapFor] would compute a gap against a not-yet-reached
-/// end date and produce a nonsensical negative result.
-SessionEvent? _nearestPast(
-  List<SessionEvent> chainEvents,
-  DateTime today,
-  DateTime Function(SessionEvent) endOf,
-) {
-  final past = chainEvents.where(
-    (e) => _nearestTypes.contains(e.type) && endOf(e).isBefore(today),
-  );
-  return past.isEmpty
-      ? null
-      : past.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
-}
-
-SessionEvent? _nearestFuture(List<SessionEvent> chainEvents, DateTime today) {
-  final future = chainEvents.where(
-    (e) => _nearestTypes.contains(e.type) && e.date.isAfter(today),
-  );
-  return future.isEmpty
-      ? null
-      : future.reduce((a, b) => a.date.isBefore(b.date) ? a : b);
+  return null;
 }
 
 /// At most two rows: today's CR (if one lands exactly on today) and the
