@@ -91,20 +91,26 @@ class _PersistenceErrorToastState extends ConsumerState<PersistenceErrorToast> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: 16,
+            // Above the on-screen keyboard too: it is often up while a value
+            // is being edited in a sheet or dialog.
+            bottom: 16 + MediaQuery.viewInsetsOf(context).bottom,
             child: SafeArea(
-              child: Material(
-                key: const Key('persistenceErrorToast'),
-                color: Theme.of(context).colorScheme.inverseSurface,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  onTap: _hide,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      message,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onInverseSurface,
+              child: Semantics(
+                liveRegion: true,
+                container: true,
+                child: Material(
+                  key: const Key('persistenceErrorToast'),
+                  color: Theme.of(context).colorScheme.inverseSurface,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: _hide,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onInverseSurface,
+                        ),
                       ),
                     ),
                   ),

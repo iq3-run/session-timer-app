@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/persistence/persistence_error_toast.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
+import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/session_plan/session_plan_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
@@ -149,6 +150,20 @@ void main() {
     expect(store.failWrites, isTrue);
     await tester.pump(const Duration(seconds: 2));
     expect(_toast, findsNothing);
+  });
+
+  testWidgets('also covers the flash points edited in the settings sheet', (
+    tester,
+  ) async {
+    final store = _installFlakyStore();
+    final container = await _pump(tester);
+    await container.read(flashPointsControllerProvider.future);
+    store.failWrites = true;
+
+    await container.read(flashPointsControllerProvider.notifier).addPoint(99);
+    await tester.pump();
+
+    expect(find.text(saveFailedMessage), findsOneWidget);
   });
 
   testWidgets('also covers the completion time', (tester) async {
