@@ -15,8 +15,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// `state.value`: a failed persist sets `state` to `AsyncError` (which does
 /// not retain the previous value), and reading `state` directly would strand
 /// every later mutation with nothing to build on. A mutation queued while
-/// [build] is still loading waits for it, even if the load failed — so a
-/// single failure can't wedge the queue.
+/// [build] is still loading waits for it. If that load failed, the mutation
+/// retries the load first and reports an error without writing anything when
+/// it fails again: persisting an update on top of [initialValue] would
+/// overwrite whatever is actually stored.
 ///
 /// Subclasses provide the persistence details ([initialValue],
 /// [loadInitial], [persist], [persistenceFailureMessage]) and expose their
@@ -27,6 +29,10 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
 
   // Lazy so it is only read after the subclass is constructed.
   late T _lastGood = initialValue;
+
+  // Whether [_lastGood] came from a successful load or persist, rather than
+  // being the placeholder [initialValue].
+  bool _loaded = false;
 
   /// The value used until something has been loaded or persisted.
   @protected
@@ -58,13 +64,17 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
     // fast.
     try {
       final prefs = await ref.watch(sharedPreferencesProvider.future);
-      // A mutation may have already landed on `state` while this build()
-      // was awaiting the prefs future above — don't clobber it with a stale
-      // read.
-      if (state.hasValue) return state.value as T;
+      // A rebuild (e.g. `sharedPreferencesProvider` was invalidated) keeps the
+      // value already in `state`: it is at least as new as what is on disk.
+      if (state.hasValue) {
+        _lastGood = state.value as T;
+        _loaded = true;
+        return _lastGood;
+      }
 
       final loaded = await loadInitial(prefs);
       _lastGood = loaded;
+      _loaded = true;
       return loaded;
     } finally {
       if (!_initialLoad.isCompleted) _initialLoad.complete();
@@ -80,9 +90,16 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
 
   Future<void> _mutateNow(T Function(T) update) async {
     if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = normalize(update(_lastGood));
     try {
       final prefs = await ref.read(sharedPreferencesProvider.future);
+      // The initial load failed earlier: try again rather than building on
+      // the placeholder (and overwriting what is stored). If it fails again
+      // the error is reported below and nothing is written.
+      if (!_loaded) {
+        _lastGood = await loadInitial(prefs);
+        _loaded = true;
+      }
+      final updated = normalize(update(_lastGood));
       final persisted = await persist(prefs, updated);
       if (persisted) {
         _lastGood = updated;
@@ -93,7 +110,7 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
           StackTrace.current,
         );
       }
-    } on Exception catch (e, st) {
+    } on Object catch (e, st) {
       state = AsyncError(e, st);
     }
   }

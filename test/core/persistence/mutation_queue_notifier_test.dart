@@ -37,7 +37,7 @@ class _Counter extends MutationQueueNotifier<int> {
       case _Write.reportsFailure:
         return false;
       case _Write.throws:
-        throw Exception('write failed');
+        throw StateError('write failed');
     }
   }
 
@@ -47,15 +47,25 @@ class _Counter extends MutationQueueNotifier<int> {
   Future<void> add(int n) => mutate((v) => v + n);
 }
 
-final _counterProvider = AsyncNotifierProvider<_Counter, int>(_Counter.new);
+// No automatic retry: the failed-load tests count `loadInitial` calls and
+// must not depend on Riverpod's retry timing.
+final _counterProvider = AsyncNotifierProvider<_Counter, int>(
+  _Counter.new,
+  retry: (_, _) => null,
+);
 
 void main() {
-  setUp(() {
+  void resetKnobs() {
     _nextWrite = _Write.ok;
     _loadCalls = 0;
     _loadThrows = false;
+  }
+
+  setUp(() {
+    resetKnobs();
     SharedPreferences.setMockInitialValues({});
   });
+  tearDown(resetKnobs);
 
   ProviderContainer makeContainer() {
     final container = ProviderContainer();
@@ -154,7 +164,8 @@ void main() {
     expect(container.read(_counterProvider).value, 3);
   });
 
-  test('a failed initial load does not wedge later mutations', () async {
+  test('a failed initial load does not overwrite what is stored', () async {
+    SharedPreferences.setMockInitialValues({_key: 10});
     _loadThrows = true;
     final container = makeContainer();
     final notifier = container.read(_counterProvider.notifier);
@@ -165,6 +176,56 @@ void main() {
 
     await notifier.add(4);
 
-    expect(container.read(_counterProvider).value, 4);
+    expect(container.read(_counterProvider).hasError, isTrue);
+    expect((await SharedPreferences.getInstance()).getInt(_key), 10);
   });
+
+  test('a mutation after a failed initial load retries the load', () async {
+    SharedPreferences.setMockInitialValues({_key: 10});
+    _loadThrows = true;
+    final container = makeContainer();
+    final notifier = container.read(_counterProvider.notifier);
+    await expectLater(
+      container.read(_counterProvider.future),
+      throwsStateError,
+    );
+
+    _loadThrows = false;
+    await notifier.add(4);
+
+    expect(container.read(_counterProvider).value, 14);
+    expect((await SharedPreferences.getInstance()).getInt(_key), 14);
+  });
+
+  test('a mutation queued behind a failed one still runs', () async {
+    final container = makeContainer();
+    final notifier = container.read(_counterProvider.notifier);
+    await notifier.add(1);
+
+    _nextWrite = _Write.reportsFailure;
+    final failing = notifier.add(100);
+    final after = notifier.add(2);
+    // The write outcome is read when each mutation persists, so flip it once
+    // the first has run.
+    await failing;
+    _nextWrite = _Write.ok;
+    await after;
+
+    expect(container.read(_counterProvider).value, 3);
+  });
+
+  test(
+    'a rebuild keeps the current value and mutations continue from it',
+    () async {
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await notifier.add(2);
+
+      container.invalidate(sharedPreferencesProvider);
+      expect(await container.read(_counterProvider.future), 2);
+
+      await notifier.add(1);
+      expect(container.read(_counterProvider).value, 3);
+    },
+  );
 }

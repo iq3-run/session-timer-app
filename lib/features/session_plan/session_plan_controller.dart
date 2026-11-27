@@ -28,17 +28,21 @@ final sessionPlanControllerProvider =
 class SessionPlanController
     extends MutationQueueNotifier<List<SessionPlanEntry>> {
   @override
+  @protected
   List<SessionPlanEntry> get initialValue => const [];
 
   @override
+  @protected
   String get persistenceFailureMessage =>
       'SharedPreferences reported failure to persist $sessionPlanJsonKey';
 
   @override
+  @protected
   Future<List<SessionPlanEntry>> loadInitial(SharedPreferences prefs) async =>
       _sorted(_readPersisted(prefs));
 
   @override
+  @protected
   List<SessionPlanEntry> normalize(List<SessionPlanEntry> value) =>
       _sorted(value);
 
@@ -96,6 +100,7 @@ class SessionPlanController
   }
 
   @override
+  @protected
   Future<bool> persist(
     SharedPreferences prefs,
     List<SessionPlanEntry> value,
