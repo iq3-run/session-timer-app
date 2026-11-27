@@ -20,9 +20,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// it fails again: persisting an update on top of [initialValue] would
 /// overwrite whatever is actually stored.
 ///
-/// The notifier assumes it is the only writer of its key. A rebuild keeps the
-/// value in memory instead of re-reading storage, so anything that changes
-/// the stored value from elsewhere must reload it explicitly.
+/// The notifier assumes it is the only writer of its key within this
+/// isolate. A rebuild keeps the value in memory instead of re-reading
+/// storage, so a change made from elsewhere (another isolate) is only seen
+/// after [reloadFromStorage]; a mutation that runs before that builds on the
+/// stale value and overwrites the external write.
 ///
 /// Subclasses provide the persistence details ([initialValue],
 /// [loadInitial], [persist], [persistenceFailureMessage]) and expose their
@@ -38,8 +40,8 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
   // being the placeholder [initialValue].
   bool _loaded = false;
 
-  // Counts successful persists, so [build] can tell that a mutation landed
-  // while it was reading (see there).
+  // Counts the times [_lastGood] was replaced by a persist or a reload, so
+  // [build] can tell that newer data landed while it was reading (see there).
   int _persistedCount = 0;
 
   /// The value used until something has been loaded or persisted.
@@ -107,6 +109,34 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
   @protected
   Future<void> mutate(T Function(T) update) =>
       _queue.run(() => _mutateNow(update));
+
+  /// Re-reads the stored value and publishes it, for when something outside
+  /// this notifier (e.g. a home-widget button handled in another isolate with
+  /// its own `SharedPreferences` cache) changed it. Queued behind running
+  /// mutations so it can't race one. It reads through [loadInitial], so only
+  /// use it where that is a plain read. Failures are logged, not published:
+  /// callers fire this without awaiting it, and the value they already show
+  /// is still valid.
+  @protected
+  Future<void> reloadFromStorage() => _queue.run(_reloadNow);
+
+  Future<void> _reloadNow() async {
+    if (!_initialLoad.isCompleted) await _initialLoad.future;
+    try {
+      if (!ref.mounted) return;
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      await prefs.reload();
+      final onDisk = await loadInitial(prefs);
+      _lastGood = onDisk;
+      _loaded = true;
+      // Counted like a persist: a build() still reading must not overwrite
+      // what was just reloaded with its older read.
+      _persistedCount++;
+      _publish(AsyncData(onDisk));
+    } on Object catch (e) {
+      debugPrint('$runtimeType: reload failed: $e');
+    }
+  }
 
   Future<void> _mutateNow(T Function(T) update) async {
     if (!_initialLoad.isCompleted) await _initialLoad.future;
