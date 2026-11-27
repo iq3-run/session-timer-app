@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
+import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_point_config.dart';
@@ -19,7 +19,8 @@ final flashPointsControllerProvider =
 /// its own flash/notify toggle (see `FlashPointConfig`).
 ///
 /// The 12 defaults ([defaultCompletionFlashPointsMinutes]) are a baseline
-/// applied at every `build()` (app startup only — mirrors
+/// applied once per load (`loadInitial`, i.e. app startup, or the retry of
+/// a failed load — not on a rebuild that keeps the in-memory value; mirrors
 /// `CompletionTimeController`'s own "clear an overdue target at startup"
 /// rule, not a continuous check): a default already present always stays.
 /// A default missing from the persisted list (the user removed it) is
@@ -32,41 +33,37 @@ final flashPointsControllerProvider =
 /// their own moment has passed — see [_applyStartupRules]. A revived
 /// default always comes back with both toggles ON — its prior toggle state
 /// isn't remembered while it was absent.
-class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
-  // Mirrors TimeTargetsController's mutation-queue pattern: see that file
-  // for why _lastGood/_initialLoad exist instead of reading state directly.
-  Future<void> _mutationQueue = Future.value();
-  final Completer<void> _initialLoad = Completer<void>();
-  List<FlashPointConfig> _lastGood = const [];
+class FlashPointsController
+    extends MutationQueueNotifier<List<FlashPointConfig>> {
+  @override
+  @protected
+  List<FlashPointConfig> get initialValue => const [];
 
   @override
-  Future<List<FlashPointConfig>> build() async {
-    try {
-      final prefs = await ref.watch(sharedPreferencesProvider.future);
-      if (state.hasValue) return state.value!;
+  @protected
+  String get persistenceFailureMessage =>
+      'SharedPreferences reported failure to persist '
+      '$flashPointsMinutesJsonKey';
 
-      final raw = prefs.getString(flashPointsMinutesJsonKey);
-      final loaded = raw == null
-          ? const <FlashPointConfig>[]
-          : _readPersisted(raw);
+  @override
+  @protected
+  Future<List<FlashPointConfig>> loadInitial(SharedPreferences prefs) async {
+    final raw = prefs.getString(flashPointsMinutesJsonKey);
+    final loaded = raw == null
+        ? const <FlashPointConfig>[]
+        : _readPersisted(raw);
 
-      // A one-time read (not ref.watch) — this rule only ever applies at
-      // startup, so a later completion-time change must not re-trigger it.
-      final completion = await ref.read(
-        completionTimeControllerProvider.future,
-      );
-      final points = _applyStartupRules(
-        loaded,
-        completion.targetTime,
-        DateTime.now(),
-      );
+    // A one-time read (not ref.watch) — this rule only ever applies at
+    // startup, so a later completion-time change must not re-trigger it.
+    final completion = await ref.read(completionTimeControllerProvider.future);
+    final points = _applyStartupRules(
+      loaded,
+      completion.targetTime,
+      DateTime.now(),
+    );
 
-      await _persist(prefs, points);
-      _lastGood = points;
-      return points;
-    } finally {
-      if (!_initialLoad.isCompleted) _initialLoad.complete();
-    }
+    await persist(prefs, points);
+    return points;
   }
 
   /// See the class doc for the rule. Note: `completionTarget` is never
@@ -131,7 +128,7 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
 
   Future<void> addPoint(int minutes) {
     if (minutes <= 0) return Future.value();
-    return _mutate(
+    return mutate(
       (points) => points.any((p) => p.minutes == minutes)
           ? points
           : [...points, FlashPointConfig(minutes: minutes)],
@@ -139,9 +136,9 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
   }
 
   Future<void> removePoint(int minutes) =>
-      _mutate((points) => points.where((p) => p.minutes != minutes).toList());
+      mutate((points) => points.where((p) => p.minutes != minutes).toList());
 
-  Future<void> setFlashEnabled(int minutes, {required bool enabled}) => _mutate(
+  Future<void> setFlashEnabled(int minutes, {required bool enabled}) => mutate(
     (points) => _updatePoint(points, minutes, (p) {
       return p.copyWith(flashEnabled: enabled);
     }),
@@ -151,13 +148,12 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
   /// disables the control in that state, and this is the defensive second
   /// layer (see `FlashPointConfig.copyWith`, which already forces
   /// `notifyEnabled` false whenever `flashEnabled` is false).
-  Future<void> setNotifyEnabled(int minutes, {required bool enabled}) =>
-      _mutate(
-        (points) => _updatePoint(points, minutes, (p) {
-          if (!p.flashEnabled) return p;
-          return p.copyWith(notifyEnabled: enabled);
-        }),
-      );
+  Future<void> setNotifyEnabled(int minutes, {required bool enabled}) => mutate(
+    (points) => _updatePoint(points, minutes, (p) {
+      if (!p.flashEnabled) return p;
+      return p.copyWith(notifyEnabled: enabled);
+    }),
+  );
 
   List<FlashPointConfig> _updatePoint(
     List<FlashPointConfig> points,
@@ -168,44 +164,6 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
       for (final p in points)
         if (p.minutes == minutes) update(p) else p,
     ];
-  }
-
-  Future<void> _mutate(
-    List<FlashPointConfig> Function(List<FlashPointConfig>) update,
-  ) {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _mutateNow(update));
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  Future<void> _mutateNow(
-    List<FlashPointConfig> Function(List<FlashPointConfig>) update,
-  ) async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = update(_lastGood);
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final persisted = await _persist(prefs, updated);
-      if (persisted) {
-        _lastGood = updated;
-        state = AsyncData(updated);
-      } else {
-        state = _persistenceFailure();
-      }
-    } on Exception catch (e, st) {
-      state = AsyncError(e, st);
-    }
-  }
-
-  AsyncValue<List<FlashPointConfig>> _persistenceFailure() {
-    return AsyncError(
-      Exception(
-        'SharedPreferences reported failure to persist '
-        '$flashPointsMinutesJsonKey',
-      ),
-      StackTrace.current,
-    );
   }
 
   /// Corrupt or unparseable data degrades to "no custom points" rather than
@@ -228,13 +186,15 @@ class FlashPointsController extends AsyncNotifier<List<FlashPointConfig>> {
         .toList();
   }
 
-  Future<bool> _persist(
+  @override
+  @protected
+  Future<bool> persist(
     SharedPreferences prefs,
-    List<FlashPointConfig> points,
+    List<FlashPointConfig> value,
   ) {
     return prefs.setString(
       flashPointsMinutesJsonKey,
-      jsonEncode(points.map((p) => p.toJson()).toList()),
+      jsonEncode(value.map((p) => p.toJson()).toList()),
     );
   }
 }

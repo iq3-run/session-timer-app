@@ -35,6 +35,12 @@ class _FixedCompletionController extends CompletionTimeController {
   Future<CompletionTimeState> build() async => _value;
 }
 
+class _FailingCompletionController extends CompletionTimeController {
+  @override
+  Future<CompletionTimeState> build() async =>
+      throw StateError('completion time unavailable');
+}
+
 /// Encodes a plain list of minute values as the persisted JSON shape
 /// (each entry both toggles ON), matching what a real `_persist` call
 /// would have written for an all-enabled list.
@@ -513,6 +519,30 @@ void main() {
       );
       expect(_minutes(points), containsAll([11, 13, 19]));
       expect(_minutes(points), isNot(contains(7)));
+    });
+
+    test('a failing completion-time load blocks edits without touching what '
+        'is stored', () async {
+      SharedPreferences.setMockInitialValues({
+        flashPointsMinutesJsonKey: _persistedJson([5, 10]),
+      });
+      final container = ProviderContainer(
+        overrides: [
+          completionTimeControllerProvider.overrideWith(
+            _FailingCompletionController.new,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(flashPointsControllerProvider.notifier).addPoint(99);
+
+      expect(container.read(flashPointsControllerProvider).hasError, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString(flashPointsMinutesJsonKey),
+        _persistedJson([5, 10]),
+      );
     });
   });
 }

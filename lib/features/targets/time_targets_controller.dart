@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
+import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,52 +13,30 @@ final timeTargetsControllerProvider =
       TimeTargetsController.new,
     );
 
-class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
-  // Serializes _mutate calls: each waits for the previous one's read of
-  // `_lastGood` -> persist -> state-update cycle to finish before starting
-  // its own, so concurrent add/update/remove calls can't read the same
-  // stale list and have one silently overwrite the other's persisted
-  // result.
-  Future<void> _mutationQueue = Future.value();
-
-  // Completes once build() has loaded the initial list. Mutations queued
-  // before that gate on this instead of AsyncNotifier's own `future`,
-  // because `future` rethrows whenever `state` is currently AsyncError —
-  // which would otherwise permanently wedge every later mutation after a
-  // single persistence failure (AsyncError() does not retain the prior
-  // value; see _mutateNow's fallback field below).
-  final Completer<void> _initialLoad = Completer<void>();
-
-  // The last list that was either loaded from disk or successfully
-  // persisted. Read by _mutateNow instead of `state.value`/`future` so a
-  // failed persist (which sets `state` to AsyncError, discarding its value)
-  // doesn't strand every subsequent mutation with nothing to build on.
-  List<TimeTarget> _lastGood = const [];
+class TimeTargetsController extends MutationQueueNotifier<List<TimeTarget>> {
+  @override
+  @protected
+  List<TimeTarget> get initialValue => const [];
 
   @override
-  Future<List<TimeTarget>> build() async {
-    // If anything below throws, _initialLoad must still complete — otherwise
-    // every mutation queued behind it (see _mutateNow) would await it
-    // forever instead of failing fast.
-    try {
-      final prefs = await ref.watch(sharedPreferencesProvider.future);
-      // A mutate() call may have already landed on `state` while this
-      // build() was awaiting the prefs future above — don't clobber it with
-      // a stale read.
-      if (state.hasValue) return state.value!;
+  @protected
+  String get persistenceFailureMessage =>
+      'SharedPreferences reported failure to persist $timeTargetsJsonKey';
 
-      final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-      final unexpired = _readPersisted(
-        prefs,
-      ).where((t) => t.epochMs > nowEpochMs).toList();
-      await _persist(prefs, unexpired);
-      final sorted = _sorted(unexpired);
-      _lastGood = sorted;
-      return sorted;
-    } finally {
-      if (!_initialLoad.isCompleted) _initialLoad.complete();
-    }
+  @override
+  @protected
+  Future<List<TimeTarget>> loadInitial(SharedPreferences prefs) async {
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final unexpired = _readPersisted(
+      prefs,
+    ).where((t) => t.epochMs > nowEpochMs).toList();
+    await persist(prefs, unexpired);
+    return _sorted(unexpired);
   }
+
+  @override
+  @protected
+  List<TimeTarget> normalize(List<TimeTarget> value) => _sorted(value);
 
   Future<void> addTarget(DateTime time, {String? title}) async {
     final target = TimeTarget(
@@ -67,7 +44,7 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
       epochMs: time.millisecondsSinceEpoch,
       title: title,
     );
-    await _mutate((targets) => [...targets, target]);
+    await mutate((targets) => [...targets, target]);
   }
 
   Future<void> updateTarget(
@@ -76,7 +53,7 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
     String? title,
     bool clearTitle = false,
   }) async {
-    await _mutate(
+    await mutate(
       (targets) => [
         for (final t in targets)
           if (t.id == id)
@@ -92,7 +69,7 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   }
 
   Future<void> removeTarget(String id) async {
-    await _mutate((targets) => targets.where((t) => t.id != id).toList());
+    await mutate((targets) => targets.where((t) => t.id != id).toList());
   }
 
   /// Creates or replaces the target at the caller-chosen [id], unlike
@@ -100,51 +77,11 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
   /// that need to keep exactly one auto-managed target up to date across
   /// repeated calls, rather than accumulating a new entry every time.
   Future<void> upsertTarget(String id, DateTime time, {String? title}) async {
-    await _mutate(
+    await mutate(
       (targets) => [
         ...targets.where((t) => t.id != id),
         TimeTarget(id: id, epochMs: time.millisecondsSinceEpoch, title: title),
       ],
-    );
-  }
-
-  Future<void> _mutate(
-    List<TimeTarget> Function(List<TimeTarget>) update,
-  ) {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _mutateNow(update));
-    // Swallow the error here so it doesn't become an unhandled rejection on
-    // the queue chain itself — _mutateNow already reports failures via
-    // `state`, and each caller's own awaited `result` still sees it.
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  Future<void> _mutateNow(
-    List<TimeTarget> Function(List<TimeTarget>) update,
-  ) async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = _sorted(update(_lastGood));
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final persisted = await _persist(prefs, updated);
-      if (persisted) {
-        _lastGood = updated;
-        state = AsyncData(updated);
-      } else {
-        state = _persistenceFailure();
-      }
-    } on Exception catch (e, st) {
-      state = AsyncError(e, st);
-    }
-  }
-
-  AsyncValue<List<TimeTarget>> _persistenceFailure() {
-    return AsyncError(
-      Exception(
-        'SharedPreferences reported failure to persist $timeTargetsJsonKey',
-      ),
-      StackTrace.current,
     );
   }
 
@@ -165,8 +102,10 @@ class TimeTargetsController extends AsyncNotifier<List<TimeTarget>> {
         .toList();
   }
 
-  Future<bool> _persist(SharedPreferences prefs, List<TimeTarget> targets) {
-    final json = jsonEncode(targets.map((t) => t.toJson()).toList());
+  @override
+  @protected
+  Future<bool> persist(SharedPreferences prefs, List<TimeTarget> value) {
+    final json = jsonEncode(value.map((t) => t.toJson()).toList());
     return prefs.setString(timeTargetsJsonKey, json);
   }
 
