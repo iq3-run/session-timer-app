@@ -119,6 +119,63 @@ void main() {
       expect(arguments['body'], '指定時刻になりました');
     });
 
+    group('with an NTP offset', () {
+      DateTime scheduledAt(_RecordedCall call) => DateTime.parse(
+        (call.arguments! as Map<dynamic, dynamic>)['scheduledDateTimeISO8601']!
+            as String,
+      );
+
+      test('registers each alarm earlier by the offset, so it rings when '
+          'the corrected clock reaches the instant', () async {
+        final service = buildService();
+        final instant = DateTime.now().add(const Duration(hours: 1));
+        final event = FlashEvent(id: 'a', instant: instant, label: 'x');
+
+        await service.rescheduleAll([event], ntpOffsetMs: 60000);
+
+        final at = scheduledAt(
+          calls.singleWhere((c) => c.method == 'zonedSchedule'),
+        );
+        final expected = instant.subtract(const Duration(seconds: 60));
+        expect(
+          at.difference(expected).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+      });
+
+      test('a device clock that is ahead (negative offset) registers it '
+          'later', () async {
+        final service = buildService();
+        final instant = DateTime.now().add(const Duration(seconds: 30));
+        final event = FlashEvent(id: 'a', instant: instant, label: 'x');
+
+        await service.rescheduleAll([event], ntpOffsetMs: -60000);
+
+        final at = scheduledAt(
+          calls.singleWhere((c) => c.method == 'zonedSchedule'),
+        );
+        final expected = instant.add(const Duration(seconds: 60));
+        expect(
+          at.difference(expected).abs(),
+          lessThan(const Duration(seconds: 1)),
+        );
+      });
+
+      test('skips an event that has already passed by the corrected clock, '
+          'though the device clock has not reached it', () async {
+        final service = buildService();
+        final event = FlashEvent(
+          id: 'a',
+          instant: DateTime.now().add(const Duration(seconds: 30)),
+          label: 'x',
+        );
+
+        await service.rescheduleAll([event], ntpOffsetMs: 60000);
+
+        expect(calls.where((c) => c.method == 'zonedSchedule'), isEmpty);
+      });
+    });
+
     test('derives a stable, deterministic id from the event id', () async {
       final service = buildService();
       final event = FlashEvent(

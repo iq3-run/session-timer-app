@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/notifications/notification_event_source.dart';
 import 'package:session_timer/features/notifications/notification_service.dart';
+
+/// An offset change smaller than this doesn't re-register the alarms.
+const _offsetRescheduleThresholdMs = 1000;
 
 /// Mounted once at the app root. Owns the notification plugin's lifecycle:
 /// initializes it and requests permission on startup, then re-schedules all
@@ -99,9 +103,12 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
       // list, not for its current value — schedule explicitly for whatever
       // it already is by the time init finishes, rather than relying on a
       // source provider happening to still be mid-load.
+      final offsetMs = ref.read(ntpOffsetMsProvider);
       await service.rescheduleAll(
         ref.read(notificationCandidateEventsProvider),
+        ntpOffsetMs: offsetMs,
       );
+      _appliedOffsetMs = offsetMs;
     } on Exception catch (e) {
       debugPrint('NotificationScheduler: failed to initialize: $e');
     }
@@ -112,13 +119,31 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
     ref.listen(notificationCandidateEventsProvider, (previous, next) {
       unawaited(_reschedule(next));
     });
+    // The alarms are registered by the device clock, shifted by the offset:
+    // the first sync lands a few seconds after launch, and a later one can
+    // change it, so what is already registered has to move with it.
+    ref.listen(ntpOffsetMsProvider, (previous, next) {
+      // Every sync returns a slightly different offset (network jitter);
+      // re-registering every alarm for a few milliseconds isn't worth it.
+      if ((next - _appliedOffsetMs).abs() < _offsetRescheduleThresholdMs) {
+        return;
+      }
+      unawaited(_reschedule(ref.read(notificationCandidateEventsProvider)));
+    });
     return widget.child;
   }
+
+  /// The offset the alarms are currently registered with.
+  int _appliedOffsetMs = 0;
 
   /// Whether the reschedule went through.
   Future<bool> _reschedule(List<FlashEvent> events) async {
     try {
-      await ref.read(notificationServiceProvider).rescheduleAll(events);
+      final offsetMs = ref.read(ntpOffsetMsProvider);
+      await ref
+          .read(notificationServiceProvider)
+          .rescheduleAll(events, ntpOffsetMs: offsetMs);
+      _appliedOffsetMs = offsetMs;
       return true;
     } on Object catch (e) {
       debugPrint('NotificationScheduler: failed to reschedule: $e');
