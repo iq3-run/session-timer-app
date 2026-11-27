@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
+import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/session_plan/session_plan_entry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -26,24 +25,22 @@ final sessionPlanControllerProvider =
 /// Unlike `TimeTargetsController`, this never drops entries on load: sessions
 /// hold only a time of day, so none is ever "already ended" — the plan is
 /// kept until the user removes it by hand, not reset per calendar day.
-class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
-  Future<void> _mutationQueue = Future.value();
-  final Completer<void> _initialLoad = Completer<void>();
-  List<SessionPlanEntry> _lastGood = const [];
+class SessionPlanController
+    extends MutationQueueNotifier<List<SessionPlanEntry>> {
+  @override
+  List<SessionPlanEntry> get initialValue => const [];
 
   @override
-  Future<List<SessionPlanEntry>> build() async {
-    try {
-      final prefs = await ref.watch(sharedPreferencesProvider.future);
-      if (state.hasValue) return state.value!;
+  String get persistenceFailureMessage =>
+      'SharedPreferences reported failure to persist $sessionPlanJsonKey';
 
-      final sorted = _sorted(_readPersisted(prefs));
-      _lastGood = sorted;
-      return sorted;
-    } finally {
-      if (!_initialLoad.isCompleted) _initialLoad.complete();
-    }
-  }
+  @override
+  Future<List<SessionPlanEntry>> loadInitial(SharedPreferences prefs) async =>
+      _sorted(_readPersisted(prefs));
+
+  @override
+  List<SessionPlanEntry> normalize(List<SessionPlanEntry> value) =>
+      _sorted(value);
 
   Future<void> addSession({
     required int startMinutes,
@@ -54,7 +51,7 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
       startMinutes: startMinutes,
       durationMinutes: durationMinutes,
     );
-    await _mutate((sessions) => [...sessions, entry]);
+    await mutate((sessions) => [...sessions, entry]);
   }
 
   Future<void> updateSession(
@@ -62,7 +59,7 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
     required int startMinutes,
     required int durationMinutes,
   }) async {
-    await _mutate(
+    await mutate(
       (sessions) => [
         for (final s in sessions)
           if (s.id == id)
@@ -78,44 +75,7 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
   }
 
   Future<void> removeSession(String id) async {
-    await _mutate((sessions) => sessions.where((s) => s.id != id).toList());
-  }
-
-  Future<void> _mutate(
-    List<SessionPlanEntry> Function(List<SessionPlanEntry>) update,
-  ) {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _mutateNow(update));
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  Future<void> _mutateNow(
-    List<SessionPlanEntry> Function(List<SessionPlanEntry>) update,
-  ) async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = _sorted(update(_lastGood));
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final persisted = await _persist(prefs, updated);
-      if (persisted) {
-        _lastGood = updated;
-        state = AsyncData(updated);
-      } else {
-        state = _persistenceFailure();
-      }
-    } on Exception catch (e, st) {
-      state = AsyncError(e, st);
-    }
-  }
-
-  AsyncValue<List<SessionPlanEntry>> _persistenceFailure() {
-    return AsyncError(
-      Exception(
-        'SharedPreferences reported failure to persist $sessionPlanJsonKey',
-      ),
-      StackTrace.current,
-    );
+    await mutate((sessions) => sessions.where((s) => s.id != id).toList());
   }
 
   List<SessionPlanEntry> _readPersisted(SharedPreferences prefs) {
@@ -135,11 +95,12 @@ class SessionPlanController extends AsyncNotifier<List<SessionPlanEntry>> {
         .toList();
   }
 
-  Future<bool> _persist(
+  @override
+  Future<bool> persist(
     SharedPreferences prefs,
-    List<SessionPlanEntry> sessions,
+    List<SessionPlanEntry> value,
   ) {
-    final json = jsonEncode(sessions.map((s) => s.toJson()).toList());
+    final json = jsonEncode(value.map((s) => s.toJson()).toList());
     return prefs.setString(sessionPlanJsonKey, json);
   }
 
