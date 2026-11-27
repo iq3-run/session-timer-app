@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
+import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,26 +21,20 @@ final sessionEventControllerProvider =
 /// Persists the full session schedule (OR/WE/WD/CR/SS/CS). Unlike
 /// `TimeTargetsController`, past events are never dropped — the chain gap
 /// and "直前から" calculations need the full history to stay accurate.
-class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
-  // Mirrors FlashPointsController's mutation-queue pattern: see that file
-  // for why _lastGood/_initialLoad exist instead of reading state directly.
-  Future<void> _mutationQueue = Future.value();
-  final Completer<void> _initialLoad = Completer<void>();
-  List<SessionEvent> _lastGood = const [];
+class SessionEventController extends MutationQueueNotifier<List<SessionEvent>> {
+  @override
+  @protected
+  List<SessionEvent> get initialValue => const [];
 
   @override
-  Future<List<SessionEvent>> build() async {
-    try {
-      final prefs = await ref.watch(sharedPreferencesProvider.future);
-      if (state.hasValue) return state.value!;
+  @protected
+  String get persistenceFailureMessage =>
+      'SharedPreferences reported failure to persist $sessionEventsJsonKey';
 
-      final events = _readPersisted(prefs);
-      _lastGood = events;
-      return events;
-    } finally {
-      if (!_initialLoad.isCompleted) _initialLoad.complete();
-    }
-  }
+  @override
+  @protected
+  Future<List<SessionEvent>> loadInitial(SharedPreferences prefs) async =>
+      _readPersisted(prefs);
 
   /// No-op if [type] is OR or CS and one already exists — those two are
   /// singletons. [manualNumber], when given, overrides the auto-assigned
@@ -52,7 +45,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
     int? manualNumber,
     SessionTrack track = SessionTrack.common,
   }) {
-    return _mutate((events) {
+    return mutate((events) {
       if (_singletonTypes.contains(type) && events.any((e) => e.type == type)) {
         return events;
       }
@@ -69,7 +62,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   }
 
   Future<void> removeEvent(String id) =>
-      _mutate((events) => events.where((e) => e.id != id).toList());
+      mutate((events) => events.where((e) => e.id != id).toList());
 
   /// Removes every event whose id is in [ids] in one persisted write
   /// (unlike calling [removeEvent] per id, a failed save can't leave only
@@ -77,13 +70,13 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   /// event added after the caller confirmed with the user — which this
   /// can't undo — is never deleted along with them.
   Future<void> removeEvents(Set<String> ids) =>
-      _mutate((events) => events.where((e) => !ids.contains(e.id)).toList());
+      mutate((events) => events.where((e) => !ids.contains(e.id)).toList());
 
   /// Toggles whether [id]'s row shows on the read-only "セッションスケ
   /// ジュール" screen (see `SessionEvent.visible`). A no-op if no event
   /// with that id exists.
   Future<void> setVisible(String id, {required bool visible}) {
-    return _mutate(
+    return mutate(
       (events) => _replaceEvent(
         events,
         id,
@@ -102,7 +95,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   /// Sets or clears (via `null`) [id]'s displayed-number override (see
   /// `SessionEvent.manualNumber`). A no-op if no event with that id exists.
   Future<void> setManualNumber(String id, int? manualNumber) {
-    return _mutate(
+    return mutate(
       (events) => _replaceEvent(
         events,
         id,
@@ -121,7 +114,7 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
   /// Changes [id]'s date, leaving its type/visible/manualNumber unchanged.
   /// A no-op if no event with that id exists.
   Future<void> setDate(String id, DateTime date) {
-    return _mutate(
+    return mutate(
       (events) => _replaceEvent(
         events,
         id,
@@ -146,43 +139,6 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
       if (e.id == id) update(e) else e,
   ];
 
-  Future<void> _mutate(
-    List<SessionEvent> Function(List<SessionEvent>) update,
-  ) {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _mutateNow(update));
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  Future<void> _mutateNow(
-    List<SessionEvent> Function(List<SessionEvent>) update,
-  ) async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = update(_lastGood);
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final persisted = await _persist(prefs, updated);
-      if (persisted) {
-        _lastGood = updated;
-        state = AsyncData(updated);
-      } else {
-        state = _persistenceFailure();
-      }
-    } on Exception catch (e, st) {
-      state = AsyncError(e, st);
-    }
-  }
-
-  AsyncValue<List<SessionEvent>> _persistenceFailure() {
-    return AsyncError(
-      Exception(
-        'SharedPreferences reported failure to persist $sessionEventsJsonKey',
-      ),
-      StackTrace.current,
-    );
-  }
-
   List<SessionEvent> _readPersisted(SharedPreferences prefs) {
     final raw = prefs.getString(sessionEventsJsonKey);
     if (raw == null) return const [];
@@ -200,8 +156,10 @@ class SessionEventController extends AsyncNotifier<List<SessionEvent>> {
         .toList();
   }
 
-  Future<bool> _persist(SharedPreferences prefs, List<SessionEvent> events) {
-    final json = jsonEncode(events.map((e) => e.toJson()).toList());
+  @override
+  @protected
+  Future<bool> persist(SharedPreferences prefs, List<SessionEvent> value) {
+    final json = jsonEncode(value.map((e) => e.toJson()).toList());
     return prefs.setString(sessionEventsJsonKey, json);
   }
 }
