@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/persistence/persistence_error_toast.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/clock/clock_screen.dart';
 import 'package:session_timer/features/home_widget/home_widget_scheduler.dart';
@@ -16,6 +17,8 @@ class SessionTimerApp extends StatelessWidget {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('ja'), Locale('en')],
       localeListResolutionCallback: resolveDeviceLocale,
+      builder: (context, child) =>
+          PersistenceErrorToast(child: child ?? const SizedBox.shrink()),
       home: const NotificationScheduler(
         child: HomeWidgetScheduler(child: ClockScreen()),
       ),
