@@ -15,6 +15,9 @@ enum _Write { ok, reportsFailure, throws }
 _Write _nextWrite = _Write.ok;
 int _loadCalls = 0;
 bool _loadThrows = false;
+Completer<void>? _loadGate;
+Completer<void>? _loadReachedGate;
+Completer<void>? _persistGate;
 
 class _Counter extends MutationQueueNotifier<int> {
   @override
@@ -27,11 +30,19 @@ class _Counter extends MutationQueueNotifier<int> {
   Future<int> loadInitial(SharedPreferences prefs) async {
     _loadCalls++;
     if (_loadThrows) throw StateError('load failed');
-    return prefs.getInt(_key) ?? 0;
+    // Read first, then wait: the value is stale by the time the gate opens.
+    final value = prefs.getInt(_key) ?? 0;
+    if (_loadReachedGate?.isCompleted == false) _loadReachedGate!.complete();
+    // Only the first read waits, so a mutation's own retry isn't held too.
+    final gate = _loadGate;
+    _loadGate = null;
+    await gate?.future;
+    return value;
   }
 
   @override
   Future<bool> persist(SharedPreferences prefs, int value) async {
+    await _persistGate?.future;
     switch (_nextWrite) {
       case _Write.ok:
         return prefs.setInt(_key, value);
@@ -63,6 +74,9 @@ void main() {
     _nextWrite = _Write.ok;
     _loadCalls = 0;
     _loadThrows = false;
+    _loadGate = null;
+    _loadReachedGate = null;
+    _persistGate = null;
   }
 
   setUp(() {
@@ -165,10 +179,47 @@ void main() {
     final notifier = container.read(_counterProvider.notifier);
     await container.read(_counterProvider.future);
 
+    // Dispose while persist is in flight, then let it finish.
+    _persistGate = Completer<void>();
     final pending = notifier.add(1);
+    await Future<void>.delayed(Duration.zero);
     container.dispose();
+    _persistGate!.complete();
 
     await expectLater(pending, completes);
+  });
+
+  test('a retry of the load still reading does not overwrite what '
+      'mutations persisted meanwhile', () async {
+    SharedPreferences.setMockInitialValues({_key: 10});
+    _loadThrows = true;
+    final container = makeContainer();
+    final notifier = container.read(_counterProvider.notifier);
+    await expectLater(
+      container.read(_counterProvider.future),
+      throwsStateError,
+    );
+
+    // The load is retried and reads the stored value (10), but is slow to
+    // finish.
+    _loadThrows = false;
+    _loadGate = Completer<void>();
+    final gate = _loadGate!;
+    _loadReachedGate = Completer<void>();
+    container.invalidate(_counterProvider);
+    unawaited(container.read(_counterProvider.future).catchError((_) => 0));
+    await _loadReachedGate!.future;
+
+    // Meanwhile a mutation persists (10 -> 15) and a later one fails.
+    await notifier.add(5);
+    _nextWrite = _Write.reportsFailure;
+    await notifier.add(1000);
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+
+    _nextWrite = _Write.ok;
+    await notifier.add(1);
+    expect(container.read(_counterProvider).value, 16);
   });
 
   test('a persist that throws sets the error state', () async {

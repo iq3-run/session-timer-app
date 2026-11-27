@@ -38,6 +38,10 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
   // being the placeholder [initialValue].
   bool _loaded = false;
 
+  // Counts successful persists, so [build] can tell that a mutation landed
+  // while it was reading (see there).
+  int _persistedCount = 0;
+
   /// The value used until something has been loaded or persisted.
   @protected
   T get initialValue;
@@ -76,12 +80,14 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
         return _lastGood;
       }
 
+      final persistedBefore = _persistedCount;
       final loaded = await loadInitial(prefs);
-      // A mutation can retry a failed load and publish while this one is
+      // A mutation can retry a failed load and persist while this one is
       // still reading (e.g. the framework's own retry of build()); what it
-      // published is newer than what was just read.
-      if (state.hasValue) {
-        _lastGood = state.value as T;
+      // persisted is newer than what was just read. Counting persists rather
+      // than looking at `state` also covers a later mutation that failed and
+      // left `state` as an error.
+      if (_persistedCount != persistedBefore) {
         _loaded = true;
         return _lastGood;
       }
@@ -125,6 +131,7 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
       final persisted = await persist(prefs, updated);
       if (persisted) {
         _lastGood = updated;
+        _persistedCount++;
         _publish(AsyncData(updated));
       } else {
         _publish(
