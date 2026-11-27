@@ -52,11 +52,39 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
         state == AppLifecycleState.inactive) {
       return;
     }
-    final hadSuppressed = ref
-        .read(notificationServiceProvider)
-        .clearSuppressed();
-    if (!hadSuppressed) return;
-    unawaited(_reschedule(ref.read(notificationCandidateEventsProvider)));
+    if (ref.read(notificationServiceProvider).clearSuppressed()) {
+      _restorePending = true;
+    }
+    unawaited(_restoreIfPending());
+  }
+
+  /// Set once suppressed notifications were forgotten, and cleared only when
+  /// the reschedule that brings them back has succeeded: if it fails (the
+  /// plugin throws), the next trip to the background retries, instead of
+  /// the notifications being lost for good.
+  bool _restorePending = false;
+  bool _restoring = false;
+
+  Future<void> _restoreIfPending() async {
+    // `hidden` and `paused` arrive back to back; one reschedule covers both.
+    // A request that comes in while one is running is picked up by the loop:
+    // the flag is cleared *before* each pass, so it can't wipe a newer one.
+    if (_restoring) return;
+    _restoring = true;
+    try {
+      while (_restorePending) {
+        _restorePending = false;
+        final ok = await _reschedule(
+          ref.read(notificationCandidateEventsProvider),
+        );
+        if (!ok) {
+          _restorePending = true; // retried on the next trip to background
+          break;
+        }
+      }
+    } finally {
+      _restoring = false;
+    }
   }
 
   /// A device without notification support (or a test environment without
@@ -87,11 +115,14 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
     return widget.child;
   }
 
-  Future<void> _reschedule(List<FlashEvent> events) async {
+  /// Whether the reschedule went through.
+  Future<bool> _reschedule(List<FlashEvent> events) async {
     try {
       await ref.read(notificationServiceProvider).rescheduleAll(events);
-    } on Exception catch (e) {
+      return true;
+    } on Object catch (e) {
       debugPrint('NotificationScheduler: failed to reschedule: $e');
+      return false;
     }
   }
 }

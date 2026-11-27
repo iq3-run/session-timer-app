@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_overlay.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
@@ -164,5 +165,34 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     expect(fake.dropElapsedCalls, 1);
+  });
+
+  testWidgets('measures its progress on the NTP-corrected clock', (
+    tester,
+  ) async {
+    final fake = _FakeFlashQueueController();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          flashQueueControllerProvider.overrideWith(() => fake),
+          // The corrected clock is 4s ahead of the device's.
+          ntpOffsetMsProvider.overrideWithValue(4000),
+        ],
+        child: const MaterialApp(home: FlashOverlay()),
+      ),
+    );
+
+    // By the device clock this flash still has ~1s to go; by the corrected
+    // clock its window is long over, so it must be skipped, not replayed.
+    fake.setActive(
+      FlashEvent(
+        id: 'ntp',
+        instant: DateTime.now().add(const Duration(seconds: 1)),
+        label: 'test',
+      ),
+    );
+    await tester.pump();
+
+    expect(fake.state.active, isNull);
   });
 }

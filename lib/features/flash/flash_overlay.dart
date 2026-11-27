@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
@@ -123,9 +124,12 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   /// widget notices — starting from this fraction instead of always 0
   /// keeps the strobe ending at `event.instant` rather than up to ~1s late.
   double _elapsedProgress(FlashEvent event) {
-    final elapsedMs = DateTime.now()
-        .difference(event.windowStart)
-        .inMilliseconds;
+    // Same NTP-corrected clock `FlashQueueController` admits and drops by, so
+    // a flash it keeps never reads here as already over.
+    final now = DateTime.now().add(
+      Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
+    );
+    final elapsedMs = now.difference(event.windowStart).inMilliseconds;
     return (elapsedMs / flashAnimationDuration.inMilliseconds).clamp(0.0, 1.0);
   }
 

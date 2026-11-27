@@ -22,14 +22,20 @@ class _RecordingService extends NotificationService {
   @override
   bool clearSuppressed() {
     clearSuppressedCalls++;
-    return suppressed;
+    // Like the real service: only the first call finds anything to forget.
+    final hadAny = suppressed;
+    suppressed = false;
+    return hadAny;
   }
 
   bool suppressed = true;
+  bool failReschedule = false;
 
   @override
-  Future<void> rescheduleAll(List<FlashEvent> events) async =>
-      rescheduled.add(events);
+  Future<void> rescheduleAll(List<FlashEvent> events) async {
+    rescheduled.add(events);
+    if (failReschedule) throw Exception('plugin failed');
+  }
 }
 
 void main() {
@@ -142,5 +148,66 @@ void main() {
 
     expect(service.clearSuppressedCalls, 0);
     expect(service.rescheduled, isEmpty);
+  });
+
+  testWidgets('a failed restore is retried on the next trip to the background '
+      'even though the suppression record is already gone', (tester) async {
+    final service = _RecordingService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationServiceProvider.overrideWithValue(service),
+          notificationCandidateEventsProvider.overrideWithValue(const []),
+        ],
+        child: const MaterialApp(
+          home: NotificationScheduler(child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+    service.rescheduled.clear();
+    service.failReschedule = true;
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(service.rescheduled, hasLength(1)); // failed
+
+    // The record is gone now; only the pending flag knows to retry.
+    service
+      ..suppressed = false
+      ..failReschedule = false;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(service.rescheduled, hasLength(2)); // retried, and succeeded
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(service.rescheduled, hasLength(2)); // done: no more retries
+  });
+
+  testWidgets('hidden then paused reschedule only once', (tester) async {
+    final service = _RecordingService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationServiceProvider.overrideWithValue(service),
+          notificationCandidateEventsProvider.overrideWithValue(const []),
+        ],
+        child: const MaterialApp(
+          home: NotificationScheduler(child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+    service.rescheduled.clear();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(service.rescheduled, hasLength(1));
   });
 }
