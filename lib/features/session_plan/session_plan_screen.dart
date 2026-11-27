@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/session_plan/current_session_resolution.dart';
@@ -71,7 +72,10 @@ class _SetCurrentSessionButton extends ConsumerWidget {
   }
 
   Future<void> _apply(BuildContext context, WidgetRef ref) async {
-    final resolution = resolveCurrentSession(sessions, DateTime.now());
+    final resolution = resolveCurrentSession(
+      sessions,
+      ref.read(correctedNowProvider)(),
+    );
     final messenger = ScaffoldMessenger.of(context);
     if (resolution == null) {
       messenger.showSnackBar(
@@ -209,7 +213,10 @@ class _ApplySessionButton extends ConsumerWidget {
 
   Future<void> _apply(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    final occurrence = resolveSessionOccurrence(session, DateTime.now());
+    final occurrence = resolveSessionOccurrence(
+      session,
+      ref.read(correctedNowProvider)(),
+    );
     await _applyTimes(
       ref,
       completionTarget: occurrence.end,
@@ -261,7 +268,7 @@ class _AddSessionRow extends ConsumerWidget {
   Future<void> _addSession(BuildContext context, WidgetRef ref) async {
     final pickedStart = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(DateTime.now()),
+      initialTime: TimeOfDay.fromDateTime(ref.read(correctedNowProvider)()),
     );
     if (pickedStart == null || !context.mounted) return;
     final startMinutes = minutesOfTimeOfDay(pickedStart);

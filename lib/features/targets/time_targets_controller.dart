@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,7 +27,7 @@ class TimeTargetsController extends MutationQueueNotifier<List<TimeTarget>> {
   @override
   @protected
   Future<List<TimeTarget>> loadInitial(SharedPreferences prefs) async {
-    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final nowEpochMs = ref.read(correctedNowProvider)().millisecondsSinceEpoch;
     final unexpired = _readPersisted(
       prefs,
     ).where((t) => t.epochMs > nowEpochMs).toList();

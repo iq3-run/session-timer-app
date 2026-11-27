@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 
@@ -17,5 +18,5 @@ TimeTarget? nextTimeTarget(List<TimeTarget> targets, DateTime now) {
 /// the target list itself changes, not on every second's tick.
 final nextTimeTargetProvider = Provider<TimeTarget?>((ref) {
   final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
-  return nextTimeTarget(targets, DateTime.now());
+  return nextTimeTarget(targets, ref.read(correctedNowProvider)());
 });

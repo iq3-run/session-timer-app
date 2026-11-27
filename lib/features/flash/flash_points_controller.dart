@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
@@ -59,7 +60,7 @@ class FlashPointsController
     final points = _applyStartupRules(
       loaded,
       completion.targetTime,
-      DateTime.now(),
+      ref.read(correctedNowProvider)(),
     );
 
     await persist(prefs, points);
