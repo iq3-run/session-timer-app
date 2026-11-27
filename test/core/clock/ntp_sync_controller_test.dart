@@ -115,6 +115,37 @@ void main() {
       expect(prefs.getString(ntpServerHostKey), 'unreachable.example.com');
     });
 
+    test('a failure after a success keeps the last offset and its time, so '
+        'the clock does not fall back to the device clock', () async {
+      SharedPreferences.setMockInitialValues({});
+      var reachable = true;
+      final container = ProviderContainer(
+        overrides: [
+          ntpOffsetFetcherProvider.overrideWithValue(
+            (host, {required timeout}) async =>
+                reachable ? 90000 : throw Exception('no network'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(ntpSyncControllerProvider.future);
+      final notifier = container.read(ntpSyncControllerProvider.notifier);
+      await notifier.syncNow('ntp.example.com');
+      final syncedAt = container
+          .read(ntpSyncControllerProvider)
+          .value!
+          .lastSyncedAt;
+
+      reachable = false;
+      await notifier.syncNow('ntp.example.com');
+      final state = container.read(ntpSyncControllerProvider).value!;
+
+      expect(state.status, NtpSyncStatus.failed);
+      expect(state.offsetMs, 90000);
+      expect(state.lastSyncedAt, syncedAt);
+      expect(container.read(ntpOffsetMsProvider), 90000);
+    });
+
     test(
       'also falls back to failed for a raw String error (as the ntp '
       'package itself throws on an unresolvable host or empty response)',

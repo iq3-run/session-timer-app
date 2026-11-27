@@ -102,10 +102,13 @@ final ntpSyncControllerProvider =
       NtpSyncController.new,
     );
 
-/// The correction to apply on top of device time; 0 while unsynced,
-/// loading, or failed. Read by `now_provider.dart`. A change also moves the
-/// device alarms (`NotificationScheduler` registers them shifted by it), so
-/// each change re-registers every pending notification.
+/// The correction to apply on top of device time: 0 until the first
+/// successful sync, and from then on the last successful one (it is kept
+/// while a later sync is running or has failed). Read by `now_provider.dart`.
+///
+/// A change also moves the device alarms (`NotificationScheduler` registers
+/// them shifted by it), so each change re-registers every pending
+/// notification.
 final ntpOffsetMsProvider = Provider<int>(
   (ref) => ref.watch(ntpSyncControllerProvider).value?.offsetMs ?? 0,
 );
@@ -177,7 +180,15 @@ class NtpSyncController extends AsyncNotifier<NtpSyncState> {
         lastSyncedAt: DateTime.now().add(Duration(milliseconds: offsetMs)),
       );
     } on Object {
-      return NtpSyncState(serverHost: host, status: NtpSyncStatus.failed);
+      // Keep the last successful offset (and when it was measured): a
+      // transient failure — a flaky network on a manual re-sync — must not
+      // drop the app back to the raw device clock. The status still reports
+      // the failure. `_current()` is the `syncing` state set just before,
+      // which carries that offset.
+      return _current().copyWith(
+        serverHost: host,
+        status: NtpSyncStatus.failed,
+      );
     }
   }
 
