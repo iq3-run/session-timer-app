@@ -33,6 +33,7 @@ void main() {
 
   late List<_RecordedCall> calls;
   late bool canScheduleExactAlarms;
+  Completer<void>? cancelAllGate;
 
   setUp(() {
     calls = [];
@@ -43,11 +44,13 @@ void main() {
     // uninitialized.
     AndroidFlutterLocalNotificationsPlugin.registerWith();
     canScheduleExactAlarms = false;
+    cancelAllGate = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
           calls.add(_RecordedCall(call.method, call.arguments));
           return switch (call.method) {
             'initialize' => true,
+            'cancelAll' => await cancelAllGate?.future,
             'canScheduleExactNotifications' => canScheduleExactAlarms,
             _ => null,
           };
@@ -289,6 +292,34 @@ void main() {
         expect((cancel.arguments! as Map<dynamic, dynamic>)['id'], scheduledId);
       },
     );
+
+    test('runs after a reschedule that is still in flight', () async {
+      final service = buildService();
+      final event = futureEvent();
+      // A different, unsuppressed event, so the in-flight reschedule really
+      // reaches `zonedSchedule` (the suppressed one is skipped).
+      final other = FlashEvent(
+        id: 'target:t2:1',
+        instant: DateTime.now().add(const Duration(hours: 2)),
+        label: '別の指定時刻',
+      );
+      cancelAllGate = Completer<void>();
+
+      final reschedule = service.rescheduleAll([event, other]);
+      final cancel = service.cancelForEvent(event);
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((c) => c.method), isNot(contains('cancel')));
+
+      cancelAllGate!.complete();
+      await Future.wait([reschedule, cancel]);
+      final methods = calls.map((c) => c.method).toList();
+      expect(methods, contains('zonedSchedule'));
+      expect(methods, contains('cancel'));
+      expect(
+        methods.lastIndexOf('zonedSchedule'),
+        lessThan(methods.indexOf('cancel')),
+      );
+    });
 
     test('a later reschedule does not bring the notification back', () async {
       final service = buildService();

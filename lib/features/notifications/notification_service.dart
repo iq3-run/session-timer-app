@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:session_timer/core/async/serial_queue.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -95,18 +96,14 @@ class NotificationService {
   /// older call's later `zonedSchedule`s land after the newer call's
   /// `cancelAll()` and leave stale notifications behind. Mirrors
   /// `StopwatchController`/`TimeTargetsController`'s `_mutationQueue`
-  /// pattern.
-  Future<void> _rescheduleQueue = Future<void>.value();
+  /// pattern (see [SerialQueue]).
+  final SerialQueue _rescheduleQueue = SerialQueue();
 
   /// Cancels every pending scheduled notification and re-schedules one for
   /// each of [events] whose instant hasn't passed yet. Called whenever the
   /// candidate list changes (completion/target/timer state edited).
-  Future<void> rescheduleAll(List<FlashEvent> events) {
-    final previous = _rescheduleQueue;
-    final result = previous.then((_) => _rescheduleNow(events));
-    _rescheduleQueue = result.catchError((_) {});
-    return result;
-  }
+  Future<void> rescheduleAll(List<FlashEvent> events) =>
+      _rescheduleQueue.run(() => _rescheduleNow(events));
 
   /// Event ids whose notification was dropped because the flash for them
   /// started on screen (see [cancelForEvent]), mapped to their instant. A
@@ -123,13 +120,10 @@ class NotificationService {
   /// if it still shows, that is harmless.
   Future<void> cancelForEvent(FlashEvent event) {
     _suppressed[event.id] = event.instant;
-    final previous = _rescheduleQueue;
-    final result = previous.then((_) async {
+    return _rescheduleQueue.run(() async {
       await init();
       await _plugin.cancel(id: _notificationId(event.id));
     });
-    _rescheduleQueue = result.catchError((_) {});
-    return result;
   }
 
   /// Forgets every suppression, so the next [rescheduleAll] schedules the
