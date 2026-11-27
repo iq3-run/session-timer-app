@@ -20,6 +20,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// it fails again: persisting an update on top of [initialValue] would
 /// overwrite whatever is actually stored.
 ///
+/// The notifier assumes it is the only writer of its key. A rebuild keeps the
+/// value in memory instead of re-reading storage, so anything that changes
+/// the stored value from elsewhere must reload it explicitly.
+///
 /// Subclasses provide the persistence details ([initialValue],
 /// [loadInitial], [persist], [persistenceFailureMessage]) and expose their
 /// own operations on top of [mutate].
@@ -73,6 +77,14 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
       }
 
       final loaded = await loadInitial(prefs);
+      // A mutation can retry a failed load and publish while this one is
+      // still reading (e.g. the framework's own retry of build()); what it
+      // published is newer than what was just read.
+      if (state.hasValue) {
+        _lastGood = state.value as T;
+        _loaded = true;
+        return _lastGood;
+      }
       _lastGood = loaded;
       _loaded = true;
       return loaded;
@@ -82,36 +94,51 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
   }
 
   /// Applies [update] to the last good value, persists the result and
-  /// publishes it as the new state. Failures are reported through `state`
-  /// (and the returned future still completes normally for them).
+  /// publishes it as the new state. Loading or persisting failures are
+  /// reported through `state` (and the returned future still completes
+  /// normally for them). An error thrown by [update] itself is a bug in the
+  /// caller: it goes to the caller's future and leaves `state` untouched.
   @protected
   Future<void> mutate(T Function(T) update) =>
       _queue.run(() => _mutateNow(update));
 
   Future<void> _mutateNow(T Function(T) update) async {
     if (!_initialLoad.isCompleted) await _initialLoad.future;
+
+    final SharedPreferences prefs;
     try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
+      prefs = await ref.read(sharedPreferencesProvider.future);
       // The initial load failed earlier: try again rather than building on
       // the placeholder (and overwriting what is stored). If it fails again
-      // the error is reported below and nothing is written.
+      // the error is reported and nothing is written.
       if (!_loaded) {
         _lastGood = await loadInitial(prefs);
         _loaded = true;
       }
-      final updated = normalize(update(_lastGood));
+    } on Object catch (e, st) {
+      _publish(AsyncError(e, st));
+      return;
+    }
+
+    final updated = normalize(update(_lastGood));
+    try {
       final persisted = await persist(prefs, updated);
       if (persisted) {
         _lastGood = updated;
-        state = AsyncData(updated);
+        _publish(AsyncData(updated));
       } else {
-        state = AsyncError(
-          Exception(persistenceFailureMessage),
-          StackTrace.current,
+        _publish(
+          AsyncError(Exception(persistenceFailureMessage), StackTrace.current),
         );
       }
     } on Object catch (e, st) {
-      state = AsyncError(e, st);
+      _publish(AsyncError(e, st));
     }
+  }
+
+  // A write can finish after the notifier was disposed (e.g. a container
+  // torn down mid-mutation); assigning `state` then would throw.
+  void _publish(AsyncValue<T> value) {
+    if (ref.mounted) state = value;
   }
 }

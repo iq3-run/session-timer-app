@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
@@ -45,6 +46,9 @@ class _Counter extends MutationQueueNotifier<int> {
   int normalize(int value) => value < 0 ? 0 : value;
 
   Future<void> add(int n) => mutate((v) => v + n);
+
+  @visibleForTesting
+  Future<void> mutateForTest(int Function(int) update) => mutate(update);
 }
 
 // No automatic retry: the failed-load tests count `loadInitial` calls and
@@ -136,6 +140,35 @@ void main() {
     final state = container.read(_counterProvider);
     expect(state.hasError, isTrue);
     expect(state.error.toString(), contains('could not persist $_key'));
+  });
+
+  test(
+    'an error thrown by the update goes to the caller, not to state',
+    () async {
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await notifier.add(2);
+
+      await expectLater(
+        notifier.mutateForTest((_) => throw StateError('bad update')),
+        throwsStateError,
+      );
+
+      expect(container.read(_counterProvider).value, 2);
+      await notifier.add(1);
+      expect(container.read(_counterProvider).value, 3);
+    },
+  );
+
+  test('a write finishing after dispose does not throw', () async {
+    final container = ProviderContainer();
+    final notifier = container.read(_counterProvider.notifier);
+    await container.read(_counterProvider.future);
+
+    final pending = notifier.add(1);
+    container.dispose();
+
+    await expectLater(pending, completes);
   });
 
   test('a persist that throws sets the error state', () async {
