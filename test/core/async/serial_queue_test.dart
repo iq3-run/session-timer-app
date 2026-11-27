@@ -39,4 +39,21 @@ void main() {
       expect(await after, 'ok');
     },
   );
+
+  test('a failing task does not raise an uncaught error in the zone', () async {
+    final uncaught = <Object>[];
+    await runZonedGuarded(() async {
+      final queue = SerialQueue();
+      await queue
+          .run<void>(() async => throw StateError('boom'))
+          .then(
+            (_) {},
+            onError: (Object _) {},
+          );
+      await queue.run(() async {});
+      await Future<void>.delayed(Duration.zero);
+    }, (error, _) => uncaught.add(error));
+
+    expect(uncaught, isEmpty);
+  });
 }
