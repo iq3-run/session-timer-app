@@ -21,6 +21,19 @@ ProviderContainer _container({required int offsetMs}) {
   return container;
 }
 
+class _TestOffset extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  // `Notifier.state` is protected, so changing it goes through here.
+  // ignore: use_setters_to_change_properties
+  void change(int value) => state = value;
+}
+
+final _testOffsetProvider = NotifierProvider<_TestOffset, int>(
+  _TestOffset.new,
+);
+
 int _soonEpochMs() =>
     DateTime.now().add(const Duration(seconds: 30)).millisecondsSinceEpoch;
 
@@ -86,6 +99,34 @@ void main() {
         'later',
         DateTime.now().add(const Duration(minutes: 10)),
       );
+
+      expect(container.read(nextTimeTargetProvider)?.id, 'later');
+    });
+
+    test('the next time target is recomputed when the offset changes later, '
+        'as the first NTP sync lands after launch', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          ntpOffsetMsProvider.overrideWith(
+            (ref) => ref.watch(_testOffsetProvider),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(timeTargetsControllerProvider.future);
+      final notifier = container.read(timeTargetsControllerProvider.notifier);
+      await notifier.upsertTarget(
+        'soon',
+        DateTime.now().add(const Duration(seconds: 30)),
+      );
+      await notifier.upsertTarget(
+        'later',
+        DateTime.now().add(const Duration(minutes: 10)),
+      );
+      expect(container.read(nextTimeTargetProvider)?.id, 'soon');
+
+      container.read(_testOffsetProvider.notifier).change(_offsetMs);
 
       expect(container.read(nextTimeTargetProvider)?.id, 'later');
     });

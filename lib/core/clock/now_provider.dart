@@ -8,15 +8,18 @@ final nowProvider = StreamProvider<DateTime>((ref) {
   );
 });
 
-/// The current NTP-corrected time, read on demand: `ref.read(
-/// correctedNowProvider)()`.
+/// The current NTP-corrected time, read on demand with
+/// `ref.read(correctedNowProvider)()`.
 ///
 /// For absolute times (a target's moment, whether a session has started or a
 /// stored time has passed). Elapsed time — the stopwatch and the countdown
 /// timer — stays on the device clock instead: it only compares the device
 /// clock with itself, and correcting it would make it jump at every sync.
 /// The offset is read at each call, so a later sync is picked up without
-/// rebuilding anything that holds this function.
+/// rebuilding anything that holds this function. Load-time cleanups that use
+/// it (dropping stored targets that have passed) run before the first sync
+/// lands, so they are best effort: anything they miss is still treated as
+/// past by every later check.
 final correctedNowProvider = Provider<DateTime Function()>(
   (ref) =>
       () => DateTime.now().add(

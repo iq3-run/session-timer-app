@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';
@@ -152,7 +153,9 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
   Future<void> _pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: clampToScheduleRange(_pickedDate ?? DateTime.now()),
+      initialDate: clampToScheduleRange(
+        _pickedDate ?? ref.read(correctedNowProvider)(),
+      ),
       firstDate: earliestScheduleDate,
       lastDate: latestScheduleDate,
     );
