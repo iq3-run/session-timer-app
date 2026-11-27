@@ -14,8 +14,8 @@ import 'package:session_timer/features/schedule/session_event.dart';
 /// 1WE(A)/1WE(B) — and if A has run to 2WE while B stopped at 1WE, the
 /// merged one is 3WE. The schedules are expected to end at the merge, but if
 /// an A/B event is dated after a common one it counts on from it — from the
-/// furthest schedule, whichever one it is on — so no number is ever given
-/// twice. With no A/B events this is the plain date-order count.
+/// furthest schedule, whichever one it is on — so a number is never repeated
+/// within one schedule. With no A/B events this is the plain date-order count.
 Map<String, int> assignSequenceNumbers(List<SessionEvent> events) {
   final result = <String, int>{};
   for (final type in numberedEventTypes) {

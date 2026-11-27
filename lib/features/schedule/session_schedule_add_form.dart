@@ -67,8 +67,8 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
     );
   }
 
-  // The number field only exists for numbered types, so a leftover invalid
-  // number (typed before switching to another type) must not block adding.
+  // The number field only exists for numbered types, so its text must not
+  // block adding any other type.
   bool get _canSubmit =>
       _pickedDate != null &&
       (!numberedEventTypes.contains(_type) ||
@@ -142,6 +142,9 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
         // A/B only exists for WE/WD; don't carry a leftover choice over to
         // a type that can't have one.
         if (!SessionEvent.supportsTrack(_type)) _track = SessionTrack.common;
+        // Likewise a number typed for a numbered type: it would stay hidden
+        // (and, if invalid, block adding) once the field is gone.
+        if (!numberedEventTypes.contains(_type)) _numberController.clear();
       }),
     );
   }

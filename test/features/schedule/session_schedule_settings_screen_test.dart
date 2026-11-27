@@ -331,14 +331,24 @@ void main() {
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const Key('scheduleManualNumberField')),
-          findsNothing,
-        );
         final button = tester.widget<FilledButton>(
           find.byKey(const Key('addScheduleEventButton')),
         );
         expect(button.onPressed, isNotNull);
+
+        await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+        await tester.pumpAndSettle();
+        expect(find.text('CR'), findsOneWidget);
+
+        // Back on a numbered type, the old text is gone, not just hidden.
+        await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('週末(WE)').last);
+        await tester.pumpAndSettle();
+        final field = tester.widget<TextField>(
+          find.byKey(const Key('scheduleManualNumberField')),
+        );
+        expect(field.controller?.text, isEmpty);
       },
     );
 
