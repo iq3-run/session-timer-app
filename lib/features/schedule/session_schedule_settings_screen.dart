@@ -7,71 +7,10 @@ import 'package:session_timer/features/schedule/session_chain.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/schedule/session_event_numbering.dart';
+import 'package:session_timer/features/schedule/session_schedule_add_form.dart';
+import 'package:session_timer/features/schedule/session_schedule_dialogs.dart';
+import 'package:session_timer/features/schedule/session_schedule_form_helpers.dart';
 import 'package:session_timer/features/schedule/session_schedule_formatting.dart';
-
-/// Shared bounds for every `showDatePicker` call on this screen (add form
-/// and per-row edit alike).
-final _earliestScheduleDate = DateTime(2000);
-final _latestScheduleDate = DateTime(2100);
-
-/// Keeps a `showDatePicker` `initialDate` within [_earliestScheduleDate,
-/// _latestScheduleDate] — `showDatePicker` asserts on an out-of-range value,
-/// and [date] may come from already-persisted data this screen didn't
-/// itself just pick (e.g. an older/foreign import) rather than always being
-/// bounded by this screen's own picker calls.
-DateTime _clampToScheduleRange(DateTime date) {
-  if (date.isBefore(_earliestScheduleDate)) return _earliestScheduleDate;
-  if (date.isAfter(_latestScheduleDate)) return _latestScheduleDate;
-  return date;
-}
-
-const Map<SessionEventType, String> _typeNames = {
-  SessionEventType.orientation: 'オリエンテーション(OR)',
-  SessionEventType.weekend: '週末(WE)',
-  SessionEventType.workday: 'ワークデー(WD)',
-  SessionEventType.classroom: 'クラスルーム(CR)',
-  SessionEventType.specialSession: '特別セッション(SS)',
-  SessionEventType.completion: '完了セッション(CS)',
-};
-
-const Set<SessionEventType> _singletonTypes = {
-  SessionEventType.orientation,
-  SessionEventType.completion,
-};
-
-/// Types that carry a sequence number (and so can take a manual override) —
-/// OR/CR/CS never have one regardless of `manualNumber`.
-const Set<SessionEventType> _numberedTypes = {
-  SessionEventType.weekend,
-  SessionEventType.workday,
-  SessionEventType.specialSession,
-};
-
-/// Empty (auto) or a positive integer — shared by the add form's number
-/// field and the edit dialog's, so both accept/reject the same input.
-bool _isValidManualNumberText(String text) {
-  final trimmed = text.trim();
-  return trimmed.isEmpty || (int.tryParse(trimmed) ?? -1) > 0;
-}
-
-/// `null` for empty (auto) text; the caller is expected to have already
-/// checked [_isValidManualNumberText].
-int? _parseManualNumberText(String text) {
-  final trimmed = text.trim();
-  return trimmed.isEmpty ? null : int.tryParse(trimmed);
-}
-
-/// Whether [event] gets a show/hide-on-`SessionScheduleScreen` toggle — CS,
-/// the first WE, and CR always show there and never expose one (see
-/// `session_chain.dart`'s `_isVisibleOnScheduleScreen`, which this mirrors).
-bool _hasVisibilityToggle(SessionEvent event, Map<String, int> numbers) {
-  if (event.type == SessionEventType.completion) return false;
-  if (event.type == SessionEventType.classroom) return false;
-  if (event.type == SessionEventType.weekend && numbers[event.id] == 1) {
-    return false;
-  }
-  return true;
-}
 
 /// Add/delete/full-list management screen for the session schedule (OR/WE/
 /// WD/CR/SS/CS), reachable from `SessionScheduleScreen`. Unlike that
@@ -111,7 +50,9 @@ class SessionScheduleSettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _AddEventForm(existingTypes: events.map((e) => e.type).toSet()),
+              AddScheduleEventForm(
+                existingTypes: events.map((e) => e.type).toSet(),
+              ),
               const SizedBox(height: 16),
               Expanded(
                 child: _EventList(events: sorted, numbers: numbers),
@@ -180,7 +121,7 @@ class _EventRow extends ConsumerWidget {
       sessionEventLabel(event, numbers),
       style: SessionTimerTextStyles.label,
     );
-    if (!_numberedTypes.contains(event.type)) return label;
+    if (!numberedScheduleTypes.contains(event.type)) return label;
     // InkWell rather than GestureDetector — it picks up keyboard focus and
     // Enter/Space activation for free, which a bare GestureDetector doesn't.
     return InkWell(
@@ -211,49 +152,12 @@ Future<void> _confirmAndDeleteAll(
 ) async {
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (context) => _DeleteAllDialog(count: events.length),
+    builder: (context) => DeleteAllScheduleDialog(count: events.length),
   );
   if (confirmed != true || !context.mounted) return;
   await ref.read(sessionEventControllerProvider.notifier).removeEvents({
     for (final e in events) e.id,
   });
-}
-
-class _DeleteAllDialog extends StatelessWidget {
-  const _DeleteAllDialog({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: SessionTimerColors.panel,
-      title: const Text(
-        'すべての日程を削除',
-        style: TextStyle(color: SessionTimerColors.white),
-      ),
-      content: Text(
-        '登録されている$count件の日程をすべて削除します。\nこの操作は元に戻せません。',
-        style: const TextStyle(color: SessionTimerColors.white),
-      ),
-      actions: [
-        TextButton(
-          key: const Key('deleteAllCancel'),
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('キャンセル'),
-        ),
-        FilledButton(
-          key: const Key('deleteAllConfirm'),
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-            foregroundColor: Theme.of(context).colorScheme.onError,
-          ),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('削除'),
-        ),
-      ],
-    );
-  }
 }
 
 /// Opens a dialog to set or clear [event]'s manual number override.
@@ -262,9 +166,9 @@ Future<void> _editManualNumber(
   WidgetRef ref,
   SessionEvent event,
 ) async {
-  final result = await showDialog<_ManualNumberResult>(
+  final result = await showDialog<ManualNumberResult>(
     context: context,
-    builder: (context) => _ManualNumberDialog(initial: event.manualNumber),
+    builder: (context) => ManualNumberDialog(initial: event.manualNumber),
   );
   if (result == null) return;
   await ref
@@ -280,9 +184,9 @@ Future<void> _editDate(
 ) async {
   final picked = await showDatePicker(
     context: context,
-    initialDate: _clampToScheduleRange(event.date),
-    firstDate: _earliestScheduleDate,
-    lastDate: _latestScheduleDate,
+    initialDate: clampToScheduleRange(event.date),
+    firstDate: earliestScheduleDate,
+    lastDate: latestScheduleDate,
   );
   if (picked == null || !context.mounted) return;
   await ref
@@ -291,71 +195,6 @@ Future<void> _editDate(
         event.id,
         picked,
       );
-}
-
-class _ManualNumberResult {
-  const _ManualNumberResult(this.manualNumber);
-
-  final int? manualNumber;
-}
-
-class _ManualNumberDialog extends StatefulWidget {
-  const _ManualNumberDialog({required this.initial});
-
-  final int? initial;
-
-  @override
-  State<_ManualNumberDialog> createState() => _ManualNumberDialogState();
-}
-
-class _ManualNumberDialogState extends State<_ManualNumberDialog> {
-  late final _controller = TextEditingController(
-    text: widget.initial?.toString() ?? '',
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: SessionTimerColors.panel,
-      title: const Text(
-        '番号を編集',
-        style: TextStyle(color: SessionTimerColors.white),
-      ),
-      content: TextField(
-        key: const Key('manualNumberDialogField'),
-        controller: _controller,
-        autofocus: true,
-        keyboardType: TextInputType.number,
-        style: const TextStyle(color: SessionTimerColors.white),
-        decoration: const InputDecoration(
-          labelText: '番号（空欄なら自動採番）',
-          labelStyle: TextStyle(color: SessionTimerColors.muted),
-        ),
-        onChanged: (_) => setState(() {}),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('キャンセル'),
-        ),
-        FilledButton(
-          key: const Key('manualNumberDialogSave'),
-          onPressed: _isValidManualNumberText(_controller.text)
-              ? () => Navigator.of(context).pop(
-                  _ManualNumberResult(_parseManualNumberText(_controller.text)),
-                )
-              : null,
-          child: const Text('保存'),
-        ),
-      ],
-    );
-  }
 }
 
 class _VisibilityControl extends StatelessWidget {
@@ -371,7 +210,7 @@ class _VisibilityControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasVisibilityToggle(event, numbers)) {
+    if (!hasVisibilityToggle(event, numbers)) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: 8),
         child: Text(
@@ -385,185 +224,5 @@ class _VisibilityControl extends StatelessWidget {
       value: event.visible,
       onChanged: (visible) => notifier.setVisible(event.id, visible: visible),
     );
-  }
-}
-
-class _AddEventForm extends ConsumerStatefulWidget {
-  const _AddEventForm({required this.existingTypes});
-
-  final Set<SessionEventType> existingTypes;
-
-  @override
-  ConsumerState<_AddEventForm> createState() => _AddEventFormState();
-}
-
-class _AddEventFormState extends ConsumerState<_AddEventForm> {
-  SessionEventType _type = SessionEventType.weekend;
-  SessionTrack _track = SessionTrack.common;
-  DateTime? _pickedDate;
-  final _numberController = TextEditingController();
-
-  @override
-  void dispose() {
-    _numberController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // The A/B selector gets its own line: the main row is already full on a
-    // narrow portrait screen, and only WE/WD ever show it.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _mainRow(),
-        if (SessionEvent.supportsTrack(_type)) _trackSelector(),
-      ],
-    );
-  }
-
-  Widget _trackSelector() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          const Text('日程', style: TextStyle(color: SessionTimerColors.muted)),
-          const SizedBox(width: 12),
-          SegmentedButton<SessionTrack>(
-            key: const Key('scheduleTrackSelector'),
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: SessionTrack.common, label: Text('共通')),
-              ButtonSegment(value: SessionTrack.a, label: Text('A')),
-              ButtonSegment(value: SessionTrack.b, label: Text('B')),
-            ],
-            selected: {_track},
-            onSelectionChanged: (selection) =>
-                setState(() => _track = selection.first),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mainRow() {
-    return Row(
-      children: [
-        if (_numberedTypes.contains(_type)) ...[
-          _numberField(),
-          const SizedBox(width: 8),
-        ],
-        Expanded(child: _typeDropdown()),
-        const SizedBox(width: 8),
-        TextButton(
-          key: const Key('scheduleDateButton'),
-          onPressed: () => _pickDate(context),
-          child: Text(
-            _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
-            style: const TextStyle(color: SessionTimerColors.muted),
-          ),
-        ),
-        FilledButton(
-          key: const Key('addScheduleEventButton'),
-          onPressed:
-              _pickedDate == null ||
-                  !_isValidManualNumberText(_numberController.text)
-              ? null
-              : _submit,
-          child: const Text('追加'),
-        ),
-      ],
-    );
-  }
-
-  Widget _numberField() {
-    return SizedBox(
-      width: 64,
-      child: TextField(
-        key: const Key('scheduleManualNumberField'),
-        controller: _numberController,
-        keyboardType: TextInputType.number,
-        style: const TextStyle(color: SessionTimerColors.white),
-        decoration: const InputDecoration(
-          labelText: '番号',
-          labelStyle: TextStyle(color: SessionTimerColors.muted),
-        ),
-        onChanged: (_) => setState(() {}),
-      ),
-    );
-  }
-
-  DropdownButton<SessionEventType> _typeDropdown() {
-    return DropdownButton<SessionEventType>(
-      key: const Key('scheduleTypeDropdown'),
-      value: _type,
-      isExpanded: true,
-      dropdownColor: SessionTimerColors.panel,
-      items: [
-        for (final type in SessionEventType.values)
-          DropdownMenuItem(
-            value: type,
-            enabled:
-                !_singletonTypes.contains(type) ||
-                !widget.existingTypes.contains(type),
-            child: Text(
-              _typeNames[type]!,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: SessionTimerColors.white),
-            ),
-          ),
-      ],
-      onChanged: (value) => setState(() {
-        _type = value ?? _type;
-        // A/B only exists for WE/WD; don't carry a leftover choice over to
-        // a type that can't have one.
-        if (!SessionEvent.supportsTrack(_type)) _track = SessionTrack.common;
-      }),
-    );
-  }
-
-  Future<void> _pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _clampToScheduleRange(_pickedDate ?? DateTime.now()),
-      firstDate: _earliestScheduleDate,
-      lastDate: _latestScheduleDate,
-    );
-    if (picked == null || !context.mounted) return;
-    setState(() => _pickedDate = picked);
-  }
-
-  void _submit() {
-    final date = _pickedDate;
-    if (date == null) return;
-    final addedType = _type;
-    final addedTrack = _track;
-    final manualNumber = _numberedTypes.contains(addedType)
-        ? _parseManualNumberText(_numberController.text)
-        : null;
-    unawaited(
-      ref
-          .read(sessionEventControllerProvider.notifier)
-          .addEvent(
-            addedType,
-            date,
-            manualNumber: manualNumber,
-            track: addedTrack,
-          ),
-    );
-    setState(() {
-      _pickedDate = null;
-      _numberController.clear();
-      // Back to 共通 after every add, like the date and number: otherwise a
-      // forgotten A/B choice would silently put the next event on that
-      // schedule.
-      _track = SessionTrack.common;
-      // OR/CS are singletons — once added, their dropdown entry disables
-      // itself, so the selection must move off it or it'd point at a
-      // disabled item.
-      if (_singletonTypes.contains(addedType)) {
-        _type = SessionEventType.weekend;
-      }
-    });
   }
 }
