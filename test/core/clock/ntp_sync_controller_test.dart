@@ -195,6 +195,36 @@ void main() {
     );
 
     test(
+      'a failed prefs write on a re-sync also keeps the last offset',
+      () async {
+        final previousStore = SharedPreferencesStorePlatform.instance;
+        addTearDown(
+          () => SharedPreferencesStorePlatform.instance = previousStore,
+        );
+        SharedPreferences.setMockInitialValues({});
+        final store = _FlakyStore.empty();
+        SharedPreferencesStorePlatform.instance = store;
+        final container = _buildContainer(
+          fetcher: (host, {required timeout}) async => 90000,
+        );
+        addTearDown(container.dispose);
+        await container.read(ntpSyncControllerProvider.future);
+        final notifier = container.read(ntpSyncControllerProvider.notifier);
+        await notifier.syncNow('ntp.example.com');
+        expect(container.read(ntpOffsetMsProvider), 90000);
+
+        store.failNextWrite = true;
+        await notifier.syncNow('ntp.example.com');
+
+        expect(
+          container.read(ntpSyncControllerProvider),
+          isA<AsyncError<NtpSyncState>>(),
+        );
+        expect(container.read(ntpOffsetMsProvider), 90000);
+      },
+    );
+
+    test(
       'lastSyncedAt reflects the NTP-corrected time, not raw device time',
       () async {
         SharedPreferences.setMockInitialValues({});

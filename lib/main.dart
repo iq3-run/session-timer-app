@@ -55,7 +55,8 @@ Future<void> _registerHomeWidgetBackgroundCallback() async {
 /// failure into a normal `failed` state, but a lower-level failure (e.g.
 /// reading `SharedPreferences` itself) must not become an unhandled async
 /// error — the app already falls back to running on device time either
-/// way, so a startup sync attempt gone wrong should never crash the app.
+/// way (on the device clock, as no offset is known yet at launch), so a
+/// startup sync attempt gone wrong should never crash the app.
 Future<void> _autoSyncNtpAtStartup(ProviderContainer container) async {
   try {
     final initial = await container.read(ntpSyncControllerProvider.future);
@@ -63,6 +64,6 @@ Future<void> _autoSyncNtpAtStartup(ProviderContainer container) async {
         .read(ntpSyncControllerProvider.notifier)
         .syncNow(initial.serverHost);
   } on Exception {
-    // Fall through silently — the app already runs on device time.
+    // Fall through silently — the app keeps running on the device clock.
   }
 }
