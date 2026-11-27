@@ -103,7 +103,9 @@ final ntpSyncControllerProvider =
     );
 
 /// The correction to apply on top of device time; 0 while unsynced,
-/// loading, or failed. Read by `now_provider.dart`.
+/// loading, or failed. Read by `now_provider.dart`. A change also moves the
+/// device alarms (`NotificationScheduler` registers them shifted by it), so
+/// each change re-registers every pending notification.
 final ntpOffsetMsProvider = Provider<int>(
   (ref) => ref.watch(ntpSyncControllerProvider).value?.offsetMs ?? 0,
 );

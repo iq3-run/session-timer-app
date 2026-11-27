@@ -270,5 +270,40 @@ void main() {
       ]);
       expect(service.offsets, [60000]);
     });
+
+    testWidgets('a change under a second does not re-register anything', (
+      tester,
+    ) async {
+      final service = _RecordingService();
+      final container = ProviderContainer(
+        overrides: [
+          notificationServiceProvider.overrideWithValue(service),
+          notificationCandidateEventsProvider.overrideWithValue(const []),
+          ntpOffsetMsProvider.overrideWith(
+            (ref) => ref.watch(_testOffsetProvider),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: NotificationScheduler(child: SizedBox()),
+          ),
+        ),
+      );
+      await tester.pump();
+      service.rescheduled.clear();
+
+      container.read(_testOffsetProvider.notifier).change(400);
+      await tester.pump();
+      expect(service.rescheduled, isEmpty);
+
+      // Measured from what is registered (0), not from the last tiny step.
+      container.read(_testOffsetProvider.notifier).change(1200);
+      await tester.pump();
+      expect(service.rescheduled, hasLength(1));
+    });
   });
 }
