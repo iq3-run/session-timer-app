@@ -70,6 +70,7 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
     // If anything below throws, _initialLoad must still complete — otherwise
     // every mutation queued behind it would wait forever instead of failing
     // fast.
+    final persistedBefore = _persistedCount;
     try {
       final prefs = await ref.watch(sharedPreferencesProvider.future);
       // A rebuild (e.g. `sharedPreferencesProvider` was invalidated) keeps the
@@ -80,7 +81,6 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
         return _lastGood;
       }
 
-      final persistedBefore = _persistedCount;
       final loaded = await loadInitial(prefs);
       // A mutation can retry a failed load and persist while this one is
       // still reading (e.g. the framework's own retry of build()); what it
@@ -122,6 +122,7 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
         _loaded = true;
       }
     } on Object catch (e, st) {
+      debugPrint('$runtimeType: loading failed: $e');
       _publish(AsyncError(e, st));
       return;
     }
@@ -139,6 +140,7 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
         );
       }
     } on Object catch (e, st) {
+      debugPrint('$runtimeType: persisting failed: $e');
       _publish(AsyncError(e, st));
     }
   }
