@@ -67,10 +67,17 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
     );
   }
 
+  // The number field only exists for numbered types, so its text must not
+  // block adding any other type.
+  bool get _canSubmit =>
+      _pickedDate != null &&
+      (!numberedEventTypes.contains(_type) ||
+          isValidManualNumberText(_numberController.text));
+
   Widget _mainRow() {
     return Row(
       children: [
-        if (numberedScheduleTypes.contains(_type)) ...[
+        if (numberedEventTypes.contains(_type)) ...[
           _numberField(),
           const SizedBox(width: 8),
         ],
@@ -86,11 +93,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
         ),
         FilledButton(
           key: const Key('addScheduleEventButton'),
-          onPressed:
-              _pickedDate == null ||
-                  !isValidManualNumberText(_numberController.text)
-              ? null
-              : _submit,
+          onPressed: _canSubmit ? _submit : null,
           child: const Text('追加'),
         ),
       ],
@@ -125,7 +128,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
           DropdownMenuItem(
             value: type,
             enabled:
-                !singletonScheduleTypes.contains(type) ||
+                !singletonEventTypes.contains(type) ||
                 !widget.existingTypes.contains(type),
             child: Text(
               scheduleTypeNames[type]!,
@@ -139,6 +142,9 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
         // A/B only exists for WE/WD; don't carry a leftover choice over to
         // a type that can't have one.
         if (!SessionEvent.supportsTrack(_type)) _track = SessionTrack.common;
+        // Likewise a number typed for a numbered type: it would stay hidden
+        // (and, if invalid, block adding) once the field is gone.
+        if (!numberedEventTypes.contains(_type)) _numberController.clear();
       }),
     );
   }
@@ -159,7 +165,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
     if (date == null) return;
     final addedType = _type;
     final addedTrack = _track;
-    final manualNumber = numberedScheduleTypes.contains(addedType)
+    final manualNumber = numberedEventTypes.contains(addedType)
         ? parseManualNumberText(_numberController.text)
         : null;
     unawaited(
@@ -182,7 +188,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
       // OR/CS are singletons — once added, their dropdown entry disables
       // itself, so the selection must move off it or it'd point at a
       // disabled item.
-      if (singletonScheduleTypes.contains(addedType)) {
+      if (singletonEventTypes.contains(addedType)) {
         _type = SessionEventType.weekend;
       }
     });

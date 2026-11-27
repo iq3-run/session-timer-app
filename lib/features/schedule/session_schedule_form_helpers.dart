@@ -25,19 +25,6 @@ const Map<SessionEventType, String> scheduleTypeNames = {
   SessionEventType.completion: '完了セッション(CS)',
 };
 
-const Set<SessionEventType> singletonScheduleTypes = {
-  SessionEventType.orientation,
-  SessionEventType.completion,
-};
-
-/// Types that carry a sequence number (and so can take a manual override) —
-/// OR/CR/CS never have one regardless of `manualNumber`.
-const Set<SessionEventType> numberedScheduleTypes = {
-  SessionEventType.weekend,
-  SessionEventType.workday,
-  SessionEventType.specialSession,
-};
-
 /// Empty (auto) or a positive integer — shared by the add form's number
 /// field and the edit dialog's, so both accept/reject the same input.
 bool isValidManualNumberText(String text) {

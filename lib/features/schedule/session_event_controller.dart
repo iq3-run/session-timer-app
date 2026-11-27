@@ -8,11 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const sessionEventsJsonKey = 'session_events_json';
 
-const Set<SessionEventType> _singletonTypes = {
-  SessionEventType.orientation,
-  SessionEventType.completion,
-};
-
 final sessionEventControllerProvider =
     AsyncNotifierProvider<SessionEventController, List<SessionEvent>>(
       SessionEventController.new,
@@ -46,7 +41,8 @@ class SessionEventController extends MutationQueueNotifier<List<SessionEvent>> {
     SessionTrack track = SessionTrack.common,
   }) {
     return mutate((events) {
-      if (_singletonTypes.contains(type) && events.any((e) => e.type == type)) {
+      if (singletonEventTypes.contains(type) &&
+          events.any((e) => e.type == type)) {
         return events;
       }
       final event = SessionEvent(

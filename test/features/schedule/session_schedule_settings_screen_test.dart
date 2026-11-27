@@ -313,6 +313,45 @@ void main() {
       },
     );
 
+    testWidgets(
+      'an invalid number left over from a numbered type does not block '
+      'adding a type without a number field',
+      (tester) async {
+        await _pumpScreen(tester);
+        await tester.enterText(
+          find.byKey(const Key('scheduleManualNumberField')),
+          '0',
+        );
+        await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('クラスルーム(CR)').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('scheduleDateButton')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+
+        final button = tester.widget<FilledButton>(
+          find.byKey(const Key('addScheduleEventButton')),
+        );
+        expect(button.onPressed, isNotNull);
+
+        await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+        await tester.pumpAndSettle();
+        expect(find.text('CR'), findsOneWidget);
+
+        // Back on a numbered type, the old text is gone, not just hidden.
+        await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('週末(WE)').last);
+        await tester.pumpAndSettle();
+        final field = tester.widget<TextField>(
+          find.byKey(const Key('scheduleManualNumberField')),
+        );
+        expect(field.controller?.text, isEmpty);
+      },
+    );
+
     testWidgets('adding with a manual number uses it as the label', (
       tester,
     ) async {
