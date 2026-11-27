@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
-import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/lifecycle/app_foreground.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
@@ -156,9 +155,7 @@ class FlashQueueController extends Notifier<FlashQueueState> {
   /// [now] is for tests; by default it is the device clock plus the NTP
   /// offset, like the rest of the flash logic.
   void dropElapsed({DateTime? now}) {
-    now ??= DateTime.now().add(
-      Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
-    );
+    now ??= ref.read(correctedNowProvider)();
     final cutoff = now;
     _queue.removeWhere((event) => !event.instant.isAfter(cutoff));
     final active = _active;

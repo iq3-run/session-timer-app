@@ -46,7 +46,10 @@ class CompletionCountdownSection extends ConsumerWidget {
           : TimeOfDay.fromDateTime(currentTarget),
     );
     if (picked == null || !context.mounted) return;
-    final target = resolveNextOccurrence(picked, DateTime.now());
+    final target = resolveNextOccurrence(
+      picked,
+      ref.read(correctedNowProvider)(),
+    );
     await ref.read(completionTimeControllerProvider.notifier).setTarget(target);
   }
 }

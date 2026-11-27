@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 
@@ -21,7 +22,7 @@ class CompletionTimeController extends AsyncNotifier<CompletionTimeState> {
     final storedEpochMs = prefs.getInt(completionTimeEpochMsKey);
     if (storedEpochMs == null) return const CompletionTimeState();
 
-    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final nowEpochMs = ref.read(correctedNowProvider)().millisecondsSinceEpoch;
     if (storedEpochMs <= nowEpochMs) {
       // Best-effort cleanup: the state is "unset" either way since the
       // target has expired, and a failed remove() self-heals — the next

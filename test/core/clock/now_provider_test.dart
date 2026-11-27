@@ -61,4 +61,38 @@ void main() {
       isTrue,
     );
   });
+
+  group('correctedNowProvider', () {
+    test('adds the current NTP offset to the device clock', () {
+      final container = ProviderContainer(
+        overrides: [ntpOffsetMsProvider.overrideWithValue(60000)],
+      );
+      addTearDown(container.dispose);
+
+      final before = DateTime.now();
+      final corrected = container.read(correctedNowProvider)();
+      final after = DateTime.now();
+
+      expect(
+        corrected.isBefore(before.add(const Duration(seconds: 60))),
+        isFalse,
+      );
+      expect(
+        corrected.isAfter(after.add(const Duration(seconds: 60))),
+        isFalse,
+      );
+    });
+
+    test('is the plain device clock while no offset is known', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final before = DateTime.now();
+      final corrected = container.read(correctedNowProvider)();
+      final after = DateTime.now();
+
+      expect(corrected.isBefore(before), isFalse);
+      expect(corrected.isAfter(after), isFalse);
+    });
+  });
 }

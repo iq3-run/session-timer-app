@@ -1,5 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/now_provider.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 
@@ -15,7 +17,12 @@ TimeTarget? nextTimeTarget(List<TimeTarget> targets, DateTime now) {
 /// Deliberately doesn't watch a ticking `now` provider — like
 /// `notificationCandidateEventsProvider`, this only needs to recompute when
 /// the target list itself changes, not on every second's tick.
+///
+/// It does watch the NTP offset: the first sync lands a few seconds after
+/// launch, and a target that only then turns out to be past must stop being
+/// "next" without waiting for the list to change.
 final nextTimeTargetProvider = Provider<TimeTarget?>((ref) {
+  ref.watch(ntpOffsetMsProvider);
   final targets = ref.watch(timeTargetsControllerProvider).value ?? const [];
-  return nextTimeTarget(targets, DateTime.now());
+  return nextTimeTarget(targets, ref.read(correctedNowProvider)());
 });

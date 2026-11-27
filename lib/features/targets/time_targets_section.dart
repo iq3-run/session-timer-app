@@ -79,7 +79,10 @@ class _TimeTargetRow extends ConsumerWidget {
     if (picked == null || !context.mounted) return;
     final rawTitle = await _promptTargetTitle(context, initial: target.title);
     if (!context.mounted) return;
-    final resolved = resolveNextOccurrence(picked, DateTime.now());
+    final resolved = resolveNextOccurrence(
+      picked,
+      ref.read(correctedNowProvider)(),
+    );
     final edit = resolveTargetTitleEdit(rawTitle);
     await ref
         .read(timeTargetsControllerProvider.notifier)
@@ -127,7 +130,7 @@ class _AddTargetRow extends ConsumerWidget {
   }
 
   Future<void> _addTarget(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
+    final now = ref.read(correctedNowProvider)();
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
@@ -135,7 +138,10 @@ class _AddTargetRow extends ConsumerWidget {
     if (picked == null || !context.mounted) return;
     final rawTitle = await _promptTargetTitle(context);
     if (!context.mounted) return;
-    final resolved = resolveNextOccurrence(picked, DateTime.now());
+    final resolved = resolveNextOccurrence(
+      picked,
+      ref.read(correctedNowProvider)(),
+    );
     await ref
         .read(timeTargetsControllerProvider.notifier)
         .addTarget(resolved, title: resolveTargetTitleEdit(rawTitle).title);
