@@ -346,6 +346,41 @@ void main() {
       expect(container.read(_counterProvider).value, 5);
     });
 
+    test('replaces the error state left by a failed persist', () async {
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await notifier.add(3);
+      _nextWrite = _Write.reportsFailure;
+      await notifier.add(100);
+      expect(container.read(_counterProvider).hasError, isTrue);
+
+      await notifier.reload();
+
+      final state = container.read(_counterProvider);
+      expect(state.hasError, isFalse);
+      expect(state.value, 3);
+    });
+
+    test('after a failed initial load, the next mutation does not load '
+        'again', () async {
+      SharedPreferences.setMockInitialValues({_key: 10});
+      _loadThrows = true;
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await expectLater(
+        container.read(_counterProvider.future),
+        throwsStateError,
+      );
+
+      _loadThrows = false;
+      await notifier.reload();
+      final callsAfterReload = _loadCalls;
+      await notifier.add(1);
+
+      expect(container.read(_counterProvider).value, 11);
+      expect(_loadCalls, callsAfterReload);
+    });
+
     test(
       'a failing reload keeps the current value and does not throw',
       () async {
