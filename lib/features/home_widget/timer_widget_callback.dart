@@ -5,7 +5,7 @@ import 'package:session_timer/features/home_widget/home_widget_sync_service.dart
 import 'package:session_timer/features/stopwatch/stopwatch_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 
-/// Mirrors `timer_section.dart`'s `_defaultSetupDuration` — the widget's
+/// Mirrors `timer_setup_sheet.dart`'s `_defaultSetupDuration` — the widget's
 /// "start" button can't open the mode/duration picker, so it always starts
 /// a fresh 通常タイマー of this length.
 const _defaultQuickStartDuration = Duration(minutes: 5);
