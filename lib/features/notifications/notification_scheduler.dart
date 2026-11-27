@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/notifications/notification_event_source.dart';
 import 'package:session_timer/features/notifications/notification_service.dart';
@@ -101,6 +102,7 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
       // source provider happening to still be mid-load.
       await service.rescheduleAll(
         ref.read(notificationCandidateEventsProvider),
+        ntpOffsetMs: ref.read(ntpOffsetMsProvider),
       );
     } on Exception catch (e) {
       debugPrint('NotificationScheduler: failed to initialize: $e');
@@ -112,13 +114,21 @@ class _NotificationSchedulerState extends ConsumerState<NotificationScheduler>
     ref.listen(notificationCandidateEventsProvider, (previous, next) {
       unawaited(_reschedule(next));
     });
+    // The alarms are registered by the device clock, shifted by the offset:
+    // the first sync lands a few seconds after launch, and a later one can
+    // change it, so what is already registered has to move with it.
+    ref.listen(ntpOffsetMsProvider, (previous, next) {
+      unawaited(_reschedule(ref.read(notificationCandidateEventsProvider)));
+    });
     return widget.child;
   }
 
   /// Whether the reschedule went through.
   Future<bool> _reschedule(List<FlashEvent> events) async {
     try {
-      await ref.read(notificationServiceProvider).rescheduleAll(events);
+      await ref
+          .read(notificationServiceProvider)
+          .rescheduleAll(events, ntpOffsetMs: ref.read(ntpOffsetMsProvider));
       return true;
     } on Object catch (e) {
       debugPrint('NotificationScheduler: failed to reschedule: $e');

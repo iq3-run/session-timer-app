@@ -2,16 +2,31 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/notifications/notification_event_source.dart';
 import 'package:session_timer/features/notifications/notification_scheduler.dart';
 import 'package:session_timer/features/notifications/notification_service.dart';
+
+class _TestOffset extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  // `Notifier.state` is protected, so changing it goes through here.
+  // ignore: use_setters_to_change_properties
+  void change(int value) => state = value;
+}
+
+final _testOffsetProvider = NotifierProvider<_TestOffset, int>(
+  _TestOffset.new,
+);
 
 class _RecordingService extends NotificationService {
   _RecordingService() : super(FlutterLocalNotificationsPlugin());
 
   int clearSuppressedCalls = 0;
   final List<List<FlashEvent>> rescheduled = [];
+  final List<int> offsets = [];
 
   @override
   Future<void> init() async {}
@@ -32,8 +47,12 @@ class _RecordingService extends NotificationService {
   bool failReschedule = false;
 
   @override
-  Future<void> rescheduleAll(List<FlashEvent> events) async {
+  Future<void> rescheduleAll(
+    List<FlashEvent> events, {
+    int ntpOffsetMs = 0,
+  }) async {
     rescheduled.add(events);
+    offsets.add(ntpOffsetMs);
     if (failReschedule) throw Exception('plugin failed');
   }
 }
@@ -209,5 +228,47 @@ void main() {
     await tester.pump();
 
     expect(service.rescheduled, hasLength(1));
+  });
+
+  group('NTP offset', () {
+    testWidgets('is passed along when scheduling, and a change reschedules '
+        'what is already registered', (tester) async {
+      final service = _RecordingService();
+      final event = FlashEvent(
+        id: 'target:t1:1',
+        instant: DateTime.now().add(const Duration(hours: 1)),
+        label: '指定時刻',
+      );
+      final container = ProviderContainer(
+        overrides: [
+          notificationServiceProvider.overrideWithValue(service),
+          notificationCandidateEventsProvider.overrideWithValue([event]),
+          ntpOffsetMsProvider.overrideWith(
+            (ref) => ref.watch(_testOffsetProvider),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: NotificationScheduler(child: SizedBox()),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(service.offsets.last, 0);
+      service.rescheduled.clear();
+      service.offsets.clear();
+
+      container.read(_testOffsetProvider.notifier).change(60000);
+      await tester.pump();
+
+      expect(service.rescheduled, [
+        [event],
+      ]);
+      expect(service.offsets, [60000]);
+    });
   });
 }

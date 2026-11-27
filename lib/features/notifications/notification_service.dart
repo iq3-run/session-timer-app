@@ -102,8 +102,13 @@ class NotificationService {
   /// Cancels every pending scheduled notification and re-schedules one for
   /// each of [events] whose instant hasn't passed yet. Called whenever the
   /// candidate list changes (completion/target/timer state edited).
-  Future<void> rescheduleAll(List<FlashEvent> events) =>
-      _rescheduleQueue.run(() => _rescheduleNow(events));
+  ///
+  /// [FlashEvent.instant]s are on the NTP-corrected clock, but the OS fires
+  /// the alarm by the device clock: each is registered [ntpOffsetMs] earlier
+  /// (the offset is `corrected − device`), so it rings when the corrected
+  /// clock reaches the instant, in step with the flash on screen.
+  Future<void> rescheduleAll(List<FlashEvent> events, {int ntpOffsetMs = 0}) =>
+      _rescheduleQueue.run(() => _rescheduleNow(events, ntpOffsetMs));
 
   /// Event ids whose notification was dropped because the flash for them
   /// started on screen (see [cancelForEvent]), mapped to their instant. A
@@ -138,10 +143,11 @@ class NotificationService {
     return hadAny;
   }
 
-  Future<void> _rescheduleNow(List<FlashEvent> events) async {
+  Future<void> _rescheduleNow(List<FlashEvent> events, int ntpOffsetMs) async {
     await init();
     await _plugin.cancelAll();
-    final now = DateTime.now();
+    final offset = Duration(milliseconds: ntpOffsetMs);
+    final now = DateTime.now().add(offset);
     // Suppression only matters until the event's instant; forgetting it
     // afterwards lets a later schedule that reuses the id notify normally.
     // (Not pruned by "is it still a candidate": a source briefly reading as
@@ -159,7 +165,10 @@ class NotificationService {
           id: _notificationId(event.id),
           title: _notificationTitle,
           body: event.label,
-          scheduledDate: tz.TZDateTime.from(event.instant, tz.local),
+          scheduledDate: tz.TZDateTime.from(
+            event.instant.subtract(offset),
+            tz.local,
+          ),
           notificationDetails: _notificationDetails,
           androidScheduleMode: scheduleMode,
         ),
