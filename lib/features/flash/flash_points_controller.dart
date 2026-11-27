@@ -19,7 +19,8 @@ final flashPointsControllerProvider =
 /// its own flash/notify toggle (see `FlashPointConfig`).
 ///
 /// The 12 defaults ([defaultCompletionFlashPointsMinutes]) are a baseline
-/// applied at every `build()` (app startup only — mirrors
+/// applied once per load (`loadInitial`, i.e. app startup, or the retry of
+/// a failed load — not on a rebuild that keeps the in-memory value; mirrors
 /// `CompletionTimeController`'s own "clear an overdue target at startup"
 /// rule, not a continuous check): a default already present always stays.
 /// A default missing from the persisted list (the user removed it) is
