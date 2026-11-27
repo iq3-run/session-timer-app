@@ -1,13 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
+import 'package:session_timer/core/lifecycle/app_foreground.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
+import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_point_config.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
+import 'package:session_timer/features/notifications/notification_service.dart';
 import 'package:session_timer/features/targets/time_target.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
@@ -59,8 +63,22 @@ class _MutableFlashPointsController extends FlashPointsController {
   void setPoints(List<FlashPointConfig> points) => state = AsyncData(points);
 }
 
+/// Records [cancelForEvent] calls instead of reaching the plugin.
+class _RecordingNotificationService extends NotificationService {
+  _RecordingNotificationService() : super(FlutterLocalNotificationsPlugin());
+
+  final List<String> cancelledEventIds = [];
+
+  @override
+  Future<void> cancelForEvent(FlashEvent event) async {
+    cancelledEventIds.add(event.id);
+  }
+}
+
 Future<ProviderContainer> _buildContainer({
   required StreamController<DateTime> clock,
+  NotificationService? notificationService,
+  bool inForeground = true,
   List<TimeTarget> targets = const [],
   CompletionTimeState completion = const CompletionTimeState(),
   TimerState timer = const TimerState(),
@@ -71,6 +89,9 @@ Future<ProviderContainer> _buildContainer({
   final container = ProviderContainer(
     overrides: [
       nowProvider.overrideWith((ref) => clock.stream),
+      appInForegroundProvider.overrideWithValue(() => inForeground),
+      if (notificationService != null)
+        notificationServiceProvider.overrideWithValue(notificationService),
       completionTimeControllerProvider.overrideWith(
         () => _FixedCompletionController(completion),
       ),
@@ -104,6 +125,154 @@ Future<void> _tick(StreamController<DateTime> clock, DateTime now) async {
 }
 
 void main() {
+  group('FlashQueueController notification suppression (#95)', () {
+    final target = DateTime(2099, 1, 1, 12);
+
+    Future<
+      (
+        ProviderContainer,
+        StreamController<DateTime>,
+        _RecordingNotificationService,
+      )
+    >
+    setUpSuppression({bool inForeground = true}) async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final service = _RecordingNotificationService();
+      final container = await _buildContainer(
+        clock: clock,
+        notificationService: service,
+        inForeground: inForeground,
+        targets: [
+          TimeTarget(id: 't1', epochMs: target.millisecondsSinceEpoch),
+        ],
+      );
+      addTearDown(container.dispose);
+      return (container, clock, service);
+    }
+
+    test('cancels the notification once the flash window opens', () async {
+      final (container, clock, service) = await setUpSuppression();
+
+      await _tick(clock, target.subtract(const Duration(seconds: 2)));
+      container.read(flashQueueControllerProvider); // let it rebuild
+
+      expect(service.cancelledEventIds, [
+        'target:t1:${target.millisecondsSinceEpoch}:0',
+      ]);
+    });
+
+    test('does not cancel while the app is not in the foreground '
+        '(nobody sees the flash, so the notification must stay)', () async {
+      final (container, clock, service) = await setUpSuppression(
+        inForeground: false,
+      );
+
+      await _tick(clock, target.subtract(const Duration(seconds: 2)));
+      container.read(flashQueueControllerProvider); // let it rebuild
+
+      expect(service.cancelledEventIds, isEmpty);
+    });
+
+    test('does not cancel before the window opens', () async {
+      final (container, clock, service) = await setUpSuppression();
+
+      await _tick(clock, target.subtract(const Duration(seconds: 10)));
+      container.read(flashQueueControllerProvider); // let it rebuild
+
+      expect(service.cancelledEventIds, isEmpty);
+    });
+
+    test('does not cancel an event whose instant already passed '
+        '(its notification was delivered while backgrounded)', () async {
+      final (container, clock, service) = await setUpSuppression();
+
+      await _tick(clock, target.add(const Duration(seconds: 5)));
+      container.read(flashQueueControllerProvider); // let it rebuild
+
+      expect(service.cancelledEventIds, isEmpty);
+    });
+
+    test('cancels once per event, not on every tick', () async {
+      final (container, clock, service) = await setUpSuppression();
+
+      await _tick(clock, target.subtract(const Duration(seconds: 2)));
+      container.read(flashQueueControllerProvider); // let it rebuild
+      await _tick(clock, target.subtract(const Duration(seconds: 1)));
+      container.read(flashQueueControllerProvider);
+
+      expect(service.cancelledEventIds, hasLength(1));
+    });
+  });
+
+  group('FlashQueueController.dropElapsed', () {
+    final soon = DateTime(2099, 1, 1, 12);
+    final later = soon.add(const Duration(milliseconds: 2700));
+
+    Future<ProviderContainer> setUpTwoFlashes(
+      StreamController<DateTime> clock,
+    ) async {
+      final container = await _buildContainer(
+        clock: clock,
+        targets: [
+          TimeTarget(id: 'soon', epochMs: soon.millisecondsSinceEpoch),
+          TimeTarget(id: 'later', epochMs: later.millisecondsSinceEpoch),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Both windows are open (the second is queued behind the first).
+      await _tick(clock, soon.subtract(const Duration(milliseconds: 100)));
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:soon'),
+      );
+      return container;
+    }
+
+    test('drops the playing flash whose instant has passed and promotes '
+        'the queued one that is still ahead', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final container = await setUpTwoFlashes(clock);
+
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: soon.add(const Duration(seconds: 1)));
+
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:later'),
+      );
+    });
+
+    test('keeps everything while no instant has passed', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final container = await setUpTwoFlashes(clock);
+
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: soon.subtract(const Duration(milliseconds: 50)));
+
+      expect(
+        container.read(flashQueueControllerProvider).active?.id,
+        startsWith('target:soon'),
+      );
+    });
+
+    test('clears everything once every instant has passed', () async {
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final container = await setUpTwoFlashes(clock);
+
+      container
+          .read(flashQueueControllerProvider.notifier)
+          .dropElapsed(now: later.add(const Duration(seconds: 1)));
+
+      expect(container.read(flashQueueControllerProvider).active, isNull);
+    });
+  });
+
   group('FlashQueueController', () {
     test('does not fire before the window opens', () async {
       final clock = StreamController<DateTime>.broadcast();
@@ -278,6 +447,7 @@ void main() {
         final completionController = _MutableCompletionController();
         final container = ProviderContainer(
           overrides: [
+            appInForegroundProvider.overrideWithValue(() => true),
             nowProvider.overrideWith((ref) => clock.stream),
             completionTimeControllerProvider.overrideWith(
               () => completionController,
@@ -361,6 +531,7 @@ void main() {
         ]);
         final container = ProviderContainer(
           overrides: [
+            appInForegroundProvider.overrideWithValue(() => true),
             nowProvider.overrideWith((ref) => clock.stream),
             completionTimeControllerProvider.overrideWith(
               () => _FixedCompletionController(

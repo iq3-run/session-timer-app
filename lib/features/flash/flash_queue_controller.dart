@@ -1,9 +1,15 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
+import 'package:session_timer/core/lifecycle/app_foreground.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/completion/completion_time_state.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_points_controller.dart';
+import 'package:session_timer/features/notifications/notification_service.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:session_timer/features/timer/timer_state.dart';
@@ -138,6 +144,31 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     state = FlashQueueState(active: _active, firedIds: {..._firedIds});
   }
 
+  /// Drops every flash — playing or queued — whose instant has already
+  /// passed. Called when the app returns to the foreground.
+  ///
+  /// While the app was in the background the clock kept admitting events,
+  /// but no frames were drawn, so the playing flash's animation had not
+  /// advanced: it would start its full 3s only once frames resume, long
+  /// after the moment it was for (the notification for it has already been
+  /// delivered). Flashes whose moment is still ahead are left to play.
+  ///
+  /// [now] is for tests; by default it is the device clock plus the NTP
+  /// offset, like the rest of the flash logic.
+  void dropElapsed({DateTime? now}) {
+    now ??= DateTime.now().add(
+      Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
+    );
+    final cutoff = now;
+    _queue.removeWhere((event) => !event.instant.isAfter(cutoff));
+    final active = _active;
+    if (active != null && !active.instant.isAfter(cutoff)) {
+      _active = null;
+      _promoteNextIfIdle();
+    }
+    state = FlashQueueState(active: _active, firedIds: {..._firedIds});
+  }
+
   void _admit(FlashEvent event, DateTime now) {
     if (_firedIds.contains(event.id)) return;
 
@@ -149,7 +180,31 @@ class FlashQueueController extends Notifier<FlashQueueState> {
     _firedIds.add(event.id);
     if (now.isAfter(event.instant)) return;
 
+    // The flash is about to play (alone or merged into another), so the
+    // device notification for this instant would only duplicate it (#95).
+    // Started here rather than when the animation begins: the notification
+    // is due at `instant`, this is at most `flashAnimationDuration` before.
+    //
+    // Only while the app is in the foreground: the clock keeps ticking for a
+    // while after the app is backgrounded or the screen turns off, so a
+    // window can open here with nobody watching the flash — and the
+    // notification is then the only signal the user gets.
+    if (ref.read(appInForegroundProvider)()) _cancelNotification(event);
+
     if (!_isMergeable(event)) _queue.add(event);
+  }
+
+  void _cancelNotification(FlashEvent event) {
+    unawaited(
+      ref
+          .read(notificationServiceProvider)
+          .cancelForEvent(event)
+          .onError<Object>(
+            (e, _) => debugPrint(
+              'FlashQueueController: failed to cancel notification: $e',
+            ),
+          ),
+    );
   }
 
   /// Whether [event] lands within [_flashMergeThreshold] of the currently

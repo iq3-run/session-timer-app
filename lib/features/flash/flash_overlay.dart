@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:session_timer/core/clock/ntp_sync_controller.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/flash/flash_event.dart';
 import 'package:session_timer/features/flash/flash_queue_controller.dart';
@@ -17,7 +18,7 @@ class FlashOverlay extends ConsumerStatefulWidget {
 }
 
 class _FlashOverlayState extends ConsumerState<FlashOverlay>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final _controller = AnimationController(
     vsync: this,
     duration: flashAnimationDuration,
@@ -29,8 +30,41 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
     }
   }
 
+  bool _wasBackgrounded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // Frames stop while backgrounded, so a flash that became active then has
+  // not actually been animating. Once back, drop the ones whose moment has
+  // passed instead of playing them late (see `dropElapsed`), and restart a
+  // still-ahead one from where its window really is, so it ends at its
+  // instant rather than a few seconds after.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // `inactive` alone (notification shade, a system dialog) leaves the
+    // animation running, so there is nothing to catch up on after it.
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasBackgrounded = true;
+      return;
+    }
+    if (state != AppLifecycleState.resumed || !_wasBackgrounded) return;
+    _wasBackgrounded = false;
+    final before = ref.read(flashQueueControllerProvider).active;
+    ref.read(flashQueueControllerProvider.notifier).dropElapsed();
+    final after = ref.read(flashQueueControllerProvider).active;
+    // A different (or no) active event is already handled by
+    // `_onActiveEventChanged`; only the one that kept playing needs this.
+    if (after != null && after.id == before?.id) _play(after);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
@@ -45,7 +79,17 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   // the overlay stuck fully opaque. Advance directly instead.
   void _onActiveEventChanged(FlashQueueState? previous, FlashQueueState next) {
     final event = next.active;
-    if (event == null || event.id == previous?.active?.id) return;
+    if (event == null) {
+      // Cleared while still animating (dropElapsed): stop, so the stale
+      // animation can't finish later and advance() past a newer event.
+      _controller.stop();
+      return;
+    }
+    if (event.id == previous?.active?.id) return;
+    _play(event);
+  }
+
+  void _play(FlashEvent event) {
     _controller.stop();
     final progress = _elapsedProgress(event);
     if (progress >= 1.0) {
@@ -80,9 +124,12 @@ class _FlashOverlayState extends ConsumerState<FlashOverlay>
   /// widget notices — starting from this fraction instead of always 0
   /// keeps the strobe ending at `event.instant` rather than up to ~1s late.
   double _elapsedProgress(FlashEvent event) {
-    final elapsedMs = DateTime.now()
-        .difference(event.windowStart)
-        .inMilliseconds;
+    // Same NTP-corrected clock `FlashQueueController` admits and drops by, so
+    // a flash it keeps never reads here as already over.
+    final now = DateTime.now().add(
+      Duration(milliseconds: ref.read(ntpOffsetMsProvider)),
+    );
+    final elapsedMs = now.difference(event.windowStart).inMilliseconds;
     return (elapsedMs / flashAnimationDuration.inMilliseconds).clamp(0.0, 1.0);
   }
 
