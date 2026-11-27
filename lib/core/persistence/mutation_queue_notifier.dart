@@ -108,6 +108,31 @@ abstract class MutationQueueNotifier<T> extends AsyncNotifier<T> {
   Future<void> mutate(T Function(T) update) =>
       _queue.run(() => _mutateNow(update));
 
+  /// Re-reads the stored value and publishes it, for when something outside
+  /// this notifier (e.g. a home-widget button handled in another isolate with
+  /// its own `SharedPreferences` cache) changed it. Queued behind running
+  /// mutations so it can't race one. It reads through [loadInitial], so only
+  /// use it where that is a plain read. Failures are logged, not published:
+  /// callers fire this without awaiting it, and the value they already show
+  /// is still valid.
+  @protected
+  Future<void> reloadFromStorage() => _queue.run(_reloadNow);
+
+  Future<void> _reloadNow() async {
+    if (!_initialLoad.isCompleted) await _initialLoad.future;
+    try {
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      await prefs.reload();
+      final onDisk = await loadInitial(prefs);
+      _lastGood = onDisk;
+      _loaded = true;
+      _persistedCount++;
+      _publish(AsyncData(onDisk));
+    } on Object catch (e) {
+      debugPrint('$runtimeType: reload failed: $e');
+    }
+  }
+
   Future<void> _mutateNow(T Function(T) update) async {
     if (!_initialLoad.isCompleted) await _initialLoad.future;
 

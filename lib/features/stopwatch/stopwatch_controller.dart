@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:session_timer/core/persistence/shared_preferences_provider.dart';
+import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
 import 'package:session_timer/features/stopwatch/stopwatch_state.dart';
 import 'package:session_timer/features/timer/timer_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,37 +18,27 @@ final stopwatchControllerProvider =
       StopwatchController.new,
     );
 
-class StopwatchController extends AsyncNotifier<StopwatchState> {
-  // See TimeTargetsController (lib/features/targets/time_targets_controller.dart)
-  // for why mutations are serialized through this queue instead of reading
-  // `state.value` directly.
-  Future<void> _mutationQueue = Future.value();
-  final Completer<void> _initialLoad = Completer<void>();
-  StopwatchState _lastGood = const StopwatchState();
+class StopwatchController extends MutationQueueNotifier<StopwatchState> {
+  @override
+  @protected
+  StopwatchState get initialValue => const StopwatchState();
 
   @override
-  Future<StopwatchState> build() async {
-    try {
-      final prefs = await ref.watch(sharedPreferencesProvider.future);
-      // A mutate() call may have already landed on `state` while this
-      // build() was awaiting the prefs future above — don't clobber it with
-      // a stale read.
-      if (state.hasValue) return state.value!;
+  @protected
+  String get persistenceFailureMessage =>
+      'SharedPreferences reported failure to persist stopwatch state';
 
-      final loaded = _readPersisted(prefs);
-      _lastGood = loaded;
-      return loaded;
-    } finally {
-      if (!_initialLoad.isCompleted) _initialLoad.complete();
-    }
-  }
+  @override
+  @protected
+  Future<StopwatchState> loadInitial(SharedPreferences prefs) async =>
+      _readPersisted(prefs);
 
   Future<void> toggle() {
     // Captured before queuing: if a prior persist is still in flight,
     // _mutateNow may run well after this call, and the operation should
     // still be timed from when the user actually tapped.
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    return _mutate((s) {
+    return mutate((s) {
       if (!s.isRunning) return _startedFrom(s, nowEpochMs);
       final elapsedThisRun = nowEpochMs - s.runningSinceEpochMs!;
       return StopwatchState(
@@ -65,7 +54,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
   /// read-current-state-then-toggle() sequence).
   Future<void> ensureRunning() {
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    return _mutate((s) => s.isRunning ? s : _startedFrom(s, nowEpochMs));
+    return mutate((s) => s.isRunning ? s : _startedFrom(s, nowEpochMs));
   }
 
   /// Sets the elapsed time to [elapsed] (#80), e.g. correcting 2:30 to 3:00
@@ -77,7 +66,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     // the moment the user confirmed, not from whenever the queue drains.
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     final elapsedMs = clampToNonNegativeMs(elapsed.inMilliseconds);
-    return _mutate(
+    return mutate(
       (s) => s.isRunning
           ? StopwatchState(runningSinceEpochMs: nowEpochMs - elapsedMs)
           : StopwatchState(accumulatedMs: elapsedMs),
@@ -95,7 +84,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
   /// timer too (spec 3-1節: ストップウォッチの長押しリセットはタイマーも
   /// リセットする).
   Future<void> reset() async {
-    await _mutate((_) => const StopwatchState());
+    await mutate((_) => const StopwatchState());
     await ref.read(timerControllerProvider.notifier).reset();
   }
 
@@ -105,7 +94,7 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
   /// すでに超過していればタイマーもリセットする).
   Future<void> resetAndRestart() async {
     final now = DateTime.now();
-    await _mutate(
+    await mutate(
       (_) => StopwatchState(runningSinceEpochMs: now.millisecondsSinceEpoch),
     );
     final timer = await ref.read(timerControllerProvider.future);
@@ -117,62 +106,12 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
   /// Resyncs from disk on app resume. A widget button tap (see
   /// `stopwatch_widget_callback.dart`) runs in a separate isolate with its
   /// own `SharedPreferences` cache — this app's own foreground instance
-  /// doesn't see that write until it explicitly reloads. Queued through the
-  /// same serialization as [_mutate] so it can't race a mutation already in
-  /// flight; unconditionally overwrites `_lastGood`/`state` since
-  /// [StopwatchState] has no `==` to compare against cheaply.
-  Future<void> reloadFromDisk() {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _reloadNow());
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  // Unlike `_mutateNow`, a failure here isn't turned into `AsyncError` state
-  // — `HomeWidgetScheduler` calls `reloadFromDisk()` via `unawaited(...)`,
-  // so an unhandled failure would surface as a genuine uncaught async
-  // exception rather than a caller-visible error.
-  Future<void> _reloadNow() async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      await prefs.reload();
-      final onDisk = _readPersisted(prefs);
-      _lastGood = onDisk;
-      state = AsyncData(onDisk);
-    } on Exception catch (e) {
-      debugPrint('StopwatchController: reloadFromDisk failed: $e');
-    }
-  }
-
-  Future<void> _mutate(StopwatchState Function(StopwatchState) update) {
-    final previous = _mutationQueue;
-    final result = previous.then((_) => _mutateNow(update));
-    // Swallow the error here so it doesn't become an unhandled rejection on
-    // the queue chain itself — _mutateNow already reports failures via
-    // `state`, and each caller's own awaited `result` still sees it.
-    _mutationQueue = result.catchError((_) {});
-    return result;
-  }
-
-  Future<void> _mutateNow(
-    StopwatchState Function(StopwatchState) update,
-  ) async {
-    if (!_initialLoad.isCompleted) await _initialLoad.future;
-    final updated = update(_lastGood);
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final persisted = await _persist(prefs, updated);
-      if (persisted) {
-        _lastGood = updated;
-        state = AsyncData(updated);
-      } else {
-        state = _persistenceFailure();
-      }
-    } on Exception catch (e, st) {
-      state = AsyncError(e, st);
-    }
-  }
+  /// doesn't see that write until it explicitly reloads. Queued behind
+  /// running mutations so it can't race one; unconditionally overwrites the
+  /// state since [StopwatchState] has no `==` to compare against cheaply.
+  /// A failure is logged rather than turned into `AsyncError`, because
+  /// `HomeWidgetScheduler` calls this via `unawaited(...)`.
+  Future<void> reloadFromDisk() => reloadFromStorage();
 
   StopwatchState _readPersisted(SharedPreferences prefs) {
     final raw = prefs.getString(stopwatchStateJsonKey);
@@ -187,16 +126,9 @@ class StopwatchController extends AsyncNotifier<StopwatchState> {
     return StopwatchState.tryFromJson(decoded) ?? const StopwatchState();
   }
 
-  Future<bool> _persist(SharedPreferences prefs, StopwatchState s) {
-    return prefs.setString(stopwatchStateJsonKey, jsonEncode(s.toJson()));
-  }
-
-  AsyncValue<StopwatchState> _persistenceFailure() {
-    return AsyncError(
-      Exception(
-        'SharedPreferences reported failure to persist stopwatch state',
-      ),
-      StackTrace.current,
-    );
+  @override
+  @protected
+  Future<bool> persist(SharedPreferences prefs, StopwatchState value) {
+    return prefs.setString(stopwatchStateJsonKey, jsonEncode(value.toJson()));
   }
 }

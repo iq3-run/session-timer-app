@@ -58,6 +58,8 @@ class _Counter extends MutationQueueNotifier<int> {
 
   Future<void> add(int n) => mutate((v) => v + n);
 
+  Future<void> reload() => reloadFromStorage();
+
   @visibleForTesting
   Future<void> mutateForTest(int Function(int) update) => mutate(update);
 }
@@ -312,4 +314,50 @@ void main() {
       expect(container.read(_counterProvider).value, 3);
     },
   );
+
+  group('reloadFromStorage', () {
+    test('picks up a value changed behind its back', () async {
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await notifier.add(1);
+
+      // Another isolate wrote the key; this notifier's cache is stale.
+      SharedPreferences.setMockInitialValues({_key: 99});
+      await notifier.reload();
+
+      expect(container.read(_counterProvider).value, 99);
+      await notifier.add(1);
+      expect(container.read(_counterProvider).value, 100);
+    });
+
+    test('runs after a mutation that is still in flight', () async {
+      final container = makeContainer();
+      final notifier = container.read(_counterProvider.notifier);
+      await container.read(_counterProvider.future);
+
+      _persistGate = Completer<void>();
+      final added = notifier.add(5);
+      final reloaded = notifier.reload();
+      await Future<void>.delayed(Duration.zero);
+      _persistGate!.complete();
+      await Future.wait([added, reloaded]);
+
+      // The reload saw what the mutation wrote, not the value before it.
+      expect(container.read(_counterProvider).value, 5);
+    });
+
+    test(
+      'a failing reload keeps the current value and does not throw',
+      () async {
+        final container = makeContainer();
+        final notifier = container.read(_counterProvider.notifier);
+        await notifier.add(3);
+
+        _loadThrows = true;
+        await expectLater(notifier.reload(), completes);
+
+        expect(container.read(_counterProvider).value, 3);
+      },
+    );
+  });
 }
