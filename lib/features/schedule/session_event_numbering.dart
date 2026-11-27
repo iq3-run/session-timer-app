@@ -1,11 +1,5 @@
 import 'package:session_timer/features/schedule/session_event.dart';
 
-const Set<SessionEventType> _numberedTypes = {
-  SessionEventType.weekend,
-  SessionEventType.workday,
-  SessionEventType.specialSession,
-};
-
 /// Assigns 1-based, per-type sequence numbers (1WE, 2WE, ...) to WE/WD/SS
 /// events, ordered by date. OR/CR/CS never get a number, so they're absent
 /// from the returned map. Same-date events within a type are ordered by
@@ -24,7 +18,7 @@ const Set<SessionEventType> _numberedTypes = {
 /// twice. With no A/B events this is the plain date-order count.
 Map<String, int> assignSequenceNumbers(List<SessionEvent> events) {
   final result = <String, int>{};
-  for (final type in _numberedTypes) {
+  for (final type in numberedEventTypes) {
     final indexed =
         [
           for (var i = 0; i < events.length; i++)

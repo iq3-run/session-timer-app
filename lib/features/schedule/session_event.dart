@@ -9,6 +9,20 @@ enum SessionEventType {
   completion,
 }
 
+/// Types of which at most one event can exist (OR and CS).
+const Set<SessionEventType> singletonEventTypes = {
+  SessionEventType.orientation,
+  SessionEventType.completion,
+};
+
+/// Types that carry a sequence number (and so can take a manual override) —
+/// OR/CR/CS never have one regardless of `manualNumber`.
+const Set<SessionEventType> numberedEventTypes = {
+  SessionEventType.weekend,
+  SessionEventType.workday,
+  SessionEventType.specialSession,
+};
+
 /// Which schedule an event belongs to. Some programs run two parallel
 /// schedules for their early sessions (A and B) that merge into one from a
 /// later session on; [common] is every event outside that split — and the

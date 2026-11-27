@@ -121,7 +121,7 @@ class _EventRow extends ConsumerWidget {
       sessionEventLabel(event, numbers),
       style: SessionTimerTextStyles.label,
     );
-    if (!numberedScheduleTypes.contains(event.type)) return label;
+    if (!numberedEventTypes.contains(event.type)) return label;
     // InkWell rather than GestureDetector — it picks up keyboard focus and
     // Enter/Space activation for free, which a bare GestureDetector doesn't.
     return InkWell(
