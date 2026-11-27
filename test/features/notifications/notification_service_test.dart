@@ -296,9 +296,16 @@ void main() {
     test('runs after a reschedule that is still in flight', () async {
       final service = buildService();
       final event = futureEvent();
+      // A different, unsuppressed event, so the in-flight reschedule really
+      // reaches `zonedSchedule` (the suppressed one is skipped).
+      final other = FlashEvent(
+        id: 'target:t2:1',
+        instant: DateTime.now().add(const Duration(hours: 2)),
+        label: '別の指定時刻',
+      );
       cancelAllGate = Completer<void>();
 
-      final reschedule = service.rescheduleAll([event]);
+      final reschedule = service.rescheduleAll([event, other]);
       final cancel = service.cancelForEvent(event);
       await Future<void>.delayed(Duration.zero);
       expect(calls.map((c) => c.method), isNot(contains('cancel')));
@@ -306,9 +313,11 @@ void main() {
       cancelAllGate!.complete();
       await Future.wait([reschedule, cancel]);
       final methods = calls.map((c) => c.method).toList();
+      expect(methods, contains('zonedSchedule'));
+      expect(methods, contains('cancel'));
       expect(
-        methods.indexOf('cancel'),
-        greaterThan(methods.indexOf('zonedSchedule')),
+        methods.lastIndexOf('zonedSchedule'),
+        lessThan(methods.indexOf('cancel')),
       );
     });
 
