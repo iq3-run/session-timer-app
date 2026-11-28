@@ -69,3 +69,13 @@ computation, splitting would add indirection for little clarity gain) rather
 than Warning.
 
 Related: [[project_stopwatch_pr_patterns]], [[project_session_schedule_patterns]], [[project_ntp_sync_patterns]]
+
+## 組 (session sets) + multi-date picker review (2026-11-28)
+
+- Custom dialogs with a 7-column calendar grid: keep each day cell >= 48dp tall
+  and ~40dp+ wide on a 360dp phone (AlertDialog default insets leave ~248dp);
+  add `Semantics(selected:, button:)`. Don't use a lazy `GridView` inside
+  `AlertDialog` content (intrinsic-size assertion) — use Column/Row.
+- `String.substring` / `maxLength` clamps split emoji: clamp by code point
+  (`runes.take(n)`) and re-trim; empty result must fall back, not be saved.
+- Persisted lists keyed by id: dedupe ids on load, or one edit hits two rows.
