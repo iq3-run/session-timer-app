@@ -224,6 +224,9 @@ class _MultiDatePickerDialogState extends State<MultiDatePickerDialog> {
       selected: selected,
       enabled: enabled,
       label: '${day.month}月${day.day}日',
+      // The InkWell's own semantics are excluded, so the tap action must be
+      // declared here for assistive tech to toggle the day.
+      onTap: enabled ? () => _toggle(day) : null,
       excludeSemantics: true,
       child: InkWell(
         key: Key('multiDateDay_${day.year}-${day.month}-${day.day}'),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:session_timer/core/persistence/mutation_queue_notifier.dart';
@@ -170,15 +171,15 @@ class SessionPlanController extends MutationQueueNotifier<SessionPlanBook> {
     ),
   );
 
-  // Cut by code point, not UTF-16 unit, so an emoji is never split into a
-  // lone surrogate; trimmed again because the cut can end on a space.
-  String _clamped(String name) => String.fromCharCodes(
-    name.runes.take(maxSessionPlanSetNameLength),
-  ).trim();
+  // Cut by grapheme cluster (what `TextField.maxLength` counts), so neither
+  // an emoji with a skin-tone modifier nor a ZWJ sequence is split; trimmed
+  // again because the cut can end on a space.
+  String _clamped(String name) =>
+      name.characters.take(maxSessionPlanSetNameLength).toString().trim();
 
   String _nextDefaultName(SessionPlanBook book) {
     final used = {for (final s in book.sets) s.name};
-    var n = book.sets.length + 1;
+    var n = 1;
     while (used.contains(defaultSessionPlanSetName(n))) {
       n++;
     }

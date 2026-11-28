@@ -286,6 +286,28 @@ void main() {
       );
     });
 
+    test(
+      'a default name fills the lowest free number after a deletion',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = makeContainer();
+        await _book(container);
+        final notifier = container.read(sessionPlanControllerProvider.notifier);
+        await notifier.addSet();
+        final secondId = (await _book(container)).activeId;
+        await notifier.addSet();
+
+        await notifier.removeSet(secondId);
+        await notifier.addSet();
+
+        expect((await _book(container)).sets.map((s) => s.name), [
+          '組1',
+          '組3',
+          '組2',
+        ]);
+      },
+    );
+
     test('names are never cut inside an emoji and are re-trimmed', () async {
       SharedPreferences.setMockInitialValues({});
       final container = makeContainer();
@@ -293,6 +315,13 @@ void main() {
 
       await notifier.addSet(name: '😀' * 20);
       expect((await _book(container)).active.name, '😀' * 12);
+
+      // A skin-tone modifier and a ZWJ family stay whole when they straddle
+      // the limit.
+      await notifier.addSet(name: 'abcdefghijk👍🏽');
+      expect((await _book(container)).active.name, 'abcdefghijk👍🏽');
+      await notifier.addSet(name: 'abcdefghijk👨‍👩‍👧x');
+      expect((await _book(container)).active.name, 'abcdefghijk👨‍👩‍👧');
 
       await notifier.addSet(name: 'abc defghijk lm');
       expect((await _book(container)).active.name, 'abc defghijk');

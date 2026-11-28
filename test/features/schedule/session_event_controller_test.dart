@@ -15,12 +15,16 @@ class _FlakyStore extends InMemorySharedPreferencesStore {
 
   bool failNextWrite = false;
 
+  /// Keys of every write that went through, in order.
+  final writtenKeys = <String>[];
+
   @override
   Future<bool> setValue(String valueType, String key, Object value) {
     if (failNextWrite) {
       failNextWrite = false;
       return Future.value(false);
     }
+    writtenKeys.add(key);
     return super.setValue(valueType, key, value);
   }
 }
@@ -526,7 +530,17 @@ void main() {
     );
 
     test('persists the whole batch in one write', () async {
-      final (container, notifier) = await setUpController();
+      final previousStore = SharedPreferencesStorePlatform.instance;
+      addTearDown(
+        () => SharedPreferencesStorePlatform.instance = previousStore,
+      );
+      SharedPreferences.setMockInitialValues({});
+      final store = _FlakyStore.empty();
+      SharedPreferencesStorePlatform.instance = store;
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(sessionEventControllerProvider.future);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
 
       await notifier.addEvents(SessionEventType.workday, [
         DateTime(2026, 9, 5),
@@ -534,6 +548,10 @@ void main() {
         DateTime(2026, 9, 7),
       ], track: SessionTrack.b);
 
+      expect(
+        store.writtenKeys.where((k) => k.endsWith(sessionEventsJsonKey)),
+        hasLength(1),
+      );
       final prefs = await SharedPreferences.getInstance();
       final saved = jsonDecode(prefs.getString(sessionEventsJsonKey)!) as List;
       expect(saved, hasLength(3));
