@@ -286,6 +286,31 @@ void main() {
       );
     });
 
+    test('names are never cut inside an emoji and are re-trimmed', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = makeContainer();
+      final notifier = container.read(sessionPlanControllerProvider.notifier);
+
+      await notifier.addSet(name: '😀' * 20);
+      expect((await _book(container)).active.name, '😀' * 12);
+
+      await notifier.addSet(name: 'abc defghijk lm');
+      expect((await _book(container)).active.name, 'abc defghijk');
+    });
+
+    test('duplicate set ids in stored data are collapsed', () async {
+      SharedPreferences.setMockInitialValues({
+        sessionPlanBookJsonKey:
+            '{"activeId":"a","sets":['
+            '{"id":"a","name":"A","sessions":[]},'
+            '{"id":"a","name":"A2","sessions":[]}]}',
+      });
+
+      final book = await _book(makeContainer());
+
+      expect(book.sets.map((s) => s.name), ['A']);
+    });
+
     test(
       'removeSet activates the previous 組; the last one cannot go',
       () async {

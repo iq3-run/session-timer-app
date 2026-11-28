@@ -84,6 +84,9 @@ class SessionPlanBook {
         .map(SessionPlanSet.tryFromJson)
         .whereType<SessionPlanSet>()
         .toList();
+    // Ids must be unique: a duplicate would make one edit hit two 組.
+    final seen = <String>{};
+    sets.retainWhere((s) => seen.add(s.id));
     if (sets.isEmpty) return null;
     final activeId = json['activeId'];
     return SessionPlanBook(

@@ -106,10 +106,10 @@ class SessionPlanController extends MutationQueueNotifier<SessionPlanBook> {
   /// called 組N, N being the first number no existing 組 already uses.
   Future<void> addSet({String? name}) async {
     await mutate((book) {
-      final trimmed = name?.trim() ?? '';
+      final clamped = _clamped(name ?? '');
       final set = SessionPlanSet(
         id: UniqueKey().toString(),
-        name: trimmed.isEmpty ? _nextDefaultName(book) : _clamped(trimmed),
+        name: clamped.isEmpty ? _nextDefaultName(book) : clamped,
       );
       return SessionPlanBook(sets: [...book.sets, set], activeId: set.id);
     });
@@ -118,13 +118,13 @@ class SessionPlanController extends MutationQueueNotifier<SessionPlanBook> {
   /// Renames [id]. A blank name is ignored — a 組 always has one to show on
   /// its chip.
   Future<void> renameSet(String id, String name) async {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
+    final clamped = _clamped(name);
+    if (clamped.isEmpty) return;
     await mutate(
       (book) => SessionPlanBook(
         sets: [
           for (final s in book.sets)
-            if (s.id == id) s.copyWith(name: _clamped(trimmed)) else s,
+            if (s.id == id) s.copyWith(name: clamped) else s,
         ],
         activeId: book.activeId,
       ),
@@ -170,9 +170,11 @@ class SessionPlanController extends MutationQueueNotifier<SessionPlanBook> {
     ),
   );
 
-  String _clamped(String name) => name.length <= maxSessionPlanSetNameLength
-      ? name
-      : name.substring(0, maxSessionPlanSetNameLength);
+  // Cut by code point, not UTF-16 unit, so an emoji is never split into a
+  // lone surrogate; trimmed again because the cut can end on a space.
+  String _clamped(String name) => String.fromCharCodes(
+    name.runes.take(maxSessionPlanSetNameLength),
+  ).trim();
 
   String _nextDefaultName(SessionPlanBook book) {
     final used = {for (final s in book.sets) s.name};

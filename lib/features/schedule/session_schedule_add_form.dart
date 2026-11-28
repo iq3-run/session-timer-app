@@ -127,9 +127,12 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
         enabled: _numberFieldEnabled,
         keyboardType: TextInputType.number,
         style: const TextStyle(color: SessionTimerColors.white),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '番号',
-          labelStyle: TextStyle(color: SessionTimerColors.muted),
+          // Shown while disabled so the greyed-out field isn't a mystery.
+          helperText: _numberFieldEnabled ? null : '複数日は自動',
+          helperMaxLines: 2,
+          labelStyle: const TextStyle(color: SessionTimerColors.muted),
         ),
         onChanged: (_) => setState(() {}),
       ),

@@ -96,9 +96,12 @@ class _MultiDatePickerDialogState extends State<MultiDatePickerDialog> {
       // Scrolls rather than overflows when a landscape phone leaves little
       // height for the 6-week grid.
       scrollable: true,
-      contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      // Narrower insets so each of the 7 columns keeps a usable tap width on
+      // a 360dp phone.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
       content: SizedBox(
-        width: 320,
+        width: 336,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -192,7 +195,7 @@ class _MultiDatePickerDialogState extends State<MultiDatePickerDialog> {
       children: [
         for (var start = 0; start < cellCount; start += 7)
           SizedBox(
-            height: 44,
+            height: 48,
             child: Row(
               children: [
                 for (var index = start; index < start + 7; index++)
@@ -216,27 +219,34 @@ class _MultiDatePickerDialogState extends State<MultiDatePickerDialog> {
   Widget _dayCell(DateTime day) {
     final selected = _selected.contains(day);
     final enabled = _inRange(day);
-    return Padding(
-      padding: const EdgeInsets.all(2),
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: '${day.month}月${day.day}日',
+      excludeSemantics: true,
       child: InkWell(
         key: Key('multiDateDay_${day.year}-${day.month}-${day.day}'),
         customBorder: const CircleBorder(),
         onTap: enabled ? () => _toggle(day) : null,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: selected ? SessionTimerColors.amber : null,
-          ),
-          child: Center(
-            child: Text(
-              '${day.day}',
-              style: TextStyle(
-                color: selected
-                    ? SessionTimerColors.background
-                    : enabled
-                    ? SessionTimerColors.white
-                    : SessionTimerColors.line,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected ? SessionTimerColors.amber : null,
+            ),
+            child: Center(
+              child: Text(
+                '${day.day}',
+                style: TextStyle(
+                  color: selected
+                      ? SessionTimerColors.background
+                      : enabled
+                      ? SessionTimerColors.white
+                      : SessionTimerColors.line,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                ),
               ),
             ),
           ),

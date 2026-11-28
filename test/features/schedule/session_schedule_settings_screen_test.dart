@@ -746,6 +746,42 @@ void main() {
       });
     }
 
+    testWidgets('month arrows are enabled mid-range', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('multiDatePrevMonth')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('multiDateNextMonth')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('day cells are at least 48dp tall and 40dp wide on a 360dp '
+        'phone', (tester) async {
+      await _pumpScreen(tester, surfaceSize: const Size(360, 640));
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+
+      final cell = find
+          .descendant(
+            of: find.byType(MultiDatePickerDialog),
+            matching: find.byType(InkWell),
+          )
+          .at(2);
+      final size = tester.getSize(cell);
+      expect(size.height, greaterThanOrEqualTo(48));
+      expect(size.width, greaterThanOrEqualTo(40));
+    });
+
     testWidgets('a singleton type (OR) selects one day at a time', (
       tester,
     ) async {
