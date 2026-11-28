@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -70,6 +72,164 @@ void main() {
         expect(find.text('9:30〜13:00'), findsOneWidget);
       },
     );
+
+    group('組 (session sets)', () {
+      testWidgets('starts on 組1 with a chip for it', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        await _pumpScreen(tester);
+
+        expect(find.text('組1'), findsOneWidget);
+        expect(find.byKey(const Key('addSessionSet')), findsOneWidget);
+      });
+
+      testWidgets('adding a named 組 switches to it, and switching back shows '
+          "the first 組's sessions again", (tester) async {
+        _seedSessions([_entryJson('a', 9 * 60, 60)]);
+        await _pumpScreen(tester);
+        expect(find.text('9:00〜10:00'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('addSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('sessionSetNameField')),
+          '平日',
+        );
+        await tester.tap(find.byKey(const Key('sessionSetNameSave')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('平日'), findsOneWidget);
+        expect(find.text('9:00〜10:00'), findsNothing);
+
+        await tester.tap(find.text('組1'));
+        await tester.pumpAndSettle();
+        expect(find.text('9:00〜10:00'), findsOneWidget);
+      });
+
+      testWidgets('a 組 can be renamed, and a blank name cannot be saved', (
+        tester,
+      ) async {
+        SharedPreferences.setMockInitialValues({});
+        await _pumpScreen(tester);
+
+        await tester.tap(find.byKey(const Key('sessionSetMenu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('renameSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('sessionSetNameField')),
+          '   ',
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.byKey(const Key('sessionSetNameSave')),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.enterText(
+          find.byKey(const Key('sessionSetNameField')),
+          '土日',
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sessionSetNameSave')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('土日'), findsOneWidget);
+        expect(find.text('組1'), findsNothing);
+      });
+
+      testWidgets('the only 組 cannot be deleted', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        await _pumpScreen(tester);
+
+        await tester.tap(find.byKey(const Key('sessionSetMenu')));
+        await tester.pumpAndSettle();
+
+        final item = tester.widget<PopupMenuItem<Object?>>(
+          find.byKey(const Key('removeSessionSet')),
+        );
+        expect(item.enabled, isFalse);
+      });
+
+      testWidgets('deleting asks first; cancelling keeps it, confirming '
+          'removes it with its sessions', (tester) async {
+        _seedSessions([_entryJson('a', 9 * 60, 60)]);
+        await _pumpScreen(tester);
+        await tester.tap(find.byKey(const Key('addSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sessionSetNameSave')));
+        await tester.pumpAndSettle();
+        expect(find.text('組2'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('sessionSetMenu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('removeSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('removeSetCancel')));
+        await tester.pumpAndSettle();
+        expect(find.text('組2'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('sessionSetMenu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('removeSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('removeSetConfirm')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('組2'), findsNothing);
+        expect(find.text('組1'), findsOneWidget);
+        expect(find.text('9:00〜10:00'), findsOneWidget);
+      });
+
+      testWidgets('many 組 with long names scroll sideways instead of '
+          'overflowing a narrow screen', (tester) async {
+        SharedPreferences.setMockInitialValues({
+          sessionPlanBookJsonKey: jsonEncode({
+            'activeId': 'a',
+            'sets': [
+              for (var i = 0; i < 8; i++)
+                {
+                  'id': i == 0 ? 'a' : 'x$i',
+                  'name': '十二文字のながい名前です',
+                  'sessions': <Object>[],
+                },
+            ],
+          }),
+        });
+        await tester.binding.setSurfaceSize(const Size(360, 640));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: SessionTimerTheme.dark,
+              home: const SessionPlanScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('sessionSetMenu')), findsOneWidget);
+      });
+
+      testWidgets('現在のセッションを設定 uses only the active 組', (tester) async {
+        _seedSessions([_entryJson('a', 9 * 60, 60)]);
+        await _pumpScreen(tester);
+        await tester.tap(find.byKey(const Key('addSessionSet')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sessionSetNameSave')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('現在のセッションを設定'));
+        await tester.pump();
+
+        // The new 組 is empty, so there is nothing to apply even though
+        // 組1 has a session.
+        expect(find.text('該当するセッションがありません'), findsOneWidget);
+      });
+    });
 
     testWidgets('renders a session that runs past midnight', (tester) async {
       _seedSessions([_entryJson('night', 23 * 60, 180)]);

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/schedule/multi_date_picker.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/schedule/session_schedule_form_helpers.dart';
@@ -22,7 +23,8 @@ class AddScheduleEventForm extends ConsumerStatefulWidget {
 class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
   SessionEventType _type = SessionEventType.weekend;
   SessionTrack _track = SessionTrack.common;
-  DateTime? _pickedDate;
+  // Several days can be picked at once; each becomes its own event on add.
+  Set<DateTime> _pickedDates = {};
   final _numberController = TextEditingController();
 
   @override
@@ -71,9 +73,24 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
   // The number field only exists for numbered types, so its text must not
   // block adding any other type.
   bool get _canSubmit =>
-      _pickedDate != null &&
+      _pickedDates.isNotEmpty &&
       (!numberedEventTypes.contains(_type) ||
+          _pickedDates.length > 1 ||
           isValidManualNumberText(_numberController.text));
+
+  // OR/CS exist at most once, so there is nothing to gain from picking
+  // several days for them.
+  bool get _allowsMultipleDates => !singletonEventTypes.contains(_type);
+
+  // A manual number labels one specific event; stamping the same number on
+  // a whole batch would be wrong, so the field only applies to a single day.
+  bool get _numberFieldEnabled => _pickedDates.length <= 1;
+
+  String get _dateButtonLabel {
+    if (_pickedDates.isEmpty) return '日付';
+    if (_pickedDates.length == 1) return formatScheduleDate(_pickedDates.first);
+    return '${_pickedDates.length}日';
+  }
 
   Widget _mainRow() {
     return Row(
@@ -88,7 +105,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
           key: const Key('scheduleDateButton'),
           onPressed: () => _pickDate(context),
           child: Text(
-            _pickedDate == null ? '日付' : formatScheduleDate(_pickedDate!),
+            _dateButtonLabel,
             style: const TextStyle(color: SessionTimerColors.muted),
           ),
         ),
@@ -107,6 +124,7 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
       child: TextField(
         key: const Key('scheduleManualNumberField'),
         controller: _numberController,
+        enabled: _numberFieldEnabled,
         keyboardType: TextInputType.number,
         style: const TextStyle(color: SessionTimerColors.white),
         decoration: const InputDecoration(
@@ -146,43 +164,57 @@ class _AddScheduleEventFormState extends ConsumerState<AddScheduleEventForm> {
         // Likewise a number typed for a numbered type: it would stay hidden
         // (and, if invalid, block adding) once the field is gone.
         if (!numberedEventTypes.contains(_type)) _numberController.clear();
+        // A singleton type holds one event only: keep just the earliest day.
+        if (!_allowsMultipleDates && _pickedDates.length > 1) {
+          _pickedDates = {(_pickedDates.toList()..sort()).first};
+        }
       }),
     );
   }
 
   Future<void> _pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: clampToScheduleRange(
-        _pickedDate ?? ref.read(correctedNowProvider)(),
+    final picked = await showMultiDatePicker(
+      context,
+      initialMonth: clampToScheduleRange(
+        _pickedDates.isEmpty
+            ? ref.read(correctedNowProvider)()
+            : (_pickedDates.toList()..sort()).first,
       ),
       firstDate: earliestScheduleDate,
       lastDate: latestScheduleDate,
+      initialSelection: _pickedDates,
+      allowMultiple: _allowsMultipleDates,
     );
     if (picked == null || !context.mounted) return;
-    setState(() => _pickedDate = picked);
+    setState(() {
+      _pickedDates = picked;
+      // The number belongs to a single event; drop it rather than leave
+      // hidden text that would silently go unused.
+      if (picked.length > 1) _numberController.clear();
+    });
   }
 
   void _submit() {
-    final date = _pickedDate;
-    if (date == null) return;
+    if (_pickedDates.isEmpty) return;
+    final dates = _pickedDates.toList()..sort();
     final addedType = _type;
     final addedTrack = _track;
-    final manualNumber = numberedEventTypes.contains(addedType)
+    final manualNumber =
+        numberedEventTypes.contains(addedType) && dates.length == 1
         ? parseManualNumberText(_numberController.text)
         : null;
     unawaited(
       ref
           .read(sessionEventControllerProvider.notifier)
-          .addEvent(
+          .addEvents(
             addedType,
-            date,
+            dates,
             manualNumber: manualNumber,
             track: addedTrack,
           ),
     );
     setState(() {
-      _pickedDate = null;
+      _pickedDates = {};
       _numberController.clear();
       // Back to 共通 after every add, like the date and number: otherwise a
       // forgotten A/B choice would silently put the next event on that
