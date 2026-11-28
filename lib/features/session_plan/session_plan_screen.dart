@@ -4,9 +4,11 @@ import 'package:session_timer/core/clock/now_provider.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
 import 'package:session_timer/features/completion/completion_time_controller.dart';
 import 'package:session_timer/features/session_plan/current_session_resolution.dart';
+import 'package:session_timer/features/session_plan/session_plan_book.dart';
 import 'package:session_timer/features/session_plan/session_plan_controller.dart';
 import 'package:session_timer/features/session_plan/session_plan_duration_prompts.dart';
 import 'package:session_timer/features/session_plan/session_plan_entry.dart';
+import 'package:session_timer/features/session_plan/session_plan_set_dialogs.dart';
 import 'package:session_timer/features/targets/time_targets_controller.dart';
 
 /// `SessionTimerTextStyles.label` is a small caption meant to sit alongside
@@ -26,7 +28,8 @@ class SessionPlanScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(sessionPlanControllerProvider).value ?? const [];
+    final book = ref.watch(sessionPlanControllerProvider).value;
+    final sessions = book?.active.sessions ?? const <SessionPlanEntry>[];
     return Scaffold(
       backgroundColor: SessionTimerColors.background,
       appBar: AppBar(
@@ -39,6 +42,10 @@ class SessionPlanScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
+              if (book != null) ...[
+                _SetSelectorRow(book: book),
+                const SizedBox(height: 12),
+              ],
               _SetCurrentSessionButton(sessions: sessions),
               const SizedBox(height: 16),
               Expanded(
@@ -285,3 +292,107 @@ class _AddSessionRow extends ConsumerWidget {
         );
   }
 }
+
+/// Chips for switching between 組 plus "＋" to add one, and a menu to
+/// rename / delete the active one. The chips scroll sideways when they
+/// don't fit, so a long list never overflows a narrow portrait screen.
+class _SetSelectorRow extends ConsumerWidget {
+  const _SetSelectorRow({required this.book});
+
+  final SessionPlanBook book;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(sessionPlanControllerProvider.notifier);
+    return Row(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final set in book.sets)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      key: Key('selectSet_${set.id}'),
+                      label: Text(set.name),
+                      selected: set.id == book.activeId,
+                      onSelected: (_) => notifier.selectSet(set.id),
+                    ),
+                  ),
+                ActionChip(
+                  key: const Key('addSessionSet'),
+                  avatar: const Icon(Icons.add, size: 18),
+                  label: const Text('組を追加'),
+                  onPressed: () => _addSet(context, ref),
+                ),
+              ],
+            ),
+          ),
+        ),
+        PopupMenuButton<_SetMenuAction>(
+          key: const Key('sessionSetMenu'),
+          tooltip: '組の操作',
+          onSelected: (action) => switch (action) {
+            _SetMenuAction.rename => _renameSet(context, ref),
+            _SetMenuAction.remove => _removeSet(context, ref),
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              key: Key('renameSessionSet'),
+              value: _SetMenuAction.rename,
+              child: Text('名前を変更'),
+            ),
+            PopupMenuItem(
+              key: const Key('removeSessionSet'),
+              value: _SetMenuAction.remove,
+              // The last 組 can't go: there must always be one to hold
+              // sessions.
+              enabled: book.sets.length > 1,
+              child: const Text('この組を削除'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addSet(BuildContext context, WidgetRef ref) async {
+    final name = await promptSessionSetName(
+      context,
+      title: '組を追加',
+      initial: '',
+      hint: '空欄なら自動で名前を付けます',
+      allowEmpty: true,
+    );
+    if (name == null) return;
+    await ref.read(sessionPlanControllerProvider.notifier).addSet(name: name);
+  }
+
+  Future<void> _renameSet(BuildContext context, WidgetRef ref) async {
+    final name = await promptSessionSetName(
+      context,
+      title: '組の名前を変更',
+      initial: book.active.name,
+    );
+    if (name == null) return;
+    await ref
+        .read(sessionPlanControllerProvider.notifier)
+        .renameSet(book.activeId, name);
+  }
+
+  Future<void> _removeSet(BuildContext context, WidgetRef ref) async {
+    final confirmed = await confirmRemoveSessionSet(
+      context,
+      name: book.active.name,
+      sessionCount: book.active.sessions.length,
+    );
+    if (!confirmed) return;
+    await ref
+        .read(sessionPlanControllerProvider.notifier)
+        .removeSet(book.activeId);
+  }
+}
+
+enum _SetMenuAction { rename, remove }

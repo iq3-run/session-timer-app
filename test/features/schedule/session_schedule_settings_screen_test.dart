@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:session_timer/core/theme/session_timer_theme.dart';
+import 'package:session_timer/features/schedule/multi_date_picker.dart';
 import 'package:session_timer/features/schedule/session_event.dart';
 import 'package:session_timer/features/schedule/session_event_controller.dart';
 import 'package:session_timer/features/schedule/session_schedule_settings_screen.dart';
@@ -30,11 +31,26 @@ Future<void> _pumpScreen(
   await tester.pumpAndSettle();
 }
 
-Future<void> _pickDateAndAdd(WidgetTester tester) async {
+/// Opens the multi-date picker, taps each of [days] in the month it opens
+/// on (the current one), and confirms.
+Future<void> _pickDays(WidgetTester tester, List<int> days) async {
   await tester.tap(find.byKey(const Key('scheduleDateButton')));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('OK'));
+  for (final day in days) {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MultiDatePickerDialog),
+        matching: find.text('$day'),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+  await tester.tap(find.byKey(const Key('multiDateConfirm')));
   await tester.pumpAndSettle();
+}
+
+Future<void> _pickDateAndAdd(WidgetTester tester) async {
+  await _pickDays(tester, [15]);
   await tester.tap(find.byKey(const Key('addScheduleEventButton')));
   await tester.pumpAndSettle();
 }
@@ -295,10 +311,7 @@ void main() {
       'invalid',
       (tester) async {
         await _pumpScreen(tester);
-        await tester.tap(find.byKey(const Key('scheduleDateButton')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('OK'));
-        await tester.pumpAndSettle();
+        await _pickDays(tester, [15]);
 
         await tester.enterText(
           find.byKey(const Key('scheduleManualNumberField')),
@@ -326,10 +339,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('クラスルーム(CR)').last);
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('scheduleDateButton')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('OK'));
-        await tester.pumpAndSettle();
+        await _pickDays(tester, [15]);
 
         final button = tester.widget<FilledButton>(
           find.byKey(const Key('addScheduleEventButton')),
@@ -356,10 +366,7 @@ void main() {
       tester,
     ) async {
       await _pumpScreen(tester);
-      await tester.tap(find.byKey(const Key('scheduleDateButton')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
+      await _pickDays(tester, [15]);
       await tester.enterText(
         find.byKey(const Key('scheduleManualNumberField')),
         '7',
@@ -585,6 +592,238 @@ void main() {
       expect(find.byKey(const Key('editNumber_or')), findsNothing);
       expect(find.byKey(const Key('editNumber_cr')), findsNothing);
       expect(find.byKey(const Key('editNumber_cs')), findsNothing);
+    });
+  });
+
+  group('multiple dates at once', () {
+    testWidgets('OK stays disabled until a day is selected, and 3 days show '
+        'as 3日 on the date button', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('multiDateConfirm')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MultiDatePickerDialog),
+          matching: find.text('3'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1日選択中（タップで追加・解除）'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('multiDateConfirm')));
+      await tester.pumpAndSettle();
+
+      await _pickDays(tester, [4, 5]);
+      // Re-opening keeps the earlier selection; 4 and 5 were added to 3.
+      expect(find.text('3日'), findsOneWidget);
+    });
+
+    testWidgets('adding several days creates one row each, numbered in date '
+        'order, and clears the selection', (tester) async {
+      await _pumpScreen(tester);
+
+      await _pickDays(tester, [20, 6, 13]);
+      await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1WE'), findsOneWidget);
+      expect(find.text('2WE'), findsOneWidget);
+      expect(find.text('3WE'), findsOneWidget);
+      expect(find.text('日付'), findsOneWidget);
+      final events = ProviderScope.containerOf(
+        tester.element(find.byType(SessionScheduleSettingsScreen)),
+      ).read(sessionEventControllerProvider).value!;
+      expect(events.map((e) => e.date.day).toList()..sort(), [6, 13, 20]);
+    });
+
+    testWidgets('tapping a selected day again deselects it', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+      final day = find.descendant(
+        of: find.byType(MultiDatePickerDialog),
+        matching: find.text('9'),
+      );
+
+      await tester.tap(day);
+      await tester.pumpAndSettle();
+      await tester.tap(day);
+      await tester.pumpAndSettle();
+
+      expect(find.text('0日選択中（タップで追加・解除）'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('multiDateConfirm')))
+            .onPressed,
+        isNull,
+      );
+    });
+
+    testWidgets('the selection survives paging to another month', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MultiDatePickerDialog),
+          matching: find.text('10'),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('multiDateNextMonth')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MultiDatePickerDialog),
+          matching: find.text('10'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2日選択中（タップで追加・解除）'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('multiDateClear')));
+      await tester.pumpAndSettle();
+      expect(find.text('0日選択中（タップで追加・解除）'), findsOneWidget);
+    });
+
+    testWidgets('a manual number only applies to a single day: the field is '
+        'disabled and cleared once several are picked', (tester) async {
+      await _pumpScreen(tester);
+      await tester.enterText(
+        find.byKey(const Key('scheduleManualNumberField')),
+        '7',
+      );
+
+      await _pickDays(tester, [8, 9]);
+
+      final field = tester.widget<TextField>(
+        find.byKey(const Key('scheduleManualNumberField')),
+      );
+      expect(field.enabled, isFalse);
+      expect(field.controller?.text, isEmpty);
+      await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+      await tester.pumpAndSettle();
+      expect(find.text('1WE'), findsOneWidget);
+      expect(find.text('2WE'), findsOneWidget);
+    });
+
+    testWidgets('CR accepts several days', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('クラスルーム(CR)').last);
+      await tester.pumpAndSettle();
+
+      await _pickDays(tester, [2, 3, 4]);
+      await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CR'), findsNWidgets(3));
+    });
+
+    for (final size in const [Size(360, 640), Size(740, 360)]) {
+      testWidgets('the picker lays out without overflow at $size (portrait '
+          'and landscape phone)', (tester) async {
+        await _pumpScreen(tester, surfaceSize: size);
+        await tester.tap(find.byKey(const Key('scheduleDateButton')));
+        await tester.pumpAndSettle();
+
+        // The 6th week row of a long month is the tallest case; every
+        // action must stay reachable by scrolling the dialog.
+        await tester.tap(find.byKey(const Key('multiDateNextMonth')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('multiDateConfirm')));
+
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('multiDateConfirm')), findsOneWidget);
+      });
+    }
+
+    testWidgets('month arrows are enabled mid-range', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('multiDatePrevMonth')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('multiDateNextMonth')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('day cells are at least 48dp tall and 40dp wide on a 360dp '
+        'phone', (tester) async {
+      await _pumpScreen(tester, surfaceSize: const Size(360, 640));
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+
+      final cell = find
+          .descendant(
+            of: find.byType(MultiDatePickerDialog),
+            matching: find.byType(InkWell),
+          )
+          .at(2);
+      final size = tester.getSize(cell);
+      expect(size.height, greaterThanOrEqualTo(48));
+      expect(size.width, greaterThanOrEqualTo(40));
+    });
+
+    testWidgets('a singleton type (OR) selects one day at a time', (
+      tester,
+    ) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('オリエンテーション(OR)').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('scheduleDateButton')));
+      await tester.pumpAndSettle();
+      for (final day in ['5', '6']) {
+        await tester.tap(
+          find.descendant(
+            of: find.byType(MultiDatePickerDialog),
+            matching: find.text(day),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.text('1日選択中'), findsOneWidget);
+    });
+
+    testWidgets('switching to a singleton type trims a multi-day selection '
+        'to the earliest day', (tester) async {
+      await _pumpScreen(tester);
+      await _pickDays(tester, [12, 5]);
+      expect(find.text('2日'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('scheduleTypeDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('オリエンテーション(OR)').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addScheduleEventButton')));
+      await tester.pumpAndSettle();
+
+      final events = ProviderScope.containerOf(
+        tester.element(find.byType(SessionScheduleSettingsScreen)),
+      ).read(sessionEventControllerProvider).value!;
+      expect(events.single.type, SessionEventType.orientation);
+      expect(events.single.date.day, 5);
     });
   });
 

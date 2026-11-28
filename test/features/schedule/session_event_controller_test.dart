@@ -15,12 +15,16 @@ class _FlakyStore extends InMemorySharedPreferencesStore {
 
   bool failNextWrite = false;
 
+  /// Keys of every write that went through, in order.
+  final writtenKeys = <String>[];
+
   @override
   Future<bool> setValue(String valueType, String key, Object value) {
     if (failNextWrite) {
       failNextWrite = false;
       return Future.value(false);
     }
+    writtenKeys.add(key);
     return super.setValue(valueType, key, value);
   }
 }
@@ -486,6 +490,117 @@ void main() {
       expect(
         container.read(sessionEventControllerProvider),
         isA<AsyncError<List<SessionEvent>>>(),
+      );
+    });
+  });
+
+  group('SessionEventController addEvents', () {
+    Future<(ProviderContainer, SessionEventController)>
+    setUpController() async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(sessionEventControllerProvider.future);
+      return (
+        container,
+        container.read(sessionEventControllerProvider.notifier),
+      );
+    }
+
+    test(
+      'adds one event per day, normalizing times and collapsing repeats',
+      () async {
+        final (container, notifier) = await setUpController();
+
+        await notifier.addEvents(SessionEventType.classroom, [
+          DateTime(2026, 8, 21, 9),
+          DateTime(2026, 8, 21, 18),
+          DateTime(2026, 8, 7),
+        ]);
+        final events = await container.read(
+          sessionEventControllerProvider.future,
+        );
+
+        expect(events.map((e) => e.date).toList()..sort(), [
+          DateTime(2026, 8, 7),
+          DateTime(2026, 8, 21),
+        ]);
+        expect({for (final e in events) e.id}, hasLength(2));
+      },
+    );
+
+    test('persists the whole batch in one write', () async {
+      final previousStore = SharedPreferencesStorePlatform.instance;
+      addTearDown(
+        () => SharedPreferencesStorePlatform.instance = previousStore,
+      );
+      SharedPreferences.setMockInitialValues({});
+      final store = _FlakyStore.empty();
+      SharedPreferencesStorePlatform.instance = store;
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(sessionEventControllerProvider.future);
+      final notifier = container.read(sessionEventControllerProvider.notifier);
+
+      await notifier.addEvents(SessionEventType.workday, [
+        DateTime(2026, 9, 5),
+        DateTime(2026, 9, 6),
+        DateTime(2026, 9, 7),
+      ], track: SessionTrack.b);
+
+      expect(
+        store.writtenKeys.where((k) => k.endsWith(sessionEventsJsonKey)),
+        hasLength(1),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final saved = jsonDecode(prefs.getString(sessionEventsJsonKey)!) as List;
+      expect(saved, hasLength(3));
+      expect(
+        (await container.read(sessionEventControllerProvider.future)).every(
+          (e) => e.track == SessionTrack.b,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a singleton type only takes the earliest day', () async {
+      final (container, notifier) = await setUpController();
+
+      await notifier.addEvents(SessionEventType.orientation, [
+        DateTime(2026, 8, 9),
+        DateTime(2026, 8, 2),
+      ]);
+      final events = await container.read(
+        sessionEventControllerProvider.future,
+      );
+
+      expect(events.single.date, DateTime(2026, 8, 2));
+    });
+
+    test('a singleton type is not added again once one exists', () async {
+      final (container, notifier) = await setUpController();
+      await notifier.addEvents(SessionEventType.completion, [
+        DateTime(2026, 12),
+      ]);
+
+      await notifier.addEvents(SessionEventType.completion, [
+        DateTime(2026, 12, 8),
+      ]);
+
+      expect(
+        await container.read(sessionEventControllerProvider.future),
+        hasLength(1),
+      );
+    });
+
+    test('an empty list changes nothing', () async {
+      final (container, notifier) = await setUpController();
+
+      await notifier.addEvents(SessionEventType.weekend, const []);
+
+      expect(
+        await container.read(sessionEventControllerProvider.future),
+        isEmpty,
       );
     });
   });

@@ -39,21 +39,40 @@ class SessionEventController extends MutationQueueNotifier<List<SessionEvent>> {
     DateTime date, {
     int? manualNumber,
     SessionTrack track = SessionTrack.common,
+  }) => addEvents(type, [date], manualNumber: manualNumber, track: track);
+
+  /// Adds one [type] event per calendar day in [dates] in a single
+  /// persisted write (a failed save can't leave only some of them added).
+  /// Days repeated within [dates] are added once. For a singleton type
+  /// (OR/CS) only the earliest day is used, and nothing is added if one
+  /// already exists. [manualNumber] is meant for a single event — it is
+  /// applied to every added one, so callers pass it only with one date.
+  Future<void> addEvents(
+    SessionEventType type,
+    Iterable<DateTime> dates, {
+    int? manualNumber,
+    SessionTrack track = SessionTrack.common,
   }) {
+    final days = {
+      for (final d in dates) DateTime(d.year, d.month, d.day),
+    }.toList()..sort();
     return mutate((events) {
-      if (singletonEventTypes.contains(type) &&
-          events.any((e) => e.type == type)) {
-        return events;
-      }
-      final event = SessionEvent(
-        id: UniqueKey().toString(),
-        type: type,
-        date: date,
-        manualNumber: manualNumber,
-        // Only WE/WD can be on the A or B schedule.
-        track: SessionEvent.supportsTrack(type) ? track : SessionTrack.common,
-      );
-      return [...events, event];
+      final isSingleton = singletonEventTypes.contains(type);
+      if (isSingleton && events.any((e) => e.type == type)) return events;
+      final added = [
+        for (final day in isSingleton ? days.take(1) : days)
+          SessionEvent(
+            id: UniqueKey().toString(),
+            type: type,
+            date: day,
+            manualNumber: manualNumber,
+            // Only WE/WD can be on the A or B schedule.
+            track: SessionEvent.supportsTrack(type)
+                ? track
+                : SessionTrack.common,
+          ),
+      ];
+      return [...events, ...added];
     });
   }
 
